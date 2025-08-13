@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="p-6 bg-white rounded shadow">
+  <h1 class="text-2xl font-bold mb-4">Attendance Records</h1>
+  <a href="{% url 'attendance_add' %}" class="bg-blue-600 text-white px-4 py-2 rounded mb-4 inline-block">➕ Add Attendance</a>
+  
+  <form method="get" class="flex flex-wrap gap-2 mb-4">
+    <input type="date" name="start_date" value="{{ request.GET.start_date }}" class="border px-2 py-1 rounded">
+    <input type="date" name="end_date" value="{{ request.GET.end_date }}" class="border px-2 py-1 rounded">
+  
+    <select name="employee" class="border px-2 py-1 rounded">
+      <option value="">-- Select Employee --</option>
+      {% for emp in employees %}
+        <option value="{{ emp.id }}" {% if request.GET.employee == emp.id|stringformat:"s" %}selected{% endif %}>{{ emp.name }}</option>
+      {% endfor %}
+    </select>
+  
+    <select name="department" class="border px-2 py-1 rounded">
+      <option value="">-- Select Department --</option>
+      {% for dept in departments %}
+        <option value="{{ dept.id }}" {% if request.GET.department == dept.id|stringformat:"s" %}selected{% endif %}>
+          {{ dept.name }}
+        </option>
+      {% endfor %}
+    </select>
+    
+  
+    <button type="submit" class="bg-blue-600 text-white px-4 py-1 rounded">🔍 Filter</button>
+  </form>
+
+  <table class="table-auto w-full border border-gray-300 text-sm">
+  <thead class="bg-gray-100">
+    <tr>
+      <th class="border px-4 py-2">Name</th>
+      <th class="border px-4 py-2">Date</th>
+      <th class="border px-4 py-2">Time</th>
+      <th class="border px-4 py-2">Status</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for record in attendance_summary %}
+    <tr>
+      <td class="border px-4 py-2">{{ record.employee.name }}</td>
+      <td class="border px-4 py-2">{{ record.date }}</td>
+      <td class="border px-4 py-2">
+        {% if record.in_time and record.out_time %}
+          {{ record.in_time|time:"h:i A" }} - {{ record.out_time|time:"h:i A" }}
+        {% elif record.in_time %}
+          {{ record.in_time|time:"h:i A" }} - --
+        {% elif record.out_time %}
+          -- - {{ record.out_time|time:"h:i A" }}
+        {% else %}
+          --
+        {% endif %}
+      </td>
+      <td class="border px-4 py-2
+        {% if record.status == 'Absent' %}
+          text-red-600 font-semibold
+        {% elif record.status == 'Present' %}
+          text-green-700 font-semibold
+        {% elif record.status == 'Weekly Off' %}
+          text-yellow-600 font-semibold
+        {% elif record.status == 'Public Holiday' %}
+          text-green-600 font-semibold
+        {% elif record.status == 'Leave' %}
+          text-blue-600 font-semibold
+        {% endif %}
+      ">
+        {{ record.status }}
+      </td>
+    </tr>
+    {% empty %}
+    <tr><td colspan="4" class="text-center py-4">No records found.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+</div>
+{% endblock %}

@@ -1,0 +1,7 @@
+<h2>Your subscription has expired</h2>
+{% if last_end_date %}
+    <p>Your last subscription ended on {{ last_end_date }}</p>
+{% else %}
+    <p>You have no previous subscription.</p>
+{% endif %}
+<a href="{% url 'subscription_app:view_plans' %}">View Plans</a>

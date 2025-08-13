@@ -1,0 +1,155 @@
+{% extends "base.html" %}
+{% block content %}
+{% load custom_filters %}
+
+<h2 class="text-2xl font-bold text-gray-800 mb-6">🕒 Monthly Work Time Report</h2>
+
+<!-- Filter Form -->
+<form method="get" class="bg-white p-6 rounded-lg shadow-md mb-6">
+  <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+
+    <div>
+      <label class="text-sm text-gray-600">📅 Start Date</label>
+      <input type="date" name="start_date" value="{{ request.GET.start_date }}"
+             class="w-full border border-gray-300 px-3 py-2 rounded-md focus:ring focus:ring-blue-400">
+    </div>
+
+    <div>
+      <label class="text-sm text-gray-600">📅 End Date</label>
+      <input type="date" name="end_date" value="{{ request.GET.end_date }}"
+             class="w-full border border-gray-300 px-3 py-2 rounded-md focus:ring focus:ring-blue-400">
+    </div>
+
+    <div>
+      <label class="text-sm text-gray-600">🧑‍💼 Employee</label>
+      <select name="employee"
+              class="w-full border border-gray-300 px-3 py-2 rounded-md focus:ring focus:ring-blue-400">
+        <option value="">-- All Employees --</option>
+        {% for emp in employees %}
+          <option value="{{ emp.id }}" {% if request.GET.employee == emp.id|stringformat:"s" %}selected{% endif %}>{{ emp.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div>
+      <label class="text-sm text-gray-600">🏢 Department</label>
+      <select name="department"
+              class="w-full border border-gray-300 px-3 py-2 rounded-md focus:ring focus:ring-blue-400">
+        <option value="">-- All Departments --</option>
+        {% for dept in departments %}
+          <option value="{{ dept.id }}" {% if request.GET.department == dept.id|stringformat:"s" %}selected{% endif %}>{{ dept.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="flex items-end">
+      <button type="submit"
+              class="bg-blue-600 text-white font-semibold px-4 py-2 rounded-md shadow hover:bg-blue-700 w-full">
+        🔍 Filter
+      </button>
+    </div>
+  </div>
+</form>
+
+
+<!-- PDF Export -->
+<form method="get" action="{% url 'monthly_work_time_pdf' %}" target="_blank" class="mb-6">
+  <input type="hidden" name="start_date" value="{{ start_date|date:'Y-m-d' }}">
+  <input type="hidden" name="end_date" value="{{ end_date|date:'Y-m-d' }}">
+  {% if selected_department %}
+    <input type="hidden" name="department" value="{{ selected_department }}">
+  {% endif %}
+  {% if selected_employee %}
+    <input type="hidden" name="employee" value="{{ selected_employee }}">
+  {% endif %}
+  <button type="submit"
+          class="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded-lg shadow transition">
+    📄 Export PDF
+  </button>
+</form>
+
+<!-- Report Table -->
+<div class="overflow-x-auto bg-white rounded-lg shadow-md">
+  {% load time_filters %}
+
+{% load time_filters %}
+
+<table class="min-w-full text-sm text-left text-gray-700 border border-gray-400 shadow rounded-xl">
+  <thead class="bg-gray-100 text-xs text-gray-800 uppercase border-b border-gray-400">
+    <tr>
+      <th class="px-4 py-3 border-r">#️⃣</th>
+      <th class="px-4 py-3 border-r">🧑‍💼 Name</th>
+      <th class="px-4 py-3 border-r">🟢 Start</th>
+      <th class="px-4 py-3 border-r">🔴 End</th>
+      <th class="px-4 py-3 border-r">✅ Present</th>
+      <th class="px-4 py-3 border-r">❌ Absent</th>
+      <th class="px-4 py-3 border-r">🛌 Off Days</th>
+      <th class="px-4 py-3 border-r">📅 Leave</th>
+      {% if report_data|length and report_data.0.holiday_days > 0 %}
+        <th class="px-4 py-3 border-r">🏖 Public</th>
+      {% endif %}
+      <th class="px-4 py-3 border-r">☑️ Approved</th>
+      <!-- <th class="px-4 py-3 border-r">⏱ Work</th> -->
+      <th class="px-4 py-3 border-r">🕒 Late</th>
+      <th class="px-4 py-3 border-r">📉 Less</th>
+      <th class="px-4 py-3 border-r">⏰ Over</th>
+      <th class="px-4 py-3 border-r">🧮 Final Work Hours </th>
+      <th class="px-4 py-3 border-r">🧭 Expected</th>
+      <th class="px-4 py-3">🔄 Diff</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for data in report_data %}
+      <tr class="hover:bg-gray-50 border-t border-gray-300">
+        <td class="px-4 py-2 border-r">{{ forloop.counter }}</td>
+        <td class="px-4 py-2 border-r">{{ data.employee.name }}</td>
+        <td class="px-4 py-2 border-r">{{ data.start_date }}</td>
+        <td class="px-4 py-2 border-r">{{ data.end_date }}</td>
+        <td class="px-4 py-2 border-r">{{ data.present_days }}</td>
+        <td class="px-4 py-2 border-r">{{ data.absent_days }}</td>
+        <td class="px-4 py-2 border-r">{{ data.weekly_off_days }}</td>
+        <td class="px-4 py-2 border-r">{{ data.leave_days }}</td>
+        {% if report_data|length and report_data.0.holiday_days > 0 %}
+          <td class="px-4 py-2 border-r">{{ data.holiday_days }}</td>
+        {% endif %}
+        <td class="px-4 py-2 border-r">{{ data.approved_leave_count }}</td>
+
+        <!-- <td class="px-4 py-2 border-r">{{ data.total_work_hours }}</td> -->
+        <td class="px-4 py-2 border-r">{{ data.late_time }}</td>
+        <td class="px-4 py-2 border-r">{{ data.less_time }}</td>
+        <td class="px-4 py-2 border-r">{{ data.over_time }}</td>
+        <td class="px-4 py-2 border-r">{{ data.final_work_time }}</td>
+        <td class="px-4 py-2 border-r">{{ data.expected_work_time_excl_off|format_timedelta }}</td>
+
+        <td class="px-4 py-2 font-semibold">
+          {% if data.work_time_difference.total_seconds < 0 %}
+            <span class="text-green-600">
+              +{{ data.work_time_difference|abs_timedelta|format_timedelta }}
+            </span>
+          {% elif data.work_time_difference.total_seconds > 0 %}
+            <span class="text-red-600">
+              -{{ data.work_time_difference|format_timedelta }}
+            </span>
+          {% else %}
+            <span class="text-gray-500">00:00:00</span>
+          {% endif %}
+        </td>
+      </tr>
+    {% empty %}
+      <tr>
+        <td colspan="17" class="text-center py-6 text-gray-500 border-t border-gray-300">
+          ❗ No data found for the selected range.
+        </td>
+      </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+
+
+
+
+</div>
+
+
+{% endblock content %}

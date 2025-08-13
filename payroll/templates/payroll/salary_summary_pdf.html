@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html>
+<head>
+    {% load static %}
+    <meta charset="utf-8">
+    <title>Salary Summary Report</title>
+    <style>
+    @page {
+        size: A4 landscape;
+        margin: 0.3in 0.3in 0.3in 0.3in;
+    }
+
+    @font-face {
+        font-family: 'SourceSansPro';
+        src: url("{% static 'fonts/SourceSansPro-Regular.ttf' %}") format('truetype');
+    }
+
+    body {
+        font-family: 'SourceSansPro', sans-serif;
+        font-size: 12px;
+        margin: 0;
+        padding: 0;
+    }
+
+    .header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+    padding-bottom: 5px;
+    gap: 10px;
+    flex-wrap: nowrap;
+}
+
+.header-left {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    max-width: fit-content;
+    flex-shrink: 0;
+}
+
+.logo {
+    width: 45px;
+    height: 45px;
+    border-radius: 50%;
+    object-fit: cover;
+    display: block;
+    flex-shrink: 0;
+}
+
+.company-name {
+    font-weight: bold;
+    font-size: 18px;
+    color: #003366;
+    white-space: nowrap;
+   
+}
+
+.report-title {
+    text-align: center;
+    flex-grow: 1;
+    font-size: 16px;
+    margin: 0;
+}
+
+.report-info {
+    font-size: 13px;
+    text-align: right;
+    line-height: 1.4;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+
+
+    h2 {
+        text-align: center;
+        font-size: 16px;
+        margin: 0;
+        padding: 5px;
+    }
+
+    table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 10px;
+    }
+
+    thead, tfoot {
+        background-color: #f0f0f0;
+    }
+
+    th, td {
+        border: 1px solid #444;
+        padding: 4px;
+        text-align: center;
+    }
+
+    th {
+        background-color: #eee;
+        font-weight: bold;
+    }
+
+    tfoot th {
+        font-weight: bold;
+        background-color: #f9f9f9;
+    }
+
+    .total-row {
+        font-weight: 700;
+        background-color: #e0eaff;
+        color: #003366;
+        font-size: 13px;
+        border-top: 2px solid #003366;
+    }
+
+    .diff-row {
+        font-weight: 700;
+        background-color: #fff3cd;
+        color: #856404;
+        font-size: 13px;
+        border-top: 1px solid #856404;
+    }
+
+    .empty-msg {
+        text-align: center;
+        font-style: italic;
+        color: gray;
+    }
+
+    </style>
+</head>
+<body>
+
+    <div class="header">
+  <div class="header-left">
+    <img src="{% static 'images/logo.png' %}" alt="Logo" class="logo" />
+    <span class="company-name">Riya Jewellers</span>
+  </div>
+
+  <h2 class="report-title">Salary Summary Report</h2>
+
+  <div class="report-info">
+    {% if selected_month %}
+      <div><strong>Month:</strong> {{ selected_month }}</div>
+    {% endif %}
+    {% if department_name %}
+      <div><strong>Department:</strong> {{ department_name }}</div>
+    {% endif %}
+  </div>
+</div>
+
+    <table>
+    <thead>
+        <tr>
+            <th>#</th>
+            <th>Employee</th>
+            <th>Base Salary</th>
+            <th>Bank Transfer</th>
+            <th>Cash Amount</th>
+            <th>Present</th>
+            <th>Leave</th>
+            <th>Absent</th>
+            <th>Off Days</th>
+            <th>Holidays</th>
+            <th>Late Time</th>
+            <th>Over Time</th>
+            <th>Work Hours</th>
+            <th>Expected Hours</th>
+            <th>Difference</th>
+            
+            <th>Final Salary</th>
+            <th>Payable Cash</th>  <!-- নতুন কলাম -->
+        </tr>
+    </thead>
+    <tbody>
+        {% if summaries %}
+            {% for summary in summaries %}
+                <tr>
+                    <td>{{ forloop.counter }}</td>
+                    <td>{{ summary.employee.name }}</td>
+                    <td>{{ summary.base_salary }}</td>
+                    <td>{{ summary.bank_transfer }}</td>
+                    <td>{{ summary.cash_amount }}</td>
+                    <td>{{ summary.present_days }}</td>
+                    <td>{{ summary.leave_days }}</td>
+                    <td>{{ summary.absent_days }}</td>
+                    <td>{{ summary.weekly_off_days }}</td>
+                    <td>{{ summary.holiday_days }}</td>
+                    <td>{{ summary.late_time }}</td>
+                    <td>{{ summary.over_time }}</td>
+                    <td>{{ summary.total_work_hours }}</td>
+                    <td>{{ summary.expected_work_hours }}</td>
+                    <td>{{ summary.work_time_difference }}</td>
+                    <td>{{ summary.final_salary }}</td>
+                    <td>{{ summary.payable_cash }}</td>  <!-- নতুন ডাটা -->
+                </tr>
+            {% endfor %}
+
+            <tr class="total-row">
+                <td colspan="2" style="text-align: left;">Total Base Salary</td>
+                <td>Base: {{ total_base_salary }}</td>
+                <td>Bank: {{ total_bank_transfer }}</td>
+                <td>Cash: {{ total_cash_amount }}</td>
+                <td colspan="10" style="text-align: right;">Total Payable Final Salary</td>
+                <td>{{ total_final_salary }}</td>
+                <td>{{ total_payable_cash }}</td> <!-- ফুটারে টোটাল -->
+            </tr>
+            <tr class="diff-row">
+                <td colspan="15" style="text-align: right;">Difference</td>
+                <td>{{ total_salary_difference }}</td>
+            </tr>
+        {% else %}
+            <tr>
+                <td colspan="17" class="empty-msg">No salary summary data found.</td>
+            </tr>
+        {% endif %}
+    </tbody>
+</table>
+
+    
+    
+    
+    <br><br><br>
+<table style="width:100%; margin-top: 40px; border: none;">
+    <tr>
+        <td style="text-align: center; border: none;">
+            ..............................................<br>
+            <strong>Accountant</strong>
+        </td>
+        <td style="text-align: center; border: none;">
+            ..............................................<br>
+            <strong>HR Manager</strong>
+        </td>
+        <td style="text-align: center; border: none;">
+            ..............................................<br>
+            <strong>Admin/Authorized Signatory</strong>
+        </td>
+    </tr>
+</table>
+
+
+</body>
+</html>

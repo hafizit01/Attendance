@@ -1,0 +1,32 @@
+<!-- attendance/templates/attendance/leave_list.html -->
+
+{% extends "base.html" %}
+{% block content %}
+<h2 class="text-xl font-bold mb-4">📅 Leave Requests</h2>
+<a href="{% url 'leave_create' %}" class="bg-blue-600 text-white px-4 py-2 rounded">➕ Add New Leave</a>
+<table class="table-auto w-full mt-4 border">
+  <thead>
+    <tr class="bg-gray-200">
+      <th class="border px-4 py-2">Employee</th>
+      <th class="border px-4 py-2">Type</th>
+      <th class="border px-4 py-2">Dates</th>
+      <th class="border px-4 py-2">Status</th>
+      <th class="border px-4 py-2">Actions</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for leave in leaves %}
+    <tr>
+      <td class="border px-4 py-2">{{ leave.employee.name }}</td>
+      <td class="border px-4 py-2">{{ leave.leave_type }}</td>
+      <td class="border px-4 py-2">{{ leave.start_date }} → {{ leave.end_date }}</td>
+      <td class="border px-4 py-2">{{ leave.status }}</td>
+      <td class="border px-4 py-2">
+        <a href="{% url 'leave_update' leave.pk %}" class="text-blue-600">Edit</a> |
+        <a href="{% url 'leave_delete' leave.pk %}" class="text-red-600" onclick="return confirm('Delete this leave?');">Delete</a>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

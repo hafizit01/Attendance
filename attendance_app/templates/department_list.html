@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="p-6 bg-white rounded shadow">
+  <h1 class="text-2xl font-bold mb-4">Departments</h1>
+  <a href="{% url 'department_add' %}" class="bg-blue-600 text-white px-4 py-2 rounded mb-4 inline-block">➕ Add Department</a>
+  
+  <table class="table-auto w-full border border-gray-300">
+    <thead>
+      <tr class="bg-gray-100">
+        <th class="border px-4 py-2">ID</th>
+        <th class="border px-4 py-2">Name</th>
+        <th class="border px-4 py-2">Weekly Off Day</th>
+        <th class="border px-4 py-2 text-center">Edit</th>
+        <th class="border px-4 py-2 text-center">Delete</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for dept in departments %}
+      <tr>
+        <td class="border px-4 py-2">{{ dept.id }}</td>
+        <td class="border px-4 py-2">{{ dept.name }}</td>
+        <td class="border px-4 py-2">{{ dept.weekly_off_day }}</td>
+
+        <!-- ✏️ Edit -->
+        <td class="border px-4 py-2 text-center">
+          <a href="{% url 'department_edit' dept.id %}" class="flex items-center justify-center gap-1 text-blue-600 hover:underline">
+            ✏️ Edit
+          </a>
+        </td>
+
+        <!-- 🗑️ Delete -->
+        <td class="border px-4 py-2 text-center">
+          <a href="{% url 'department_delete' dept.id %}" class="flex items-center justify-center gap-1 text-red-600 hover:underline">
+            🗑️ Delete
+          </a>
+        </td>
+      </tr>
+      {% empty %}
+      <tr>
+        <td colspan="5" class="text-center py-4">No departments found.</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

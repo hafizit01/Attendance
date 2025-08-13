@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    {% load static %}
+    {% load time_filters %}
+    <meta charset="UTF-8">
+    <title>Monthly Attendance Report</title>
+    <style>
+        @font-face {
+            font-family: 'DejaVu Sans';
+            src: url("{% static 'fonts/SourceSansPro-Regular.ttf' %}") format('truetype');
+        }
+        @page { margin: 30px; }
+        body {
+            font-family: 'DejaVu Sans', sans-serif;
+            font-size: 12px;
+            margin: 0;
+            color: #333;
+        }
+        .header {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+        .logo {
+            width: 60px; /* ছোট করা হয়েছে */
+            height: 60px;
+            object-fit: cover;
+            border-radius: 50%;
+        }
+        .headline {
+            font-size: 18px;
+            font-weight: bold;
+            text-align: right;
+            margin-left: auto;
+        }
+        h2 {
+            margin: 5px 0;
+            font-size: 20px;
+        }
+        .meta {
+            font-size: 13px;
+            margin: 2px 0;
+        }
+        .info-block {
+            margin-left: 20px; /* ✅ বাম পাশে কিছুটা margin */
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        thead {
+            background-color: #f0f8ff;
+        }
+        th, td {
+            border: 1px solid #999;
+            padding: 8px;
+            text-align: center;
+        }
+        tbody tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+    </style>
+</head>
+<body>
+
+<div class="header">
+    {% if logo_url %}
+        <img src="{{ logo_url }}" alt="Company Logo" class="logo">
+    {% endif %}
+    <div class="info-block">
+        <h2>Riya Jewellers</h2>
+        {% if department_name %}
+            <p class="meta"><strong>Department:</strong> {{ department_name }}</p>
+        {% endif %}
+        <p class="meta"><strong>Period:</strong> {{ start_date }} to {{ end_date }}</p>
+    </div>
+    <div class="headline">
+        Monthly Attendance Report
+    </div>
+</div>
+
+<table>
+    <thead>
+        <tr>
+            <th>#</th>
+            <th>Employee</th>
+            <th>Present</th>
+            <th>Absent</th>
+            <th>Leave Days</th>
+            <th>Weekly Off</th>
+            <th>Late Hours</th>
+            <th>Overtime</th>
+            <th>Less Time</th>
+            <th>Work Hours</th>
+            <th>Expected Hours</th>
+            <th>Difference</th>
+            
+        </tr>
+    </thead>
+    <tbody>
+        {% for row in report_data %}
+        <tr>
+            <td>{{ forloop.counter }}</td>
+            <td>{{ row.employee.name }}</td>
+            <td>{{ row.present_days }}</td>
+            <td>{{ row.absent_days }}</td>
+            <td>{{ row.leave_days }}</td>
+            <td>{{ row.weekly_off_days }}</td>
+            <td>{{ row.late_hours|format_timedelta }}</td>
+            <td>{{ row.over_hours|format_timedelta }}</td>
+            <td>{{ row.less_hours|format_timedelta }}</td>
+            <td>{{ row.total_work_hours|format_timedelta }}</td>
+            <td>{{ row.expected_work_hours|format_timedelta }}</td>
+            <td>{{ row.difference_time|format_diff_timedelta }}</td>
+            
+        </tr>
+        {% empty %}
+        <tr>
+            <td colspan="12">No data available.</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+<div style="position: fixed; bottom: 10px; width: 100%; text-align: center; font-size: 9px; color: #aaa;">
+    Develop by: Easy Coding
+</div>
+
+</body>
+</html>

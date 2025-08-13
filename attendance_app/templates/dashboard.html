@@ -1,0 +1,297 @@
+{% extends "base.html" %}
+{% block content %}
+
+
+<main class="flex-1 p-6">
+    <!-- Dashboard Overview -->
+    <div class="mb-10">
+      <div class="mb-10">
+  <div class="flex flex-col md:flex-row justify-between items-center mb-6">
+    <h2 class="text-3xl font-bold mb-4 md:mb-0 animated-text">📊 Attendance Dashboard</h2>
+
+    <div class="flex flex-col md:flex-row items-center gap-4">
+      <!-- Filter Form -->
+      <form method="get" class="flex gap-2">
+        <select name="department" class="p-2 border rounded">
+          <option value="">All Departments</option>
+          {% for dept in departments %}
+          <option value="{{ dept.id }}" {% if selected_department == dept.id %}selected{% endif %}>
+            {{ dept.name }}
+          </option>
+          {% endfor %}
+        </select>
+        <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded">
+          Filter
+        </button>
+      </form>
+
+      <!-- User Info + Logout -->
+      <div x-data="{ open: false }" class="relative inline-block text-left">
+  <button
+    @click="open = !open"
+    class="inline-flex items-center gap-1 text-sm font-medium text-gray-700 hover:text-black focus:outline-none"
+  >
+    👤 {{ request.user.username }}
+    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+    </svg>
+  </button>
+
+  <div
+    x-show="open"
+    @click.away="open = false"
+    x-transition
+    class="absolute right-0 mt-2 w-32 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-10"
+  >
+    <a
+      href="{% url 'logout' %}"
+      class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+    >
+      🚪 Logout
+    </a>
+  </div>
+</div>
+
+    </div>
+  </div>
+</div>
+
+
+
+
+      <div
+        class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6 text-center"
+      >
+        <div class="bg-white p-4 shadow rounded">
+          <h3 class="text-gray-600">Total</h3>
+          <p class="text-xl font-bold">{{ total_employees }}</p>
+        </div>
+        <div class="bg-green-100 p-4 shadow rounded">
+          <h3 class="text-gray-600">Present</h3>
+          <p class="text-xl font-bold">{{ present }}</p>
+        </div>
+        <div class="bg-red-100 p-4 shadow rounded">
+          <h3 class="text-gray-600">Absent</h3>
+          <p class="text-xl font-bold">{{ absent }}</p>
+        </div>
+        <div class="bg-yellow-100 p-4 shadow rounded">
+          <h3 class="text-gray-600">Late</h3>
+          <p class="text-xl font-bold">{{ late }}</p>
+        </div>
+      </div>
+
+
+      <!-- -----------chart-------- -->
+       
+     <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+  <!-- Monthly Trend Chart -->
+  <div class="bg-white p-6 rounded shadow">
+    <h3 class="text-xl mb-4 font-semibold text-center">📈 Monthly Attendance Trend</h3>
+    <div class="relative w-full overflow-x-auto">
+      <canvas id="trendChart" height="120"></canvas>
+    </div>
+  </div>
+
+  <!-- Today’s Summary Chart -->
+  <div class="bg-white p-6 rounded shadow flex flex-col items-center justify-center">
+    <h3 class="text-xl mb-4 font-semibold">📊 Today’s Summary</h3>
+    <div class="w-60 h-60">
+      <canvas id="summaryChart" class="w-full h-full"></canvas>
+    </div>
+  </div>
+</div>
+
+{% if messages %}
+      <div class="mb-4">
+        {% for message in messages %}
+        <p class="text-sm text-green-700">{{ message }}</p>
+        {% endfor %}
+      </div>
+      {% endif %}
+
+  
+      <div>
+  <h3 class="text-xl font-semibold mb-4 text-center animated-text">Today's Attendance</h3>
+
+<style>
+.animated-text {
+  background: linear-gradient(270deg, #ff0044, #00ff99, #0066ff, #ff0044);
+  background-size: 800% 800%;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: gradientAnimation 10s ease infinite;
+}
+
+@keyframes gradientAnimation {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+</style>
+
+  
+  <div
+    class="overflow-x-auto bg-white p-4 rounded shadow"
+  >
+  <table class="table-auto w-full text-sm text-left">
+  <thead class="bg-gray-200">
+    <tr>
+      <th class="px-4 py-2">Employee</th>
+      <th class="px-4 py-2">In Time</th>
+      <th class="px-4 py-2">Out Time</th>
+      <th class="px-4 py-2">Total</th>
+      <th class="px-4 py-2">Late</th>
+      <th class="px-4 py-2">Less</th>
+      <th class="px-4 py-2">Over</th>
+    </tr>
+  </thead>
+  <tbody id="employeeTableBody">
+    {% for data in employee_data %}
+    <tr class="border-t {% if forloop.counter > 10 %}hidden-row hidden{% endif %}">
+      <td class="px-4 py-2">{{ data.employee.name }}</td>
+      <td class="px-4 py-2">{{ data.in_time|default:"-" }}</td>
+      <td class="px-4 py-2">{{ data.out_time|default:"-" }}</td>
+      <td class="px-4 py-2">{{ data.total_work_time }}</td>
+      <td class="px-4 py-2">{{ data.late_time }}</td>
+      <td class="px-4 py-2">{{ data.less_time }}</td>
+      <td class="px-4 py-2">{{ data.over_time }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<div class="text-center mt-6">
+  {% if employee_data|length > 10 %}
+  <button
+    id="loadMoreBtn"
+    class="inline-block px-6 py-3 bg-gradient-to-r from-blue-500 via-blue-600 to-blue-700 text-white font-semibold rounded-lg shadow-lg hover:from-blue-600 hover:via-blue-700 hover:to-blue-800 transition duration-300 ease-in-out focus:outline-none focus:ring-4 focus:ring-blue-300"
+  >
+    Load More
+  </button>
+  {% endif %}
+</div>
+
+  </div>
+</div>
+
+    <!-- Attendance Report Section -->
+    
+  </main>
+{% endblock content %}
+  <!-- Main Content -->
+  
+
+
+{% block extra_scripts %}
+<script>
+  const ctx = document.getElementById('summaryChart').getContext('2d');
+  const summaryChart = new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels: ['Present', 'Absent', 'Late'],
+      datasets: [{
+        label: 'Today Summary',
+        data: [{{ present }}, {{ absent }}, {{ late }}],
+        backgroundColor: [
+          'rgba(34, 197, 94, 0.8)',
+          'rgba(239, 68, 68, 0.8)',
+          'rgba(250, 204, 21, 0.8)'
+        ],
+        borderColor: '#fff',
+        borderWidth: 2,
+        hoverOffset: 10,
+      }]
+    },
+    options: {
+      responsive: true,
+      cutout: '65%',
+      plugins: {
+        legend: { display: false }
+      }
+    }
+  });
+</script>   
+
+
+<!-- <script>
+  const trendData = {{ attendance_trend|safe }};
+
+  const labels = trendData.map(item => item.date);
+  const present = trendData.map(item => item.present);
+  const absent = trendData.map(item => item.absent);
+  const late = trendData.map(item => item.late);
+
+  const trendCtx = document.getElementById('trendChart').getContext('2d');
+  const trendChart = new Chart(trendCtx, {
+    type: 'line',
+    data: {
+      labels: labels,
+      datasets: [
+        {
+          label: 'Present',
+          data: present,
+          borderColor: 'rgba(34, 197, 94, 1)',
+          backgroundColor: 'rgba(34, 197, 94, 0.1)',
+          fill: true,
+          tension: 0.3
+        },
+        {
+          label: 'Absent',
+          data: absent,
+          borderColor: 'rgba(239, 68, 68, 1)',
+          backgroundColor: 'rgba(239, 68, 68, 0.1)',
+          fill: true,
+          tension: 0.3
+        },
+        {
+          label: 'Late',
+          data: late,
+          borderColor: 'rgba(250, 204, 21, 1)',
+          backgroundColor: 'rgba(250, 204, 21, 0.1)',
+          fill: true,
+          tension: 0.3
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      scales: {
+        y: {
+          beginAtZero: true
+        }
+      }
+    }
+  });
+</script> -->
+
+
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    const loadMoreBtn = document.getElementById('loadMoreBtn');
+    if (!loadMoreBtn) return;
+
+    loadMoreBtn.addEventListener('click', function () {
+      // সব লুকানো row গুলো বের করে দেখাবে
+      const hiddenRows = document.querySelectorAll('.hidden-row.hidden');
+      hiddenRows.forEach(row => {
+        row.classList.remove('hidden');
+      });
+      // বাটনটা আর দেখাবে না
+      loadMoreBtn.style.display = 'none';
+    });
+  });
+</script>
+
+<style>
+  .hidden {
+    display: none;
+  }
+</style>
+{% endblock %}
+<!-- Chart Script -->

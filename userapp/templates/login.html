@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  {% load static %}
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Attendance Login</title>
+
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+
+  <style>
+    .animated-text {
+      background: linear-gradient(270deg, #00b894, #55efc4, #00cec9, #2ecc71, #1abc9c);
+      background-size: 800% 800%;
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      animation: gradientAnimation 10s ease infinite;
+    }
+
+    @keyframes gradientAnimation {
+      0% { background-position: 0% 50%; }
+      50% { background-position: 100% 50%; }
+      100% { background-position: 0% 50%; }
+    }
+  </style>
+</head>
+<body class="bg-gradient-to-br from-indigo-100 via-purple-100 to-yellow-50 min-h-screen flex items-center justify-center px-4 py-12">
+
+  <div class="flex flex-col md:flex-row bg-white rounded-3xl shadow-2xl overflow-hidden w-full max-w-7xl border border-gray-300 min-h-[700px]">
+
+    <!-- 🔵 Branding Section (Left) -->
+    <div class="md:w-1/2 w-full bg-indigo-50 flex flex-col p-14 relative">
+      <!-- লোগোকে উপরের বাম কোণে বসানো -->
+      <div class="flex justify-start mb-6 opacity-30">
+        <img src="{% static 'images/easy.png' %}" alt="Logo" class="w-20 h-12 object-contain">
+      </div>
+      <div class="flex flex-col items-center justify-center flex-grow relative">
+        <h1 class="text-6xl md:text-7xl font-extrabold text-indigo-500 opacity-30 leading-tight text-center z-10 select-none">
+          Easy Coding<br>
+          <span class="text-4xl md:text-5xl block text-purple-400 mt-2">IT Solutions</span>
+        </h1>
+        <p class="text-lg md:text-2xl text-gray-500 opacity-70 mt-8 text-center z-10 tracking-wide select-none">
+          Attendance Management System
+        </p>
+      </div>
+      <img src="{% static 'images/attendance.jpg' %}" alt="Attendance Image"
+           class="absolute inset-0 w-full h-full object-cover opacity-10 z-0 pointer-events-none select-none">
+    </div>
+
+    <!-- 🟢 Login Section (Right) -->
+    <div class="md:w-1/2 w-full p-10 md:p-16 bg-white z-10 flex flex-col justify-center">
+      <h2 class="text-4xl font-extrabold mb-8 text-center text-indigo-700">🔐 Attendance Login</h2>
+
+      {% if messages %}
+        {% for message in messages %}
+          <div class="mb-4 p-3 rounded bg-red-100 text-red-700 border border-red-300 text-sm shadow-sm">
+            ⚠️ {{ message }}
+          </div>
+        {% endfor %}
+      {% endif %}
+
+      <form method="post" action="{% url 'login' %}" novalidate>
+        {% csrf_token %}
+        <div class="mb-5">
+          <label for="username" class="block text-gray-700 font-medium mb-1">Username</label>
+          <input id="username" type="text" name="username"
+                 class="w-full border border-gray-300 rounded px-4 py-2 focus:ring-2 focus:ring-indigo-400 focus:outline-none"
+                 required autocomplete="username" autofocus>
+        </div>
+
+        <div class="mb-8 relative">
+  <label for="password" class="block text-gray-700 font-medium mb-1">Password</label>
+  <input id="password" type="password" name="password"
+         class="w-full border border-gray-300 rounded px-4 py-2 pr-10 focus:ring-2 focus:ring-indigo-400 focus:outline-none"
+         required autocomplete="current-password">
+  <button type="button" onclick="togglePassword()" 
+          aria-label="Toggle password visibility"
+          class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-indigo-500 focus:outline-none select-none">
+    👁️
+  </button>
+</div>
+
+<button type="submit"
+                class="w-full bg-gradient-to-r from-indigo-700 to-purple-700 hover:from-purple-800 hover:to-indigo-800
+                       text-yellow-300 font-bold py-3 px-4 rounded-lg shadow-md transition duration-300">
+          🔓 Login
+        </button>
+      </form>
+    </div>
+
+  </div>
+
+  <script>
+    function togglePassword() {
+      const password = document.getElementById("password");
+      password.type = password.type === "password" ? "text" : "password";
+    }
+  </script>
+
+</body>
+
+
+
+
+
+</html>
