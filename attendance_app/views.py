@@ -321,7 +321,6 @@ def generate_attendance_table(employee_qs, start_date, end_date):
     return days
 
 # ---------------Monthly Report---------------
-
 @login_required
 def monthly_work_time_report(request):
     user_company = getattr(request.user.profile, 'company', None)
@@ -402,13 +401,15 @@ def monthly_work_time_report(request):
                 weekly_off_count += 1
                 continue
 
-            if current_date in leave_dates:
-                leave_days_count += 1
-                continue
-
             records = daily_attendance.get(current_date, [])
             in_times = [r.timestamp for r in records if r.status == 'In']
             out_times = [r.timestamp for r in records if r.status == 'Out']
+
+            if current_date in leave_dates:
+                leave_days_count += 1
+                # Leave day হলে regular_work_time যোগ করা
+                total_work_time += regular_work_time
+                continue
 
             if in_times:
                 in_time = min(in_times)
@@ -499,7 +500,6 @@ from datetime import datetime, timedelta
 from django.template.loader import render_to_string
 from weasyprint import HTML
 from .models import Employee, Department, Attendance, LeaveRequest
-
 @login_required
 def monthly_work_time_pdf(request):
     user_company = getattr(request.user.profile, 'company', None)
@@ -574,6 +574,8 @@ def monthly_work_time_pdf(request):
 
             if current_date in leave_dates:
                 leave_day_count += 1
+                # Leave দিনগুলোকে 10 ঘণ্টা ধরে total_work_time-এ যোগ করা
+                total_work_time += regular_work_time
                 continue
 
             records = daily_attendance.get(current_date, [])
