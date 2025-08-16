@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Leave Summary PDF</title>
+  <style>
+
+    @import url('https://fonts.googleapis.com/css2?family=Source+Sans+Pro&display=swap');
+
+    body {
+        font-family: 'Source Sans Pro', sans-serif;
+    }
+
+    body { font-family: sans-serif; font-size: 14px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+    th, td { border: 1px solid #000; padding: 5px; text-align: left; }
+    th { background-color: #f0f0f0; }
+  </style>
+</head>
+<body>
+  <h2>Leave Summary Report</h2>
+  <table>
+  <thead>
+    <tr>
+      <th>#</th>
+      <th>Employee</th>
+      <th>Total Approved Leaves</th>
+      <th>Leave Types</th>
+      <th>Status</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for item in summary_data %}
+    <tr>
+      <td>{{ forloop.counter }}</td>  <!-- ✅ ক্রমিক নম্বর দেখাবে -->
+      <td>{{ item.employee }}</td>
+      <td>{{ item.total_leave }}</td>
+      <td>{{ item.leave_types }}</td>
+      <td>{{ item.leave_statuses }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+</body>
+</html>

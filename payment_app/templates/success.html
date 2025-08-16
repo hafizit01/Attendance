@@ -1,0 +1,31 @@
+{% extends 'base.html' %}
+{% block content %}
+
+<div class="mx-auto max-w-lg px-6 py-16">
+  <div class="bg-white shadow-lg rounded-2xl p-8 text-center border border-green-200">
+    
+    <!-- Icon -->
+    <div class="mx-auto w-20 h-20 flex items-center justify-center rounded-full bg-green-100 text-green-600 mb-4">
+      ✅
+    </div>
+
+    <!-- Title -->
+    <h2 class="text-2xl md:text-3xl font-bold text-green-700 mb-3">
+      Payment Successful 🎉
+    </h2>
+
+    <!-- Message -->
+    <p class="text-gray-600 mb-6">
+      Thank you! Your payment has been processed successfully.  
+      You can now enjoy your subscription plan without interruption.
+    </p>
+
+    <!-- Button -->
+    <a href="{% url 'dashboard' %}"
+       class="inline-flex items-center justify-center px-6 py-3 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold shadow">
+      Go to Dashboard →
+    </a>
+  </div>
+</div>
+
+{% endblock %}

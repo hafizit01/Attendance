@@ -1,32 +1,86 @@
-<!-- attendance/templates/attendance/leave_list.html -->
-
 {% extends "base.html" %}
 {% block content %}
-<h2 class="text-xl font-bold mb-4">📅 Leave Requests</h2>
-<a href="{% url 'leave_create' %}" class="bg-blue-600 text-white px-4 py-2 rounded">➕ Add New Leave</a>
-<table class="table-auto w-full mt-4 border">
-  <thead>
-    <tr class="bg-gray-200">
-      <th class="border px-4 py-2">Employee</th>
-      <th class="border px-4 py-2">Type</th>
-      <th class="border px-4 py-2">Dates</th>
-      <th class="border px-4 py-2">Status</th>
-      <th class="border px-4 py-2">Actions</th>
-    </tr>
-  </thead>
-  <tbody>
-    {% for leave in leaves %}
-    <tr>
-      <td class="border px-4 py-2">{{ leave.employee.name }}</td>
-      <td class="border px-4 py-2">{{ leave.leave_type }}</td>
-      <td class="border px-4 py-2">{{ leave.start_date }} → {{ leave.end_date }}</td>
-      <td class="border px-4 py-2">{{ leave.status }}</td>
-      <td class="border px-4 py-2">
-        <a href="{% url 'leave_update' leave.pk %}" class="text-blue-600">Edit</a> |
-        <a href="{% url 'leave_delete' leave.pk %}" class="text-red-600" onclick="return confirm('Delete this leave?');">Delete</a>
-      </td>
-    </tr>
-    {% endfor %}
-  </tbody>
-</table>
+<div class="container mx-auto p-4">
+  <h2 class="text-2xl font-bold mb-6 text-gray-800">📅 Leave Requests</h2>
+
+  <div class="flex flex-col md:flex-row md:justify-between mb-4 gap-2">
+  <div class="flex gap-2">
+    <a href="{% url 'leave_create' %}" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded shadow">
+      ➕ Add New Leave
+    </a>
+    <a href="{% url 'leave_summary' %}" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded shadow">
+      🧾 Show Leave Summary
+    </a>
+    <a href="{% url 'leave_summary_pdf' %}" target="_blank" class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded shadow">
+      📄 Download PDF
+    </a>
+  </div>
+
+  <!-- Search Input on the right -->
+  <div class="mt-2 md:mt-0">
+    <input type="text" id="searchInput" placeholder="🔍 Search by name, ID, or Device ID"
+           class="border border-gray-300 px-3 py-2 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 w-full md:w-64">
+  </div>
+</div>
+
+
+  <div class="overflow-x-auto bg-white rounded shadow">
+    <table class="min-w-full divide-y divide-gray-200" id="leaveTable">
+      <thead class="bg-gray-100">
+        <tr>
+          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">#</th>
+          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Employee</th>
+          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
+          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Dates</th>
+          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+        </tr>
+      </thead>
+      <tbody class="bg-white divide-y divide-gray-200">
+        {% for leave in leaves %}
+        <tr class="hover:bg-gray-50">
+          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{{ leave.id }}</td>
+          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{{ leave.employee.name }}</td>
+          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{{ leave.leave_type }}</td>
+          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{{ leave.start_date }} → {{ leave.end_date }}</td>
+          <td class="px-6 py-4 whitespace-nowrap text-sm font-semibold {% if leave.status == 'Approved' %}text-green-600{% elif leave.status == 'Pending' %}text-yellow-600{% else %}text-red-600{% endif %}">
+            {{ leave.status }}
+          </td>
+          <td class="px-6 py-4 whitespace-nowrap text-sm">
+            <a href="{% url 'leave_update' leave.pk %}" class="text-blue-600 hover:underline">Edit</a> |
+            <a href="{% url 'leave_delete' leave.pk %}" class="text-red-600 hover:underline" onclick="return confirm('Delete this leave?');">Delete</a>
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="5" class="px-6 py-4 text-center text-gray-500">No leaves found.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Live Search JS -->
+<script>
+  const searchInput = document.getElementById('searchInput');
+  const table = document.getElementById('leaveTable');
+  const rows = table.getElementsByTagName('tbody')[0].getElementsByTagName('tr');
+
+  searchInput.addEventListener('input', function() {
+    const filter = this.value.toLowerCase();
+    for (let i = 0; i < rows.length; i++) {
+      const cells = rows[i].getElementsByTagName('td');
+      let match = false;
+      for (let j = 0; j < cells.length - 1; j++) { // ignore actions column
+        if (cells[j].innerText.toLowerCase().includes(filter)) {
+          match = true;
+          break;
+        }
+      }
+      rows[i].style.display = match ? '' : 'none';
+    }
+  });
+</script>
+
 {% endblock %}

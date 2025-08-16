@@ -37,32 +37,66 @@ from django.shortcuts import render
 from django.utils.timezone import now, localtime, localdate
 from datetime import timedelta
 from .models import Employee, Attendance, Department
+from subscription_app.decorators import subscription_required
 
+# ---------- Subscription helper (Date/DateTime দুই কেস) ----------
+def _has_active_subscription(user) -> bool:
+    """
+    ইউজারের সর্বশেষ সাবস্ক্রিপশন আজকের দিন-শেষ পর্যন্ত সক্রিয় কি না?
+    DateField হলে দিন-শেষ (23:59:59.999999) পর্যন্ত বৈধ ধরা হয়।
+    DateTimeField হলে tz-aware করে এখন (timezone.now) এর সাথে তুলনা হয়।
+    """
+    last = (
+        UserSubscription.objects
+        .filter(user=user)
+        .order_by('-end_date')
+        .first()
+    )
+    if not last or not last.end_date:
+        return False
+
+    end = last.end_date
+    # DateTimeField?
+    if isinstance(end, datetime):
+        if timezone.is_naive(end):
+            end = timezone.make_aware(end, timezone.get_current_timezone())
+        return timezone.now() <= end
+
+    # নাহলে DateField: দিন-শেষ পর্যন্ত বৈধ
+    end_dt = timezone.make_aware(
+        datetime.combine(end, time(23, 59, 59, 999999)),
+        timezone.get_current_timezone()
+    )
+    return timezone.now() <= end_dt
+
+
+# ---------- Dashboard ----------
 @login_required
 def dashboard(request):
     user = request.user
 
-    # ----------------------------
-    # সাবস্ক্রিপশন চেক
-    # ----------------------------
-    subscription = UserSubscription.objects.filter(
-        user=user,
-        active=True,
-        end_date__gt=now()
-    ).first()
+    # 1) সাবস্ক্রিপশন গার্ড (হার্ড ব্লক)
+    if not _has_active_subscription(user):
+        last_sub = (
+            UserSubscription.objects
+            .filter(user=user)
+            .order_by('-end_date')
+            .first()
+        )
+        return render(
+            request,
+            'subscription_app/expired.html',
+            {
+                'last_end_date': last_sub.end_date if last_sub else None,
+                # চাইলে টেমপ্লেটে স্টেট দেখাতে আরও flag পাঠাতে পারো:
+                # 'has_plan': bool(last_sub),
+                # 'is_active': False,
+            }
+        )
 
-    if not subscription:
-        last_sub = UserSubscription.objects.filter(user=user).order_by('-end_date').first()
-        return render(request, 'subscription_app/expired.html', {
-            'last_end_date': last_sub.end_date if last_sub else None
-        })
-
-    # ----------------------------
-    # কোম্পানি ভিত্তিক ডিপার্টমেন্ট ও এমপ্লয়ি ফিল্টার
-    # ----------------------------
-    user_company = getattr(user.profile, 'company', None)
+    # 2) কোম্পানি গার্ড (তোমার আগের লজিক)
+    user_company = getattr(getattr(user, 'profile', None), 'company', None)
     if not user_company:
-        # Company নেই
         return render(request, 'dashboard.html', {
             'error_message': "আপনার প্রোফাইলে কোম্পানি সেট করা নেই।"
         })
@@ -77,11 +111,13 @@ def dashboard(request):
     departments = Department.objects.filter(company=user_company)
     employee_data = []
 
-    # ----------------------------
-    # ডেলি অ্যাটেন্ডেন্স
-    # ----------------------------
+    # 3) ডেইলি অ্যাটেন্ডেন্স
     for emp in employees:
-        attendances = Attendance.objects.filter(employee=emp, timestamp__date=today).order_by('timestamp')
+        attendances = (
+            Attendance.objects
+            .filter(employee=emp, timestamp__date=today)
+            .order_by('timestamp')
+        )
         in_times = [att.timestamp for att in attendances if att.status == 'In']
         out_times = [att.timestamp for att in attendances if att.status == 'Out']
 
@@ -116,31 +152,34 @@ def dashboard(request):
             'less_time': less_time,
         })
 
-    # ----------------------------
-    # ৩০ দিনের অ্যাটেন্ডেন্স ট্রেন্ড
-    # ----------------------------
+    # 4) ৩০ দিনের ট্রেন্ড
     start_date = today - timedelta(days=29)
     attendance_trend = []
+    emp_ids = list(employees.values_list('id', flat=True))
+    total_employees = len(emp_ids)
 
     for i in range(30):
         date = start_date + timedelta(days=i)
-        emp_ids = employees.values_list('id', flat=True)
 
-        present_count = Attendance.objects.filter(
-            employee_id__in=emp_ids,
-            timestamp__date=date,
-            status='In'
-        ).values('employee').distinct().count()
-
-        total_employees = employees.count()
+        present_count = (
+            Attendance.objects
+            .filter(employee_id__in=emp_ids, timestamp__date=date, status='In')
+            .values('employee')
+            .distinct()
+            .count()
+        )
         absent_count = total_employees - present_count
 
-        late_count = Attendance.objects.filter(
-            employee_id__in=emp_ids,
-            timestamp__date=date,
-            status='In',
-            timestamp__time__gt='10:30:00'
-        ).count()
+        late_count = (
+            Attendance.objects
+            .filter(
+                employee_id__in=emp_ids,
+                timestamp__date=date,
+                status='In',
+                timestamp__time__gt='10:30:00'
+            )
+            .count()
+        )
 
         attendance_trend.append({
             'date': date.strftime('%Y-%m-%d'),
@@ -149,21 +188,18 @@ def dashboard(request):
             'late': late_count
         })
 
-    # ----------------------------
-    # কন্টেক্সট ডিকশনারি
-    # ----------------------------
+    # 5) কন্টেক্সট
     context = {
         'employee_data': employee_data,
         'departments': departments,
         'selected_department': int(selected_dept) if selected_dept else None,
-        'total_employees': employees.count(),
-        'present': sum(1 for emp in employee_data if emp['in_time']),
-        'absent': sum(1 for emp in employee_data if not emp['in_time']),
-        'late': sum(1 for emp in employee_data if emp['late_time'].total_seconds() > 0),
+        'total_employees': total_employees,
+        'present': sum(1 for e in employee_data if e['in_time']),
+        'absent': sum(1 for e in employee_data if not e['in_time']),
+        'late': sum(1 for e in employee_data if e['late_time'].total_seconds() > 0),
         'attendance_trend': attendance_trend,
         'can_view_salary': user.has_perm('payroll.view_salarysummary'),
     }
-
     return render(request, 'dashboard.html', context)
 
   # attendance_app/views.py
@@ -320,54 +356,95 @@ def generate_attendance_table(employee_qs, start_date, end_date):
 
     return days
 
-# ---------------Monthly Report---------------
+from collections import defaultdict
+from datetime import datetime, timedelta, time
+
+from django.contrib.auth.decorators import login_required
+from django.http import HttpResponseForbidden
+from django.shortcuts import render
+from django.utils import timezone
+from django.utils.timezone import is_naive, make_aware
+
+from .models import Employee, Department, Attendance, Holiday, LeaveRequest
+
+
+# ---------------Monthly Report (Company-scoped)---------------
 @login_required
 def monthly_work_time_report(request):
-    user_company = getattr(request.user.profile, 'company', None)
-    if not user_company:
-        return render(request, 'error.html', {'message': "আপনার কোম্পানি সেট করা নেই।"})
+    # --- Company scope ---
+    user = request.user
+    profile = getattr(user, "profile", None)
+    company = getattr(profile, "company", None)
 
+    if not company:
+        return HttpResponseForbidden("You don't have a company assigned. Please contact an administrator.")
+
+    # --- Date range ---
     start_date_str = request.GET.get('start_date')
     end_date_str = request.GET.get('end_date')
+
+    if not start_date_str or not end_date_str:
+        today = timezone.localdate()
+        start_date = today - timedelta(days=30)
+        end_date = today
+    else:
+        start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+        end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+
+    # --- Filters (department/employee) but always within user's company ---
     selected_dept = request.GET.get('department')
     selected_emp = request.GET.get('employee')
 
-    # ডেট রেঞ্জ সেট
-    today = datetime.today().date()
-    start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date() if start_date_str else today - timedelta(days=30)
-    end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date() if end_date_str else today
+    employees = (
+        Employee.objects
+        .filter(company=company)
+        .select_related('department', 'company')  # perf
+    )
 
-    # Employees filter user company, selected dept & employee অনুযায়ী
-    employees = Employee.objects.filter(department__company=user_company)
     if selected_dept:
-        employees = employees.filter(department__id=selected_dept)
-    if selected_emp:
-        employees = employees.filter(id=selected_emp)
+        employees = employees.filter(department__id=selected_dept, department__company=company)
 
-    # Holidays সেট
-    holidays = Holiday.objects.filter(start_date__lte=end_date, end_date__gte=start_date)
+    if selected_emp:
+        employees = employees.filter(id=selected_emp, company=company)
+
+    # --- Holidays & Leaves are company-scoped ---
+    holidays = Holiday.objects.filter(
+        company=company,
+        start_date__lte=end_date,
+        end_date__gte=start_date
+    )
+
     holiday_dates = {
         holiday.start_date + timedelta(days=i)
         for holiday in holidays
         for i in range((min(holiday.end_date, end_date) - max(holiday.start_date, start_date)).days + 1)
     }
 
+    # NOTE: ক্যালকুলেশন আগের মতই রাখা হয়েছে
     regular_work_time = timedelta(hours=10)
     expected_start_time = time(10, 30)
+
     report_data = []
 
     for emp in employees:
-        attendances = Attendance.objects.filter(
-            employee=emp,
-            timestamp__date__range=(start_date, end_date)
-        ).order_by('timestamp')
+        attendances = (
+            Attendance.objects
+            .filter(
+                employee=emp,
+                employee__company=company,
+                timestamp__date__range=(start_date, end_date)
+            )
+            .order_by('timestamp')
+        )
 
         approved_leaves = LeaveRequest.objects.filter(
+            company=company,
             employee=emp,
             status='Approved',
             start_date__lte=end_date,
             end_date__gte=start_date
         )
+
         leave_dates = {
             leave.start_date + timedelta(days=i)
             for leave in approved_leaves
@@ -401,15 +478,15 @@ def monthly_work_time_report(request):
                 weekly_off_count += 1
                 continue
 
+            if current_date in leave_dates:
+                leave_days_count += 1
+                # Leave day হলে 10 ঘণ্টা কৃতিত্ব
+                total_work_time += regular_work_time
+                continue
+
             records = daily_attendance.get(current_date, [])
             in_times = [r.timestamp for r in records if r.status == 'In']
             out_times = [r.timestamp for r in records if r.status == 'Out']
-
-            if current_date in leave_dates:
-                leave_days_count += 1
-                # Leave day হলে regular_work_time যোগ করা
-                total_work_time += regular_work_time
-                continue
 
             if in_times:
                 in_time = min(in_times)
@@ -425,26 +502,26 @@ def monthly_work_time_report(request):
                     adjusted_in_time = make_aware(adjusted_in_time)
 
                 actual_in_time = max(in_time, adjusted_in_time)
-                present_days += 1
+                present_days += 1  # In থাকলেই Present
 
                 if out_time and out_time > actual_in_time:
                     duration = out_time - actual_in_time
                     total_work_time += duration
 
                     if in_time > adjusted_in_time:
-                        total_late_time += in_time - adjusted_in_time
+                        late = in_time - adjusted_in_time
+                        total_late_time += late
 
                     if duration > regular_work_time:
                         total_over_time += duration - regular_work_time
 
-        expected_work_time = present_days * regular_work_time
+        expected_work_time = (present_days + leave_days_count) * regular_work_time
         total_less_time = max(expected_work_time - total_work_time, timedelta())
         early_leave_time = max(total_less_time - total_late_time, timedelta())
 
         absent_days = total_days - present_days - weekly_off_count - leave_days_count - holiday_count
-        expected_work_time_excl_off = (total_days - weekly_off_count - leave_days_count - holiday_count) * regular_work_time
+        expected_work_time_excl_off = (total_days - weekly_off_count - holiday_count) * regular_work_time
         work_time_difference = expected_work_time_excl_off - total_work_time
-        final_work_time = total_work_time
 
         def format_timedelta(td):
             total_seconds = int(td.total_seconds())
@@ -460,7 +537,7 @@ def monthly_work_time_report(request):
             'less_time': format_timedelta(total_less_time),
             'early_leave_time': format_timedelta(early_leave_time),
             'over_time': format_timedelta(total_over_time),
-            'final_work_time': format_timedelta(final_work_time),
+            'final_work_time': format_timedelta(total_work_time),
             'present_days': present_days,
             'absent_days': absent_days,
             'weekly_off_days': weekly_off_count,
@@ -473,11 +550,12 @@ def monthly_work_time_report(request):
             'work_time_difference': work_time_difference,
         })
 
-    # Departments & Employees list for filter dropdowns
-    departments = Department.objects.filter(company=user_company)
-    employees_all = Employee.objects.filter(department__company=user_company)
+    # Dropdown data: শুধুই নিজের কোম্পানির
+    departments = Department.objects.filter(company=company)
     if selected_dept:
-        employees_all = employees_all.filter(department__id=selected_dept)
+        employees_all = Employee.objects.filter(company=company, department__id=selected_dept)
+    else:
+        employees_all = Employee.objects.filter(company=company)
 
     context = {
         'report_data': report_data,
@@ -491,57 +569,94 @@ def monthly_work_time_report(request):
 
     return render(request, 'monthly_report.html', context)
 
-# --------------montly work time PDF---------------
-from django.contrib.auth.decorators import login_required
-from django.shortcuts import HttpResponse
-from django.utils.timezone import make_aware, is_naive
+
+# --------------Monthly Work Time PDF (Leave বাদ না দিয়ে Expected ঠিক রাখা)---------------
 from collections import defaultdict
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, time
+
+from django.contrib.auth.decorators import login_required
+from django.http import HttpResponse, HttpResponseForbidden
 from django.template.loader import render_to_string
+from django.utils import timezone
+from django.utils.timezone import make_aware, is_naive
 from weasyprint import HTML
-from .models import Employee, Department, Attendance, LeaveRequest
+
+from .models import Employee, Department, Attendance, LeaveRequest, Holiday
+
+
 @login_required
 def monthly_work_time_pdf(request):
-    user_company = getattr(request.user.profile, 'company', None)
+    # --- Company scope ---
+    user_company = getattr(getattr(request.user, "profile", None), "company", None)
     if not user_company:
-        return HttpResponse("আপনার কোম্পানি সেট করা নেই।", status=400)
+        return HttpResponseForbidden("আপনার কোম্পানি সেট করা নেই।")
 
+    # --- Date range (defaults: last 30 days) ---
     start_date_str = request.GET.get('start_date')
     end_date_str = request.GET.get('end_date')
-    selected_dept = request.GET.get('department')
-    selected_emp = request.GET.get('employee')
-
-    today = datetime.today().date()
+    today = timezone.localdate()
     try:
-        start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date() if start_date_str else today - timedelta(days=30)
+        start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date() if start_date_str else (today - timedelta(days=30))
         end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date() if end_date_str else today
     except ValueError:
         return HttpResponse("Invalid date format. Use YYYY-MM-DD", status=400)
+    if end_date < start_date:
+        return HttpResponse("end_date must be on/after start_date", status=400)
 
-    # Employees filter by user company + selected dept/employee
-    employees = Employee.objects.filter(department__company=user_company)
+    # --- Filters (department/employee) within user's company ---
+    selected_dept = request.GET.get('department')
+    selected_emp = request.GET.get('employee')
+
+    employees = (
+        Employee.objects
+        .filter(company=user_company)
+        .select_related('department', 'company')
+    )
     if selected_dept:
-        employees = employees.filter(department__id=selected_dept)
+        employees = employees.filter(department__id=selected_dept, department__company=user_company)
     if selected_emp:
-        employees = employees.filter(id=selected_emp)
+        employees = employees.filter(id=selected_emp, company=user_company)
+
+    # --- Holidays (company-scoped, overlap with range) ---
+    holidays = Holiday.objects.filter(
+        company=user_company,
+        start_date__lte=end_date,
+        end_date__gte=start_date
+    )
+    holiday_dates = {
+        hol.start_date + timedelta(days=i)
+        for hol in holidays
+        for i in range((min(hol.end_date, end_date) - max(hol.start_date, start_date)).days + 1)
+    }
+
+    # --- Constants ---
+    regular_work_time = timedelta(hours=10)
+    expected_start_time = time(10, 30)
 
     report_data = []
-    regular_work_time = timedelta(hours=10)
-    expected_start_time = datetime.strptime("10:30", "%H:%M").time()
 
     for emp in employees:
-        attendances = Attendance.objects.filter(
-            employee=emp,
-            timestamp__date__range=(start_date, end_date)
-        ).order_by('timestamp')
+        # Attendance
+        attendances = (
+            Attendance.objects
+            .filter(
+                employee=emp,
+                employee__company=user_company,
+                timestamp__date__range=(start_date, end_date)
+            )
+            .order_by('timestamp')
+        )
 
+        # Approved leaves
         approved_leaves = LeaveRequest.objects.filter(
+            company=user_company,
             employee=emp,
             status='Approved',
             start_date__lte=end_date,
             end_date__gte=start_date
         )
 
+        # Expand leave dates in range
         leave_dates = set()
         for leave in approved_leaves:
             leave_start = max(leave.start_date, start_date)
@@ -549,10 +664,12 @@ def monthly_work_time_pdf(request):
             for n in range((leave_end - leave_start).days + 1):
                 leave_dates.add(leave_start + timedelta(days=n))
 
+        # Group attendance by day
         daily_attendance = defaultdict(list)
         for att in attendances:
             daily_attendance[att.timestamp.date()].append(att)
 
+        # Aggregates
         total_work_time = timedelta()
         total_late_time = timedelta()
         total_over_time = timedelta()
@@ -563,21 +680,29 @@ def monthly_work_time_pdf(request):
         present_days = 0
         weekly_off_count = 0
         leave_day_count = 0
+        holiday_count = 0
 
         for n in range(days_in_range):
             current_date = start_date + timedelta(days=n)
             weekday = current_date.strftime('%A')
 
+            # Holiday -> exclude from expected
+            if current_date in holiday_dates:
+                holiday_count += 1
+                continue
+
+            # Weekly off -> exclude from expected
             if weekly_off_day and weekday == weekly_off_day:
                 weekly_off_count += 1
                 continue
 
+            # Leave -> count as leave + credit 10h
             if current_date in leave_dates:
                 leave_day_count += 1
-                # Leave দিনগুলোকে 10 ঘণ্টা ধরে total_work_time-এ যোগ করা
                 total_work_time += regular_work_time
                 continue
 
+            # Attendance
             records = daily_attendance.get(current_date, [])
             in_times = [r.timestamp for r in records if r.status == 'In']
             out_times = [r.timestamp for r in records if r.status == 'Out']
@@ -592,24 +717,29 @@ def monthly_work_time_pdf(request):
                 if out_time and is_naive(out_time):
                     out_time = make_aware(out_time)
 
-                expected_start_dt = make_aware(datetime.combine(current_date, expected_start_time))
+                expected_start_dt = datetime.combine(current_date, expected_start_time)
+                if is_naive(expected_start_dt):
+                    expected_start_dt = make_aware(expected_start_dt)
+
                 actual_in_time = max(in_time, expected_start_dt)
 
                 if out_time and out_time > actual_in_time:
                     duration = out_time - actual_in_time
                     total_work_time += duration
+
                     if in_time > expected_start_dt:
                         total_late_time += in_time - expected_start_dt
+
                     if duration > regular_work_time:
                         total_over_time += duration - regular_work_time
                     elif duration < regular_work_time:
                         total_less_time += regular_work_time - duration
 
-        total_excluded_days = weekly_off_count + leave_day_count
-        absent_days = days_in_range - present_days - total_excluded_days
-        total_work_days_excl_off_leave = days_in_range - total_excluded_days
-        expected_work_time_excl_off_leave = total_work_days_excl_off_leave * regular_work_time
-        work_time_difference = expected_work_time_excl_off_leave - total_work_time
+        # ✅ Expected Work Time: Weekly Off + Holiday বাদ, কিন্তু Leave বাদ হবে না
+        expected_work_time = (days_in_range - weekly_off_count - holiday_count) * regular_work_time
+
+        absent_days = days_in_range - present_days - weekly_off_count - leave_day_count - holiday_count
+        work_time_difference = expected_work_time - total_work_time
 
         report_data.append({
             'employee': emp,
@@ -617,14 +747,16 @@ def monthly_work_time_pdf(request):
             'absent_days': absent_days,
             'weekly_off_days': weekly_off_count,
             'leave_days': leave_day_count,
+            'holiday_days': holiday_count,
             'total_work_hours': total_work_time,
-            'expected_work_hours': expected_work_time_excl_off_leave,
+            'expected_work_hours': expected_work_time,
             'difference_time': work_time_difference,
             'late_hours': total_late_time,
             'over_hours': total_over_time,
             'less_hours': total_less_time,
         })
 
+    # Department name (validated in company)
     department_name = None
     if selected_dept:
         try:
@@ -641,6 +773,7 @@ def monthly_work_time_pdf(request):
         'end_date': end_date,
         'department_name': department_name,
         'logo_url': logo_url,
+        'company_name': user_company.name,
     })
 
     pdf = HTML(string=html_string, base_url=request.build_absolute_uri()).write_pdf()
@@ -648,6 +781,7 @@ def monthly_work_time_pdf(request):
     response = HttpResponse(pdf, content_type='application/pdf')
     response['Content-Disposition'] = f'inline; filename="monthly_work_time_{start_date}_to_{end_date}.pdf"'
     return response
+
 
 
 
@@ -1204,6 +1338,8 @@ def employee_attendance_pdf(request, employee_id):
 
     attendance_summary = {}
     total_work_duration = timedelta()
+    total_over_time = timedelta()
+    total_less_time = timedelta()
     holiday_count = 0
     absent_count = 0
     standard_work_duration = timedelta(hours=10)
@@ -1238,13 +1374,16 @@ def employee_attendance_pdf(request, employee_id):
             total_work_duration += daily_work_time
             status = "Present"
 
-            # Compare with 10 hours
+            # Compare with standard_work_duration
             if daily_work_time > standard_work_duration:
                 over_time = daily_work_time - standard_work_duration
                 less_time = timedelta()
             else:
                 less_time = standard_work_duration - daily_work_time
                 over_time = timedelta()
+
+            total_over_time += over_time
+            total_less_time += less_time
         else:
             in_time = None
             out_time = None
@@ -1296,7 +1435,6 @@ def employee_attendance_pdf(request, employee_id):
                     holiday_count -= 1
 
     approved_leave_count = len(approved_leave_days)
-
     total_leave_requests = LeaveRequest.objects.filter(
         employee=emp,
         start_date__lte=end_date,
@@ -1326,6 +1464,8 @@ def employee_attendance_pdf(request, employee_id):
         'absent_count': absent_count,
         'total_leave_requests': total_leave_requests,
         'total_work_duration': total_work_duration,
+        'total_over_time': total_over_time,
+        'total_less_time': total_less_time,
     }
 
     html_string = render_to_string('details_pdf_template.html', context)
@@ -1414,16 +1554,87 @@ from django.contrib.auth.decorators import login_required
 from .models import LeaveRequest, Employee
 from .forms import LeaveRequestForm
 
+from django.shortcuts import render
+from attendance_app.models import LeaveRequest
+from django.db.models import Q
+
+from django.shortcuts import render
+from attendance_app.models import LeaveRequest
+
 @login_required
 def leave_list(request):
-    # শুধু সেই leaves দেখাবে যেগুলো current user's company বা department এর
-    user_company = getattr(request.user.profile, 'company', None)
-    if user_company:
-        leaves = LeaveRequest.objects.select_related('employee').filter(employee__company=user_company)
-    else:
-        leaves = LeaveRequest.objects.none()  # যদি company না থাকে, খালি queryset
-    return render(request, 'leave_list.html', {'leaves': leaves})
+    leaves = LeaveRequest.objects.select_related('employee')
 
+    query = request.GET.get('q', '')
+    if query:
+        leaves = leaves.filter(employee__name__icontains=query)
+
+    context = {
+        'leaves': leaves,
+        'query': query
+    }
+
+    # যদি HTMX request হয়, শুধুমাত্র table অংশ রেন্ডার করো
+    if request.headers.get('HX-Request') == 'true':
+        return render(request, 'partials/leave_table.html', context)
+
+    return render(request, 'leave_list.html', context)
+
+
+
+
+from django.shortcuts import render
+from attendance_app.models import Employee, LeaveRequest
+from django.db.models import Count, Q
+
+@login_required
+def leave_summary(request):
+    employees = Employee.objects.all()
+
+    summary_data = []
+    for emp in employees:
+        emp_leaves = LeaveRequest.objects.filter(employee=emp, status='Approved')
+        leave_count = emp_leaves.count()
+        leave_types = ', '.join(emp_leaves.values_list('leave_type', flat=True))
+        leave_statuses = ', '.join(emp_leaves.values_list('status', flat=True))
+
+        summary_data.append({
+            'employee': emp.name,
+            'total_leave': leave_count,
+            'leave_types': leave_types,
+            'leave_statuses': leave_statuses,
+        })
+
+    context = {
+        'summary_data': summary_data
+    }
+    return render(request, 'leave_summary.html', context)
+
+@login_required
+def leave_summary_pdf(request):
+    employees = Employee.objects.all()
+
+    summary_data = []
+    for emp in employees:
+        emp_leaves = LeaveRequest.objects.filter(employee=emp, status='Approved')
+        leave_count = emp_leaves.count()
+        leave_types = ', '.join(emp_leaves.values_list('leave_type', flat=True))
+        leave_statuses = ', '.join(emp_leaves.values_list('status', flat=True))
+
+        summary_data.append({
+            'employee': emp.name,
+            'total_leave': leave_count,
+            'leave_types': leave_types,
+            'leave_statuses': leave_statuses,
+        })
+
+    html_string = render_to_string('leave_summary_pdf.html', {'summary_data': summary_data})
+    html = HTML(string=html_string)
+    pdf = html.write_pdf()
+
+    response = HttpResponse(pdf, content_type='application/pdf')
+    response['Content-Disposition'] = 'inline; filename="leave_summary.pdf"'
+    return response
 
 @login_required
 def leave_create(request):

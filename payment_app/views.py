@@ -89,7 +89,7 @@ def create_bkash_payment(request, slug):
     payload = {
         "mode": "0011",
         "payerReference": str(request.user.id),  # user এর id বা অন্য কিছু দিতে পারো
-        "callbackURL": "https://easycodingbd.com/Payment-Status/",  # নিশ্চিত হও এই URL কাজ করে
+        "callbackURL": "http://127.0.0.1:8000/Payment-Status/",  # নিশ্চিত হও এই URL কাজ করে
         "amount": str(plan.price),  # discount_price না থাকলে price নাও
         "currency": "BDT",
         "intent": "sale",

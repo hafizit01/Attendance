@@ -105,9 +105,9 @@
             <td class="px-4 py-2 whitespace-nowrap border border-gray-300">{{ forloop.counter }}</td>
             <td class="px-4 py-2 whitespace-nowrap border border-gray-300">{{ s.employee.name }}</td>
             <td class="px-4 py-2 whitespace-nowrap border border-gray-300">{{ s.month }}</td>
-            <td class="px-4 py-2 whitespace-nowrap border border-gray-300">рз│ {{ s.base_salary }}</td>
-            <td class="px-4 py-2 whitespace-nowrap border border-gray-300">рз│ {{ s.bank_transfer }}</td>
-            <td class="px-4 py-2 whitespace-nowrap border border-gray-300">рз│ {{ s.cash_amount }}</td>
+            <td class="px-4 py-2 whitespace-nowrap border border-gray-300">৳ {{ s.base_salary }}</td>
+            <td class="px-4 py-2 whitespace-nowrap border border-gray-300">৳ {{ s.bank_transfer }}</td>
+            <td class="px-4 py-2 whitespace-nowrap border border-gray-300">৳ {{ s.cash_amount }}</td>
             
             <td class="px-4 py-2 whitespace-nowrap border border-gray-300">{{ s.present_days }}</td>
             <td class="px-4 py-2 whitespace-nowrap border border-gray-300">{{ s.leave_days }}</td>
@@ -120,8 +120,8 @@
             <td class="px-4 py-2 whitespace-nowrap border border-gray-300">{{ s.expected_work_hours }}</td>
             <td class="px-4 py-2 whitespace-nowrap border border-gray-300">{{ s.work_time_difference }}</td>
             
-            <td class="px-4 py-2 whitespace-nowrap border border-gray-300 font-semibold text-green-700 text-right">рз│ {{ s.final_salary }}</td>
-            <td class="px-4 py-2 whitespace-nowrap border border-gray-300 font-semibold text-red-700 text-right">рз│ {{ s.payable_cash }}</td> <!-- Payable Cash ржПржЦрж╛ржирзЗ -->
+            <td class="px-4 py-2 whitespace-nowrap border border-gray-300 font-semibold text-green-700 text-right">৳ {{ s.final_salary }}</td>
+            <td class="px-4 py-2 whitespace-nowrap border border-gray-300 font-semibold text-red-700 text-right">৳ {{ s.payable_cash }}</td> <!-- Payable Cash ржПржЦрж╛ржирзЗ -->
         </tr>
         {% endfor %}
     </tbody>
@@ -129,10 +129,10 @@
     <tfoot class="bg-gray-100 font-semibold">
         <tr>
             <td colspan="3" class="px-4 py-2 border border-gray-300 text-right">Basic Salary Total:</td>
-            <td class="px-4 py-2 border border-gray-300 text-blue-700 font-bold">рз│ {{ total_base_salary }}</td>
+            <td class="px-4 py-2 border border-gray-300 text-blue-700 font-bold">৳ {{ total_base_salary }}</td>
             
-            <td class="px-4 py-2 border border-gray-300 text-blue-700 font-bold">рз│ {{ total_bank_transfer }}</td>
-            <td class="px-4 py-2 border border-gray-300 text-blue-700 font-bold">рз│ {{ total_cash_amount }}</td>
+            <td class="px-4 py-2 border border-gray-300 text-blue-700 font-bold">৳ {{ total_bank_transfer }}</td>
+            <td class="px-4 py-2 border border-gray-300 text-blue-700 font-bold">৳ {{ total_cash_amount }}</td>
             <td colspan="1"></td> <!-- ржПржЦрж╛ржирзЗ ржПржХржЯрзБ ржЦрж╛рж▓рж┐ рж╕рзНржкрзЗрж╕ ржжрж┐рзЯрзЗ ржжрж┐рж▓рж╛ржо -->
             
             <td colspan="5"></td>
@@ -147,7 +147,7 @@
                     text-gray-700
                 {% endif %}
             ">
-                рз│ {{ total_salary_difference }}
+                ৳ {{ total_salary_difference }}
 
                 {% if total_salary_difference > 0 %}
                     <span class="ml-2 text-green-600 font-normal text-xs">(Extra Salary Paid)</span>
@@ -160,9 +160,9 @@
             </td>
 
             <td colspan="2" class="px-4 py-2 border border-gray-300 text-right">Final Salary Total:</td>
-            <td class="px-4 py-2 border border-gray-300 text-green-700 font-bold">рз│ {{ total_final_salary }}</td>
+            <td class="px-4 py-2 border border-gray-300 text-green-700 font-bold">৳ {{ total_final_salary }}</td>
             
-            <td class="px-4 py-2 border border-gray-300 text-red-700 font-bold">рз│ {{ total_payable_cash }}</td> <!-- ржлрзБржЯрж╛рж░рзЗ Payable Cash ржЯрзЛржЯрж╛рж▓ -->
+            <td class="px-4 py-2 border border-gray-300 text-red-700 font-bold">৳ {{ total_payable_cash }}</td> <!-- ржлрзБржЯрж╛рж░рзЗ Payable Cash ржЯрзЛржЯрж╛рж▓ -->
         </tr>
     </tfoot>
 </table>

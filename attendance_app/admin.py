@@ -19,7 +19,6 @@ class EmployeeAdmin(admin.ModelAdmin):
     list_filter = ['company', 'department']
     search_fields = ['name']
 
-admin.site.register(Attendance)
 
 @admin.register(LeaveRequest)
 class LeaveRequestAdmin(admin.ModelAdmin):
@@ -27,4 +26,16 @@ class LeaveRequestAdmin(admin.ModelAdmin):
     list_filter = ['status', 'leave_type']
     search_fields = ['employee__name']
 
+
+
+@admin.register(Attendance)
+class AttendanceAdmin(admin.ModelAdmin):
+    list_display = ('employee', 'company', 'timestamp', 'status')
+    list_filter = ('company', 'status')
+    search_fields = ('employee__name', 'employee__device_user_id')
+    ordering = ('-timestamp',)
+
+
+
 admin.site.register(Holiday)
+

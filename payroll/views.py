@@ -136,263 +136,314 @@ def is_not_attendance_group(user):
 
 # payroll/views.py
 
-
-# ... তোমার অন্য import গুলো
-
 from collections import defaultdict
-from decimal import Decimal
 from datetime import datetime, timedelta, time
-from django.utils.timezone import make_aware, is_naive
+from decimal import Decimal
+
 from django.contrib.auth.decorators import login_required, user_passes_test
-from collections import defaultdict
-from datetime import datetime, timedelta, time
-from decimal import Decimal
-from django.utils.timezone import is_naive, make_aware
-from collections import defaultdict
-from datetime import datetime, timedelta, time
-from decimal import Decimal
+from django.http import HttpResponseForbidden
+from django.shortcuts import render, redirect
 from django.utils.timezone import is_naive, make_aware
 
-def get_salary_summary_data(month_str, department_id=None, employee_id=None,user_company=None):
+from .models import EmployeeSalary
+
+# def is_not_attendance_group(user): ...
+
+
+def get_salary_summary_data(request, month_str, department_id=None, employee_id=None):
+    """
+    Company-scoped salary summary:
+      - Logged-in user's company ছাড়া কিছুই দেখা যাবে না
+      - Expected hours = (working days excluding weekly off & public holidays) * 10
+        (Leave বাদ হবে না)
+      - Leave day:
+          * Attendance থাকলে duration হিসাব হবে,
+            কিন্তু total_work_time-এ যোগ হবে max(duration, 10h)
+          * Attendance না থাকলে total_work_time += 10h
+        present_days কেবল attendance থাকলেই বাড়বে
+      - Absent কখনোই negative হবে না
+    """
+    user_company = getattr(getattr(request.user, "profile", None), "company", None)
+    if not user_company:
+        raise PermissionError("User has no company assigned")
+
     summary_data = []
-    departments = Department.objects.all()
-    employees_qs = Employee.objects.select_related('department')
 
-    # Safe filter for department and employee
-
-    employees_qs = Employee.objects.select_related('department')
-    if user_company:
-        employees_qs = employees_qs.filter(company=user_company)
-        departments = departments.filter(company=user_company)  # department list-ও company অনুযায়ী ফিল্টার হবে
+    # Dropdowns (company-scoped)
+    departments = Department.objects.filter(company=user_company)
+    employees_qs = Employee.objects.filter(company=user_company).select_related('department', 'company')
 
     if department_id:
-        try:
-            department_id_int = int(department_id)
-            employees_qs = employees_qs.filter(department__id=department_id_int)
-        except (ValueError, TypeError):
-            department_id_int = None
-    else:
-        department_id_int = None
-
+        employees_qs = employees_qs.filter(department__id=department_id, department__company=user_company)
     if employee_id:
-        try:
-            employee_id_int = int(employee_id)
-            employees_qs = employees_qs.filter(id=employee_id_int)
-        except (ValueError, TypeError):
-            employee_id_int = None
-    else:
-        employee_id_int = None
+        employees_qs = employees_qs.filter(id=employee_id, company=user_company)
 
     total_base_salary = Decimal(0)
     total_final_salary = Decimal(0)
     total_payable_cash = Decimal(0)
 
-    # Handle month safely
-    if month_str and month_str.lower() != 'none':
-        try:
-            year, month = map(int, month_str.split('-'))
-        except ValueError:
-            year, month = datetime.today().year, datetime.today().month
-    else:
-        year, month = datetime.today().year, datetime.today().month
+    if month_str:
+        year, month = map(int, month_str.split('-'))
+        start_date = datetime(year, month, 1).date()
+        # মাসের শেষ দিন
+        end_date = (start_date.replace(day=28) + timedelta(days=4)).replace(day=1) - timedelta(days=1)
 
-    start_date = datetime(year, month, 1).date()
-    end_date = (start_date.replace(day=28) + timedelta(days=4)).replace(day=1) - timedelta(days=1)
-
-    holidays = Holiday.objects.filter(start_date__lte=end_date, end_date__gte=start_date)
-    public_holiday_dates = set()
-    for holiday in holidays:
-        overlap_start = max(start_date, holiday.start_date)
-        overlap_end = min(end_date, holiday.end_date)
-        for i in range((overlap_end - overlap_start).days + 1):
-            public_holiday_dates.add(overlap_start + timedelta(days=i))
-
-    for emp in employees_qs:
-        try:
-            salary = emp.employeesalary
-            base_salary = salary.base_salary
-            bank_transfer = salary.bank_transfer_amount
-            cash = base_salary - bank_transfer
-        except EmployeeSalary.DoesNotExist:
-            continue
-
-        attendances = Attendance.objects.filter(
-            employee=emp,
-            timestamp__date__range=(start_date, end_date)
-        ).order_by('timestamp')
-
-        approved_leaves = LeaveRequest.objects.filter(
-            employee=emp,
-            status='Approved',
+        # Company-scoped public holidays
+        holidays = Holiday.objects.filter(
+            company=user_company,
             start_date__lte=end_date,
             end_date__gte=start_date
         )
+        public_holiday_dates = set()
+        for holiday in holidays:
+            s = max(start_date, holiday.start_date)
+            e = min(end_date, holiday.end_date)
+            for i in range((e - s).days + 1):
+                public_holiday_dates.add(s + timedelta(days=i))
 
-        leave_dates = {
-            leave.start_date + timedelta(days=i)
-            for leave in approved_leaves
-            for i in range((min(leave.end_date, end_date) - max(leave.start_date, start_date)).days + 1)
-        }
-
-        daily_attendance = defaultdict(list)
-        for att in attendances:
-            daily_attendance[att.timestamp.date()].append(att)
-
-        off_day = emp.department.weekly_off_day if emp.department else None
-        expected_start_time = emp.department.in_time if emp.department else time(10, 30)
-        regular_work_time = timedelta(hours=10)
-
-        total_days = (end_date - start_date).days + 1
-        present_days = leave_days_count = weekly_off_count = public_holiday_count = 0
-        total_work_time = total_late_time = total_over_time = timedelta()
-        total_working_days = 0
-
-        # মোট কাজের দিন (off_day এবং public holiday বাদে)
-        for n in range(total_days):
-            current_date = start_date + timedelta(days=n)
-            weekday = current_date.strftime('%A')
-            if weekday != off_day and current_date not in public_holiday_dates:
-                total_working_days += 1
-
-        for n in range(total_days):
-            current_date = start_date + timedelta(days=n)
-            weekday = current_date.strftime('%A')
-
-            if current_date in public_holiday_dates:
-                public_holiday_count += 1
-                continue
-            if weekday == off_day:
-                weekly_off_count += 1
+        for emp in employees_qs:
+            # Salary fetch
+            try:
+                sal = emp.employeesalary
+                base_salary = sal.base_salary
+                bank_transfer = sal.bank_transfer_amount
+                cash = base_salary - bank_transfer
+            except EmployeeSalary.DoesNotExist:
                 continue
 
-            records = daily_attendance.get(current_date, [])
-            in_times = [r.timestamp for r in records if r.status == 'In']
-            out_times = [r.timestamp for r in records if r.status == 'Out']
+            # Attendance & Leave
+            attendances = Attendance.objects.filter(
+                employee=emp,
+                timestamp__date__range=(start_date, end_date)
+            ).order_by('timestamp')
 
-            if current_date in leave_dates:
-                leave_days_count += 1
-                if in_times:
-                    in_time = min(in_times)
-                    out_time = max(out_times) if out_times else None
+            approved_leaves = LeaveRequest.objects.filter(
+                company=user_company,
+                employee=emp,
+                status='Approved',
+                start_date__lte=end_date,
+                end_date__gte=start_date
+            )
+
+            # Expand leave dates into a set
+            leave_dates = {
+                lv.start_date + timedelta(days=i)
+                for lv in approved_leaves
+                for i in range((min(lv.end_date, end_date) - max(lv.start_date, start_date)).days + 1)
+            }
+
+            daily = defaultdict(list)
+            for a in attendances:
+                daily[a.timestamp.date()].append(a)
+
+            off_day = emp.department.weekly_off_day if emp.department else None
+            expected_start = emp.department.in_time if emp.department else time(10, 30)
+            regular = timedelta(hours=10)
+
+            total_days = (end_date - start_date).days + 1
+            present_days = 0
+            leave_days = 0
+            weekly_off = 0
+            pub_holiday = 0
+            total_work_time = timedelta()
+            total_late_time = timedelta()
+            total_over_time = timedelta()
+
+            # Working days = total - (weekly off + public holiday)
+            working_days = 0
+            for n in range(total_days):
+                d = start_date + timedelta(days=n)
+                if d in public_holiday_dates:
+                    continue
+                if off_day and d.strftime('%A') == off_day:
+                    continue
+                working_days += 1
+
+            # Per-day calc
+            for n in range(total_days):
+                d = start_date + timedelta(days=n)
+                wd = d.strftime('%A')
+
+                # Public holiday → exclude from expected & skip
+                if d in public_holiday_dates:
+                    pub_holiday += 1
+                    continue
+
+                # Weekly off → exclude from expected & skip
+                if off_day and wd == off_day:
+                    weekly_off += 1
+                    continue
+
+                recs = daily.get(d, [])
+                ins = [r.timestamp for r in recs if r.status == 'In']
+                outs = [r.timestamp for r in recs if r.status == 'Out']
+
+                # --- Leave day ---
+                if d in leave_dates:
+                    leave_days += 1
+
+                    # Default duration = 0, attendance থাকলে হিসাব করব
+                    duration = timedelta()
+
+                    if ins:
+                        in_time = min(ins)
+                        out_time = max(outs) if outs else None
+
+                        if is_naive(in_time):
+                            in_time = make_aware(in_time)
+
+                        if out_time:
+                            if is_naive(out_time):
+                                out_time = make_aware(out_time)
+                            adj_in = datetime.combine(in_time.date(), expected_start)
+                            if is_naive(adj_in):
+                                adj_in = make_aware(adj_in)
+                            real_in = max(in_time, adj_in)
+                            if out_time > real_in:
+                                duration = out_time - real_in
+
+                        # Late/OT হিসাব duration-এর উপরই
+                        exp_dt = datetime.combine(in_time.date(), expected_start)
+                        if is_naive(exp_dt):
+                            exp_dt = make_aware(exp_dt)
+                        if in_time > exp_dt:
+                            total_late_time += in_time - exp_dt
+                        if duration > regular:
+                            total_over_time += duration - regular
+
+                        # Attendance থাকলে present
+                        present_days += 1
+
+                    # ✅ Leave দিনে ক্রেডিট: max(duration, 10h)
+                    credited = max(duration, regular)
+                    total_work_time += credited
+                    continue
+
+                # --- Normal day (not leave) ---
+                if ins:
+                    in_time = min(ins)
+                    out_time = max(outs) if outs else None
+
                     if is_naive(in_time):
                         in_time = make_aware(in_time)
-                    duration = timedelta()
+
+                    dur = timedelta()
                     if out_time:
                         if is_naive(out_time):
                             out_time = make_aware(out_time)
-                        adjusted_in_time = datetime.combine(in_time.date(), expected_start_time)
-                        if is_naive(adjusted_in_time):
-                            adjusted_in_time = make_aware(adjusted_in_time)
-                        actual_in_time = max(in_time, adjusted_in_time)
-                        if out_time > actual_in_time:
-                            duration = out_time - actual_in_time
-                    total_work_time += duration
-                    expected_datetime = datetime.combine(in_time.date(), expected_start_time)
-                    if is_naive(expected_datetime):
-                        expected_datetime = make_aware(expected_datetime)
-                    if in_time > expected_datetime:
-                        total_late_time += in_time - expected_datetime
-                    if duration > regular_work_time:
-                        total_over_time += duration - regular_work_time
+                        adj_in = datetime.combine(in_time.date(), expected_start)
+                        if is_naive(adj_in):
+                            adj_in = make_aware(adj_in)
+                        real_in = max(in_time, adj_in)
+                        if out_time > real_in:
+                            dur = out_time - real_in
+
                     present_days += 1
-                else:
-                    total_work_time += regular_work_time
-                continue
+                    total_work_time += dur
 
-            if in_times:
-                in_time = min(in_times)
-                out_time = max(out_times) if out_times else None
-                if is_naive(in_time):
-                    in_time = make_aware(in_time)
-                duration = timedelta()
-                if out_time:
-                    if is_naive(out_time):
-                        out_time = make_aware(out_time)
-                    adjusted_in_time = datetime.combine(in_time.date(), expected_start_time)
-                    if is_naive(adjusted_in_time):
-                        adjusted_in_time = make_aware(adjusted_in_time)
-                    actual_in_time = max(in_time, adjusted_in_time)
-                    if out_time > actual_in_time:
-                        duration = out_time - actual_in_time
-                present_days += 1
-                total_work_time += duration
-                expected_datetime = datetime.combine(in_time.date(), expected_start_time)
-                if is_naive(expected_datetime):
-                    expected_datetime = make_aware(expected_datetime)
-                if in_time > expected_datetime:
-                    total_late_time += in_time - expected_datetime
-                if duration > regular_work_time:
-                    total_over_time += duration - regular_work_time
+                    exp_dt = datetime.combine(in_time.date(), expected_start)
+                    if is_naive(exp_dt):
+                        exp_dt = make_aware(exp_dt)
+                    if in_time > exp_dt:
+                        total_late_time += in_time - exp_dt
+                    if dur > regular:
+                        total_over_time += dur - regular
 
-        absent_days = total_working_days - present_days - leave_days_count
-        expected_work_hours = total_working_days * 10
-        actual_work_hours = total_work_time.total_seconds() / 3600
-        hourly_rate = base_salary / Decimal(expected_work_hours) if expected_work_hours > 0 else Decimal(0)
+            # Absent clamp (never negative)
+            absent_days = max(0, working_days - present_days - leave_days)
 
-        if actual_work_hours < expected_work_hours:
-            earned_salary = Decimal(actual_work_hours) * hourly_rate
-        else:
-            extra_hours = actual_work_hours - expected_work_hours
-            earned_salary = (Decimal(expected_work_hours) * hourly_rate) + (Decimal(extra_hours) * hourly_rate * Decimal(1.5))
+            # Expected hours: weekly off + public holidays বাদ, leave বাদ নয়
+            expected_hours = working_days * 10  # hours
 
-        payable_cash = earned_salary - bank_transfer
+            # Actual hours (float)
+            actual_hours = total_work_time.total_seconds() / 3600
 
-        total_base_salary += base_salary
-        total_final_salary += earned_salary
-        total_payable_cash += payable_cash
+            hourly_rate = (base_salary / Decimal(expected_hours)) if expected_hours > 0 else Decimal(0)
 
-        total_seconds = int(total_work_time.total_seconds())
-        hours = total_seconds // 3600
-        minutes = (total_seconds % 3600) // 60
-        seconds = total_seconds % 60
-        formatted_total_work_time = f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+            # Earned salary: up to expected at 1x, extra at 1.5x
+            if actual_hours <= expected_hours:
+                earned_salary = Decimal(actual_hours) * hourly_rate
+            else:
+                extra = actual_hours - expected_hours
+                earned_salary = (
+                    Decimal(expected_hours) * hourly_rate
+                    + Decimal(extra) * hourly_rate * Decimal('1.5')
+                )
 
-        diff_seconds = int((total_work_time - timedelta(hours=expected_work_hours)).total_seconds())
-        diff_hours = abs(diff_seconds) // 3600
-        diff_minutes = (abs(diff_seconds) % 3600) // 60
-        diff_seconds_remain = abs(diff_seconds) % 60
-        diff_sign = "-" if diff_seconds < 0 else "+"
-        formatted_work_diff = f"{diff_sign}{diff_hours:02d}:{diff_minutes:02d}:{diff_seconds_remain:02d}"
+            payable_cash = earned_salary - bank_transfer
 
-        late_seconds = int(total_late_time.total_seconds())
-        late_hours = late_seconds // 3600
-        late_minutes = (late_seconds % 3600) // 60
-        late_seconds_remain = late_seconds % 60
-        formatted_late_time = f"{late_hours:02d}:{late_minutes:02d}:{late_seconds_remain:02d}"
+            total_base_salary += base_salary
+            total_final_salary += earned_salary
+            total_payable_cash += payable_cash
 
-        summary_data.append({
-            'employee': emp,
-            'month': f"{year}-{month:02d}",
-            'base_salary': base_salary,
-            'bank_transfer': round(bank_transfer, 2),
-            'cash_amount': round(cash, 2),
-            'present_days': present_days,
-            'leave_days': leave_days_count,
-            'absent_days': absent_days,
-            'weekly_off_days': weekly_off_count,
-            'holiday_days': public_holiday_count,
-            'total_work_hours': formatted_total_work_time,
-            'expected_work_hours': f"{expected_work_hours:.0f}:00:00",
-            'work_time_difference': formatted_work_diff,
-            'late_time': formatted_late_time,
-            'over_time': total_over_time,
-            'final_salary': round(earned_salary, 2),
-            'payable_cash': round(payable_cash, 2),
-        })
+            # Formatting HH:MM:SS
+            tot_sec = int(total_work_time.total_seconds())
+            hh = tot_sec // 3600
+            mm = (tot_sec % 3600) // 60
+            ss = tot_sec % 60
+            fmt_total_work = f"{hh:02d}:{mm:02d}:{ss:02d}"
+
+            diff_sec = int((total_work_time - timedelta(hours=expected_hours)).total_seconds())
+            dh = abs(diff_sec) // 3600
+            dm = (abs(diff_sec) % 3600) // 60
+            ds = abs(diff_sec) % 60
+            sign = "-" if diff_sec < 0 else "+"
+            fmt_diff = f"{sign}{dh:02d}:{dm:02d}:{ds:02d}"
+
+            late_sec = int(total_late_time.total_seconds())
+            lh = late_sec // 3600
+            lm = (late_sec % 3600) // 60
+            ls = late_sec % 60
+            fmt_late = f"{lh:02d}:{lm:02d}:{ls:02d}"
+
+            summary_data.append({
+                'employee': emp,
+                'month': month_str,
+
+                'base_salary': base_salary,
+                'bank_transfer': round(bank_transfer, 2),
+                'cash_amount': round(cash, 2),
+
+                'present_days': present_days,
+                'leave_days': leave_days,
+                'absent_days': absent_days,
+                'weekly_off_days': weekly_off,
+                'holiday_days': pub_holiday,
+
+                'total_work_hours': fmt_total_work,
+                'expected_work_hours': f"{expected_hours:.0f}:00:00",
+                'work_time_difference': fmt_diff,
+                'late_time': fmt_late,
+                'over_time': total_over_time,  # timedelta হিসেবেই রাখা
+
+                'final_salary': round(earned_salary, 2),
+                'payable_cash': round(payable_cash, 2),
+            })
 
     total_salary_difference = total_final_salary - total_base_salary
-    total_bank_transfer = sum([s.get('bank_transfer', Decimal(0)) for s in summary_data])
-    total_cash_amount = sum([s.get('cash_amount', Decimal(0)) for s in summary_data])
+    total_bank_transfer = Decimal(0)
+    total_cash_amount = Decimal(0)
+
+    for row in summary_data:
+        total_bank_transfer += row.get('bank_transfer', Decimal(0))
+        total_cash_amount += row.get('cash_amount', Decimal(0))
+
+    employees_dropdown = (
+        Employee.objects.filter(company=user_company, department_id=department_id)
+        if department_id else
+        Employee.objects.filter(company=user_company)
+    )
 
     return {
         'summaries': summary_data,
         'departments': departments,
-        'employees': Employee.objects.filter(department_id=department_id_int) if department_id_int else Employee.objects.all(),
-        'selected_month': f"{year}-{month:02d}",
-        'selected_department': department_id_int,
-        'selected_employee': employee_id_int,
-        'selected_department_id': department_id_int or '',
-        'selected_employee_id': employee_id_int or '',
+        'employees': employees_dropdown,
+        'selected_month': month_str,
+        'selected_department': int(department_id) if department_id else None,
+        'selected_employee': int(employee_id) if employee_id else None,
+        'selected_department_id': int(department_id) if department_id else '',
+        'selected_employee_id': int(employee_id) if employee_id else '',
+
         'total_base_salary': round(total_base_salary, 2),
         'total_final_salary': round(total_final_salary, 2),
         'total_salary_difference': round(total_salary_difference, 2),
@@ -408,22 +459,16 @@ def salary_summary_list(request):
     if request.user.groups.filter(name='attendance').exists():
         return redirect('dashboard')
 
-    month_str = request.GET.get('month') or datetime.today().strftime('%Y-%m')
-    department_id = request.GET.get('department') or ''
-    employee_id = request.GET.get('employee') or ''
+    user_company = getattr(getattr(request.user, "profile", None), "company", None)
+    if not user_company:
+        return HttpResponseForbidden("আপনার কোম্পানি সেট করা নেই।")
 
-    # current user এর company বের করা
-    user_company = getattr(request.user.profile, 'company', None)
+    month_str = request.GET.get('month')
+    department_id = request.GET.get('department')
+    employee_id = request.GET.get('employee')
 
-    # company অনুযায়ী ডেটা আনা
-    context = get_salary_summary_data(
-        month_str,
-        department_id,
-        employee_id,
-        user_company=user_company
-    )
+    context = get_salary_summary_data(request, month_str, department_id, employee_id)
     return render(request, 'payroll/salary_summary_list.html', context)
-
 
 
 
@@ -456,47 +501,171 @@ def export_salary_summary_pdf(request):
     response['Content-Disposition'] = 'inline; filename="salary_summary.pdf"'
     return response
 
+# payroll/views.py
+
 
 # payroll/views.py
-from .models import EmployeeSalary
-from attendance_app.models import Employee
+from decimal import Decimal, InvalidOperation
+from calendar import month_name
+
+from django.contrib import messages
+from django.contrib.auth.decorators import login_required, user_passes_test
+from django.core.paginator import Paginator
+from django.db import transaction
+from django.db.models import Q
 from django.shortcuts import render, redirect
-from django.db import transaction
-from decimal import Decimal, InvalidOperation
 
+from attendance_app.models import Employee
+from .models import EmployeeSalary
 
-from django.db import transaction
-from decimal import Decimal, InvalidOperation
+# def is_not_attendance_group(user): ...
 
 @login_required
 @user_passes_test(is_not_attendance_group)
 def set_base_salaries(request):
-    employees = Employee.objects.all()  # সকল employee
+    """
+    - Company scope
+    - Database serial (Employee.id ASC) অনুযায়ী সাজানো
+    - Search: q (name/device_user_id)
+    - Pagination: per (default 30)
+    - Bonus fields সাপোর্ট (থাকলে)
+    """
 
-    if request.method == 'POST':
-        with transaction.atomic():  # batch update
+    # company scope
+    user_company = getattr(getattr(request.user, "profile", None), "company", None)
+    if not user_company:
+        messages.error(request, "আপনার প্রোফাইলে কোম্পানি সেট করা নেই।")
+        return redirect("dashboard")
+
+    # query params
+    q = (request.GET.get("q") or "").strip()
+    try:
+        per = int(request.GET.get("per") or 30)
+        if per <= 0 or per > 200:
+            per = 30
+    except ValueError:
+        per = 30
+
+    # base queryset (company-scoped), SERIAL ORDER = id ASC
+    employees_qs = (
+        Employee.objects.select_related("employeesalary", "department")
+        .filter(company=user_company)
+        .order_by("id")  # database serial asc
+    )
+
+    # search (name / device_user_id)
+    if q:
+        if q.isdigit():
+            employees_qs = employees_qs.filter(
+                Q(name__icontains=q) | Q(device_user_id=int(q))
+            )
+        else:
+            employees_qs = employees_qs.filter(name__icontains=q)
+
+    # pagination
+    paginator = Paginator(employees_qs, per)
+    page_obj = paginator.get_page(request.GET.get("page"))
+    employees = page_obj.object_list  # শুধু এই পেজের এমপ্লয়ি
+
+    # POST: শুধু current page-এর রেকর্ডগুলো সেভ হবে
+    if request.method == "POST":
+        updated, skipped, invalid = 0, 0, 0
+        with transaction.atomic():
             for emp in employees:
-                salary_val = request.POST.get(f'salary_{emp.id}')
-                bank_val = request.POST.get(f'bank_transfer_{emp.id}')
+                # field names
+                k_base = f"salary_{emp.id}"
+                k_bank = f"bank_transfer_{emp.id}"
+                k_bperc = f"bonus_percent_{emp.id}"
+                k_bfix  = f"bonus_fixed_{emp.id}"
+                k_bmon  = f"bonus_month_{emp.id}"
 
-                if salary_val:
-                    try:
-                        base_salary = Decimal(salary_val)
-                    except InvalidOperation:
-                        base_salary = Decimal(0)
+                v_base  = (request.POST.get(k_base) or "").strip()
+                v_bank  = (request.POST.get(k_bank) or "").strip()
+                v_bperc = (request.POST.get(k_bperc) or "").strip()
+                v_bfix  = (request.POST.get(k_bfix) or "").strip()
+                v_bmon  = (request.POST.get(k_bmon) or "").strip()
 
-                    try:
-                        bank_transfer = Decimal(bank_val or 0)
-                    except InvalidOperation:
-                        bank_transfer = Decimal(0)
+                # সব ফাঁকা হলে স্কিপ
+                if v_base == "" and v_bank == "" and v_bperc == "" and v_bfix == "" and v_bmon == "":
+                    skipped += 1
+                    continue
 
-                    EmployeeSalary.objects.update_or_create(
-                        employee=emp,
-                        defaults={
-                            'base_salary': base_salary,
-                            'bank_transfer_amount': bank_transfer,
-                        }
+                # parse
+                try:
+                    base_salary = Decimal(v_base) if v_base != "" else Decimal("0")
+                except InvalidOperation:
+                    invalid += 1
+                    continue
+
+                try:
+                    bank_transfer = Decimal(v_bank) if v_bank != "" else Decimal("0")
+                except InvalidOperation:
+                    bank_transfer = Decimal("0")
+
+                try:
+                    bonus_percent = Decimal(v_bperc) if v_bperc != "" else Decimal("0")
+                except InvalidOperation:
+                    bonus_percent = Decimal("0")
+
+                try:
+                    bonus_fixed = Decimal(v_bfix) if v_bfix != "" else Decimal("0")
+                except InvalidOperation:
+                    bonus_fixed = Decimal("0")
+
+                try:
+                    bonus_month = int(v_bmon) if v_bmon else 12
+                    if bonus_month < 1 or bonus_month > 12:
+                        bonus_month = 12
+                except ValueError:
+                    bonus_month = 12
+
+                # clamp: bank ≤ base
+                if bank_transfer > base_salary:
+                    bank_transfer = base_salary
+                    messages.warning(
+                        request,
+                        f"{emp.name}: Bank transfer base salary-এর চেয়ে বেশি হতে পারে না—adjusted."
                     )
-        return redirect('salary_summary_list')
 
-    return render(request, 'payroll/set_base_salaries.html', {'employees': employees})
+                defaults = {
+                    "company": user_company,
+                    "base_salary": base_salary,
+                    "bank_transfer_amount": bank_transfer,
+                }
+                # bonus ফিল্ড থাকলে তবেই সেট করবো
+                if hasattr(EmployeeSalary, "yearly_bonus_percent"):
+                    defaults["yearly_bonus_percent"] = bonus_percent
+                if hasattr(EmployeeSalary, "yearly_bonus_fixed"):
+                    defaults["yearly_bonus_fixed"] = bonus_fixed
+                if hasattr(EmployeeSalary, "bonus_payout_month"):
+                    defaults["bonus_payout_month"] = bonus_month
+
+                EmployeeSalary.objects.update_or_create(employee=emp, defaults=defaults)
+                updated += 1
+
+        if updated:
+            messages.success(request, f"✅ {updated} টি রেকর্ড (এই পেজ) আপডেট হয়েছে।")
+        if skipped:
+            messages.info(request, f"ℹ️ {skipped} টি রেকর্ডে কোনো পরিবর্তন ছিল না (স্কিপ)।")
+        if invalid:
+            messages.error(request, f"⚠️ {invalid} টি রেকর্ডে অবৈধ ইনপুট ছিল (স্কিপ)।")
+
+        # একই পেজ/কুয়েরি তে ফিরে যাই
+        return redirect(f"{request.path}?q={q}&per={per}&page={page_obj.number}")
+
+    # months (value,label) for dropdown
+    month_choices = [(i, month_name[i]) for i in range(1, 13)]
+
+    return render(
+    request,
+    "payroll/set_base_salaries.html",
+    {
+        "employees": employees,
+        "page_obj": page_obj,
+        "q": q,
+        "per": per,
+        "month_choices": month_choices,
+        "per_choices": [10, 20, 30, 50, 100],   # 👈 এখানে পাঠানো হলো
+    },
+)
+

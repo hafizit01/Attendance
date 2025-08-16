@@ -86,30 +86,65 @@ class Employee(models.Model):
     def __str__(self):
         return f"{self.name} ({self.company.name if self.company else 'No Company'})"
 
+from django.db import models
+from django.core.exceptions import ValidationError
 
 class Attendance(models.Model):
     STATUS_CHOICES = [
         ('In', 'In'),
-        ('Out', 'Out')
+        ('Out', 'Out'),
     ]
 
     company = models.ForeignKey(
-        Company,
+        'Company',
         on_delete=models.CASCADE,
         related_name='attendances',
         null=True,
-        blank=True
+        blank=True,
     )
     employee = models.ForeignKey(
-        Employee,
+        'Employee',
         on_delete=models.CASCADE,
-        related_name='attendances'
+        related_name='attendances',
     )
-    timestamp = models.DateTimeField()
+    timestamp = models.DateTimeField(db_index=True)
     status = models.CharField(max_length=10, choices=STATUS_CHOICES)
 
     def __str__(self):
         return f"{self.employee.name} - {self.timestamp.strftime('%Y-%m-%d %H:%M:%S')} - {self.status}"
+
+    def clean(self):
+        # company auto-assign (validation phase)
+        if self.employee and not self.company:
+            self.company = getattr(self.employee, 'company', None)
+        if not self.company:
+            raise ValidationError("Attendance.company নির্ধারণ করা যায়নি (employee.company সেট আছে কিনা দেখুন)।")
+
+    def save(self, *args, **kwargs):
+        # save এর সময়ও company ensure করি (signals ছাড়াই কাজ হবে)
+        if self.employee and not self.company:
+            self.company = getattr(self.employee, 'company', None)
+        super().save(*args, **kwargs)
+
+    class Meta:
+        # ডুপ্লিকেট এন্ট্রি রোখা
+        constraints = [
+            models.UniqueConstraint(
+                fields=['employee', 'timestamp', 'status'],
+                name='uniq_employee_timestamp_status'
+            ),
+        ]
+        # সাধারণ রিপোর্টে কাজে লাগবে
+        indexes = [
+            models.Index(fields=['employee', 'timestamp']),
+            models.Index(fields=['company', 'timestamp']),
+            models.Index(fields=['status', 'timestamp']),
+        ]
+        # তোমার রিপোর্টিং সুবিধা মতো বদলাতে পারো
+        ordering = ['-timestamp']
+        verbose_name = "Attendance"
+        verbose_name_plural = "Attendances"
+
 
 
 class LeaveRequest(models.Model):
@@ -169,3 +204,4 @@ class Holiday(models.Model):
 
     class Meta:
         ordering = ['start_date']
+

@@ -41,6 +41,9 @@ urlpatterns = [
     path('leaves/add/', leave_create, name='leave_create'),
     path('leaves/<int:pk>/edit/', leave_update, name='leave_update'),
     path('leaves/<int:pk>/delete/', leave_delete, name='leave_delete'),
+
+    path('leave-summary/', leave_summary, name='leave_summary'),
+    path('leave-summary-pdf/', leave_summary_pdf, name='leave_summary_pdf'),
     
     # ----------------------Public Holi Day----------------------------
     
@@ -48,4 +51,6 @@ urlpatterns = [
     path('holidays/add/', holiday_create, name='holiday_add'),
     path('holidays/<int:pk>/edit/', holiday_edit, name='holiday_edit'),
     path('holidays/<int:pk>/delete/', holiday_delete, name='holiday_delete'),
+
+    
 ]

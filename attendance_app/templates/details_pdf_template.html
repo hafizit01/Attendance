@@ -29,11 +29,15 @@
         th {
             background-color: #eee;
         }
+        tfoot td {
+            font-weight: bold;
+        }
         footer {
             font-size: 10px;
             color: #888;
             text-align: center;
             font-style: italic;
+            margin-top: 20px;
         }
     </style>
 </head>
@@ -77,28 +81,25 @@
             </tr>
             {% endfor %}
         </tbody>
+        <tfoot>
+            <tr>
+                <td colspan="4" style="text-align: right;">Total:</td>
+                <td>{{ total_work_duration|format_timedelta }}</td>
+                <td>{{ total_over_time|format_timedelta }}</td>
+                <td>{{ total_less_time|format_timedelta }}</td>
+            </tr>
+        </tfoot>
     </table>
 
-    <div class="summary">
-    <p>✅ Approved Leave Days: {{ approved_leave_count }}</p>
-    <p>📅 Holiday (Off) Days: {{ holiday_count }}</p>
-    <p>🚫 Absent Days: {{ absent_count }}</p>
-    <p>📄 Total Leave Requests: {{ total_leave_requests }}</p>
-    {% if total_work_duration.total_seconds > 0 %}
-        <p>🕓 Total Work Time: {{ total_work_duration|format_timedelta }}</p>
-    {% endif %}
-    {% if total_over_time.total_seconds > 0 %}
-        <p>⚡ Total Over Time: {{ total_over_time|format_timedelta }}</p>
-    {% endif %}
-    {% if total_less_time.total_seconds > 0 %}
-        <p>⏰ Total Less Time: {{ total_less_time|format_timedelta }}</p>
-    {% endif %}
-</div>
-
+    <div class="summary" style="margin-top: 10px;">
+        <p>✅ Approved Leave Days: {{ approved_leave_count }}</p>
+        <p>📅 Holiday (Off) Days: {{ holiday_count }}</p>
+        <p>🚫 Absent Days: {{ absent_count }}</p>
+        <p>📄 Total Leave Requests: {{ total_leave_requests }}</p>
+    </div>
 
     <footer>
         develop by: Easy Coding
     </footer>
 </body>
-
 </html>
