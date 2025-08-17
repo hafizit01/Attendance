@@ -4,43 +4,44 @@
   <meta charset="UTF-8">
   <title>Leave Summary PDF</title>
   <style>
+  @import url('https://fonts.googleapis.com/css2?family=Source+Sans+Pro&display=swap');
 
-    @import url('https://fonts.googleapis.com/css2?family=Source+Sans+Pro&display=swap');
+body {
+    font-family: 'Source Sans Pro', sans-serif;
+}
 
-    body {
-        font-family: 'Source Sans Pro', sans-serif;
-    }
 
-    body { font-family: sans-serif; font-size: 14px; }
-    table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-    th, td { border: 1px solid #000; padding: 5px; text-align: left; }
-    th { background-color: #f0f0f0; }
+    table { width:100%; border-collapse:collapse; margin-top:20px; }
+    th,td { border:1px solid #000; padding:6px 8px; text-align:left; }
+    th { background:#f0f0f0; }
   </style>
 </head>
 <body>
-  <h2>Leave Summary Report</h2>
-  <table>
-  <thead>
-    <tr>
-      <th>#</th>
-      <th>Employee</th>
-      <th>Total Approved Leaves</th>
-      <th>Leave Types</th>
-      <th>Status</th>
-    </tr>
-  </thead>
-  <tbody>
-    {% for item in summary_data %}
-    <tr>
-      <td>{{ forloop.counter }}</td>  <!-- ✅ ক্রমিক নম্বর দেখাবে -->
-      <td>{{ item.employee }}</td>
-      <td>{{ item.total_leave }}</td>
-      <td>{{ item.leave_types }}</td>
-      <td>{{ item.leave_statuses }}</td>
-    </tr>
-    {% endfor %}
-  </tbody>
-</table>
+  <h2>Leave Summary Report (Bashundhara)</h2>
 
+  <table>
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Employee</th>
+        <th>Total Leave (days)</th>
+        <th>Requests</th>
+        <th>Types (days)</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in summary %}
+      <tr>
+        <td>{{ forloop.counter }}</td>
+        <td>{{ item.employee }}</td>
+        <td>{{ item.total_days }}</td>
+        <td>{{ item.requests }}</td>
+        <td>{{ item.type_breakdown|default:"—" }}</td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="5" style="text-align:center;color:#777;">No data.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
 </body>
 </html>

@@ -1,43 +1,30 @@
-from datetime import datetime, timedelta, time as dtime,time
-from collections import defaultdict,OrderedDict
+from datetime import datetime, timedelta, time as dtime
+from collections import defaultdict, OrderedDict
 from django.contrib.auth.decorators import login_required
-from attendance_app.utils.zk_import import import_attendance
-from weasyprint import HTML
-from .forms import *
-from django.shortcuts import render, redirect,get_object_or_404
-from django.http import HttpResponse
+from django.shortcuts import render, redirect, get_object_or_404
+from django.http import HttpResponse, JsonResponse
 from django.contrib import messages
-from django.utils.timezone import localtime, localdate
-from django.db.models import Q, Min, Max
-from reportlab.pdfgen import canvas
-from reportlab.lib.pagesizes import A4
-from reportlab.lib.units import inch
-from django.utils.timezone import make_aware, is_naive
-from .models import *
+from django.utils.timezone import localtime, localdate, make_aware, is_naive, now
+from django.db.models import Q, Min, Max, Count
 from django.template.loader import render_to_string
-from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
-import json
-from django.db.models import Q
-import calendar
-from reportlab.lib.pagesizes import letter
 
-from django.utils.timezone import now
-from django.shortcuts import render
-from django.utils.timezone import now, localdate, localtime
-from datetime import timedelta
-from django.contrib.auth.decorators import login_required
+from reportlab.pdfgen import canvas
+from reportlab.lib.pagesizes import A4, letter
+from reportlab.lib.units import inch
 
+from weasyprint import HTML
+
+from .forms import *
 from .models import Employee, Department, Attendance
+from attendance_app.utils.zk_import import import_attendance
 
 from subscription_app.models import UserSubscription
-
-from django.contrib.auth.decorators import login_required
-from django.shortcuts import render
-from django.utils.timezone import now, localtime, localdate
-from datetime import timedelta
-from .models import Employee, Attendance, Department
 from subscription_app.decorators import subscription_required
+
+import json
+import calendar
+
 
 # ---------- Subscription helper (Date/DateTime দুই কেস) ----------
 def _has_active_subscription(user) -> bool:
@@ -69,8 +56,12 @@ def _has_active_subscription(user) -> bool:
     )
     return timezone.now() <= end_dt
 
+# ---------- Dashboard (Optimized) ----------
+from datetime import timedelta, datetime, time
+from collections import defaultdict
 
-# ---------- Dashboard ----------
+from django.db.models.functions import TruncDate
+
 @login_required
 def dashboard(request):
     user = request.user
@@ -86,15 +77,10 @@ def dashboard(request):
         return render(
             request,
             'subscription_app/expired.html',
-            {
-                'last_end_date': last_sub.end_date if last_sub else None,
-                # চাইলে টেমপ্লেটে স্টেট দেখাতে আরও flag পাঠাতে পারো:
-                # 'has_plan': bool(last_sub),
-                # 'is_active': False,
-            }
+            {'last_end_date': last_sub.end_date if last_sub else None}
         )
 
-    # 2) কোম্পানি গার্ড (তোমার আগের লজিক)
+    # 2) কোম্পানি গার্ড
     user_company = getattr(getattr(user, 'profile', None), 'company', None)
     if not user_company:
         return render(request, 'dashboard.html', {
@@ -104,36 +90,63 @@ def dashboard(request):
     today = localdate()
     selected_dept = request.GET.get('department')
 
-    employees = Employee.objects.filter(department__company=user_company)
+    # ---- (Q1) Employees + department eager load
+    employees = (Employee.objects
+                 .select_related('department')
+                 .filter(department__company=user_company))
     if selected_dept:
         employees = employees.filter(department__id=selected_dept)
 
+    # ---- (Q2) Departments (filter dropdown)
     departments = Department.objects.filter(company=user_company)
-    employee_data = []
 
-    # 3) ডেইলি অ্যাটেন্ডেন্স
-    for emp in employees:
-        attendances = (
-            Attendance.objects
-            .filter(employee=emp, timestamp__date=today)
-            .order_by('timestamp')
-        )
-        in_times = [att.timestamp for att in attendances if att.status == 'In']
-        out_times = [att.timestamp for att in attendances if att.status == 'Out']
+    # IDs cache
+    emp_ids = list(employees.values_list('id', flat=True))
+    total_employees = len(emp_ids)
+
+    # 3) আজকের অ্যাটেন্ডেন্স (one query for all employees)
+    # ---- (Q3) bring all rows for today, then group in Python
+    today_att_qs = (Attendance.objects
+                    .filter(employee_id__in=emp_ids, timestamp__date=today)
+                    .only('employee_id', 'timestamp', 'status')
+                    .order_by('employee_id', 'timestamp'))
+
+    # group rows by employee_id
+    rows_by_emp = defaultdict(list)
+    for att in today_att_qs:
+        rows_by_emp[att.employee_id].append(att)
+
+    employee_by_id = {e.id: e for e in employees}
+
+    # per-employee compute (same logic as before, but in Python with grouped rows)
+    employee_data = []
+    regular_work_time = timedelta(hours=10)
+
+    for emp_id, recs in rows_by_emp.items():
+        emp = employee_by_id.get(emp_id)
+        if not emp:
+            continue
+
+        in_times  = [r.timestamp for r in recs if r.status == 'In']
+        out_times = [r.timestamp for r in recs if r.status == 'Out']
 
         total_work_time = timedelta()
         for i in range(min(len(in_times), len(out_times))):
-            if out_times[i] > in_times[i]:
-                total_work_time += (out_times[i] - in_times[i])
+            t_in, t_out = in_times[i], out_times[i]
+            if is_naive(t_in):  t_in  = make_aware(t_in)
+            if is_naive(t_out): t_out = make_aware(t_out)
+            if t_out > t_in:
+                total_work_time += (t_out - t_in)
 
-        regular_work_time = timedelta(hours=10)
         late_time = over_time = less_time = timedelta()
-
         first_in = localtime(in_times[0]) if in_times else None
         last_out = localtime(out_times[-1]) if out_times else None
 
         if first_in:
-            expected_start = first_in.replace(hour=10, minute=30, second=0, microsecond=0)
+            # department.in_time থাকলে সেটাই, না থাকলে 10:30
+            dept_start = getattr(getattr(emp, 'department', None), 'in_time', None)
+            base_start = dept_start or time(10, 30)
+            expected_start = first_in.replace(hour=base_start.hour, minute=base_start.minute, second=0, microsecond=0)
             if first_in > expected_start:
                 late_time = first_in - expected_start
 
@@ -152,40 +165,50 @@ def dashboard(request):
             'less_time': less_time,
         })
 
-    # 4) ৩০ দিনের ট্রেন্ড
+    # যারা আজকে কোনো রেকর্ড নেই—তারাও টেবিলে চাইলে দেখাতে পারো:
+    for emp in employees:
+        if emp.id not in rows_by_emp:
+            employee_data.append({
+                'employee': emp,
+                'in_time': None,
+                'out_time': None,
+                'total_work_time': timedelta(),
+                'late_time': timedelta(),
+                'over_time': timedelta(),
+                'less_time': timedelta(),
+            })
+
+    # 4) ৩০ দিনের ট্রেন্ড (one aggregate query)
     start_date = today - timedelta(days=29)
+
+    # ---- (Q4) Aggregate per day: present (distinct employee with 'In'), late (In after 10:30)
+    trend_agg = (
+        Attendance.objects
+        .filter(employee_id__in=emp_ids, timestamp__date__gte=start_date, timestamp__date__lte=today)
+        .annotate(day=TruncDate('timestamp'))
+        .values('day')
+        .annotate(
+            present=Count('employee', filter=Q(status='In'), distinct=True),
+            late=Count('id', filter=Q(status='In', timestamp__time__gt='10:30:00'))
+        )
+        .order_by('day')
+    )
+
+    # map by date for O(1) lookup
+    present_by_day = {row['day']: row['present'] for row in trend_agg}
+    late_by_day    = {row['day']: row['late']    for row in trend_agg}
+
     attendance_trend = []
-    emp_ids = list(employees.values_list('id', flat=True))
-    total_employees = len(emp_ids)
-
     for i in range(30):
-        date = start_date + timedelta(days=i)
-
-        present_count = (
-            Attendance.objects
-            .filter(employee_id__in=emp_ids, timestamp__date=date, status='In')
-            .values('employee')
-            .distinct()
-            .count()
-        )
-        absent_count = total_employees - present_count
-
-        late_count = (
-            Attendance.objects
-            .filter(
-                employee_id__in=emp_ids,
-                timestamp__date=date,
-                status='In',
-                timestamp__time__gt='10:30:00'
-            )
-            .count()
-        )
-
+        d = start_date + timedelta(days=i)
+        p = present_by_day.get(d, 0)
+        l = late_by_day.get(d, 0)
+        a = total_employees - p
         attendance_trend.append({
-            'date': date.strftime('%Y-%m-%d'),
-            'present': present_count,
-            'absent': absent_count,
-            'late': late_count
+            'date': d.strftime('%Y-%m-%d'),
+            'present': p,
+            'absent': a,
+            'late': l
         })
 
     # 5) কন্টেক্সট
@@ -201,6 +224,7 @@ def dashboard(request):
         'can_view_salary': user.has_perm('payroll.view_salarysummary'),
     }
     return render(request, 'dashboard.html', context)
+
 
   # attendance_app/views.py
 
@@ -1583,58 +1607,274 @@ def leave_list(request):
 
 
 
+# views.py
+from collections import defaultdict
+from datetime import date
+
+from django.contrib.auth.decorators import login_required
+from django.db.models import Q
+from django.http import HttpResponse
 from django.shortcuts import render
-from attendance_app.models import Employee, LeaveRequest
-from django.db.models import Count, Q
+from django.template.loader import render_to_string
+from django.utils.dateparse import parse_date
+
+from attendance_app.models import LeaveRequest, Department
+
+# Optional PDF library (WeasyPrint). না থাকলে HTML fallback হবে।
+try:
+    from weasyprint import HTML
+except ImportError:
+    HTML = None
+
+
+def _clip_days(start, end, d_from, d_to):
+    """
+    Overlap window ধরে inclusive দিন গণনা:
+    - যদি filter date_from/date_to দেয়া থাকে, leave span ক্লিপ করি
+    - ক্লিপড start > end হলে 0 দিন
+    """
+    if d_from:
+        start = max(start, d_from)
+    if d_to:
+        end = min(end, d_to)
+    if end < start:
+        return 0
+    return (end - start).days + 1
+
 
 @login_required
 def leave_summary(request):
-    employees = Employee.objects.all()
+    """
+    UI view: ফিল্টারসহ per-employee leave দিন দেখাবে (start/end overlap ধরে)
+    Filters:
+      - q: employee name / remarks
+      - status: Approved/Pending/Rejected
+      - department: department id
+      - date_from, date_to: overlap window
+    """
+    # --- Filters ---
+    q        = (request.GET.get('q') or '').strip()
+    status   = (request.GET.get('status') or '').strip()
+    dept_id  = (request.GET.get('department') or '').strip()
+    d_from   = parse_date(request.GET.get('date_from') or '')
+    d_to     = parse_date(request.GET.get('date_to') or '')
 
-    summary_data = []
-    for emp in employees:
-        emp_leaves = LeaveRequest.objects.filter(employee=emp, status='Approved')
-        leave_count = emp_leaves.count()
-        leave_types = ', '.join(emp_leaves.values_list('leave_type', flat=True))
-        leave_statuses = ', '.join(emp_leaves.values_list('status', flat=True))
+    # --- Base queryset ---
+    qs = (LeaveRequest.objects
+          .select_related('employee', 'employee__department')
+          .only('employee__id', 'employee__name', 'employee__department__name',
+                'start_date', 'end_date', 'status', 'leave_type', 'remarks')
+          .order_by('-start_date', '-id'))
 
-        summary_data.append({
-            'employee': emp.name,
-            'total_leave': leave_count,
-            'leave_types': leave_types,
-            'leave_statuses': leave_statuses,
+    # --- Apply filters ---
+    if q:
+        qs = qs.filter(Q(employee__name__icontains=q) | Q(remarks__icontains=q))
+    if status:
+        qs = qs.filter(status=status)
+    if dept_id:
+        qs = qs.filter(employee__department_id=dept_id)
+    # overlap window filter
+    if d_from:
+        qs = qs.filter(end_date__gte=d_from)
+    if d_to:
+        qs = qs.filter(start_date__lte=d_to)
+
+    # --- Aggregate per employee (by days, not requests) ---
+    bucket = {}  # emp_id -> dict
+    rows = qs.values('employee_id', 'employee__name', 'start_date', 'end_date', 'leave_type')
+
+    for r in rows:
+        emp_id = r['employee_id']
+        if emp_id not in bucket:
+            bucket[emp_id] = {
+                'employee': r['employee__name'],
+                'total_days': 0,          # মোট leave days (overlap ধরে)
+                'requests': 0,            # কতগুলো request মিলেছে (info purpose)
+                'type_days': defaultdict(int),  # টাইপ অনুযায়ী দিনের যোগফল
+            }
+        days = _clip_days(r['start_date'], r['end_date'], d_from, d_to)
+        if days <= 0:
+            continue
+        bucket[emp_id]['total_days'] += days
+        bucket[emp_id]['requests'] += 1
+        if r['leave_type']:
+            bucket[emp_id]['type_days'][r['leave_type']] += days
+
+    # --- List + sort ---
+    summary = []
+    for it in bucket.values():
+        summary.append({
+            'employee': it['employee'],
+            'total_days': it['total_days'],
+            'requests': it['requests'],
+            'type_breakdown': ', '.join(f"{k}:{v}" for k, v in sorted(it['type_days'].items())),
         })
+    summary.sort(key=lambda x: (x['employee'] or '').lower())
 
     context = {
-        'summary_data': summary_data
+        'summary': summary,
+        'q': q, 'status': status, 'department': dept_id,
+        'date_from': d_from, 'date_to': d_to,
+        'departments': Department.objects.only('id', 'name').order_by('name'),
     }
     return render(request, 'leave_summary.html', context)
 
+
 @login_required
 def leave_summary_pdf(request):
-    employees = Employee.objects.all()
+    """
+    PDF view: UI-র মতই একই ফিল্টার + একই দিনের হিসাব।
+    WeasyPrint থাকলে PDF, না থাকলে HTML fallback (ডিবাগে সুবিধা হবে)।
+    """
+    # --- Same filters as leave_summary ---
+    q        = (request.GET.get('q') or '').strip()
+    status   = (request.GET.get('status') or '').strip()
+    dept_id  = (request.GET.get('department') or '').strip()
+    d_from   = parse_date(request.GET.get('date_from') or '')
+    d_to     = parse_date(request.GET.get('date_to') or '')
+
+    qs = (LeaveRequest.objects
+          .select_related('employee', 'employee__department')
+          .only('employee__id', 'employee__name', 'employee__department__name',
+                'start_date', 'end_date', 'status', 'leave_type', 'remarks')
+          .order_by('-start_date', '-id'))
+
+    if q:
+        qs = qs.filter(Q(employee__name__icontains=q) | Q(remarks__icontains=q))
+    if status:
+        qs = qs.filter(status=status)
+    if dept_id:
+        qs = qs.filter(employee__department_id=dept_id)
+    if d_from:
+        qs = qs.filter(end_date__gte=d_from)
+    if d_to:
+        qs = qs.filter(start_date__lte=d_to)
+
+    # --- Same aggregation ---
+    bucket = {}
+    rows = qs.values('employee_id', 'employee__name', 'start_date', 'end_date', 'leave_type')
+
+    for r in rows:
+        emp_id = r['employee_id']
+        if emp_id not in bucket:
+            bucket[emp_id] = {
+                'employee': r['employee__name'],
+                'total_days': 0,
+                'requests': 0,
+                'type_days': defaultdict(int),
+            }
+        days = _clip_days(r['start_date'], r['end_date'], d_from, d_to)
+        if days <= 0:
+            continue
+        bucket[emp_id]['total_days'] += days
+        bucket[emp_id]['requests'] += 1
+        if r['leave_type']:
+            bucket[emp_id]['type_days'][r['leave_type']] += days
 
     summary_data = []
-    for emp in employees:
-        emp_leaves = LeaveRequest.objects.filter(employee=emp, status='Approved')
-        leave_count = emp_leaves.count()
-        leave_types = ', '.join(emp_leaves.values_list('leave_type', flat=True))
-        leave_statuses = ', '.join(emp_leaves.values_list('status', flat=True))
-
+    for it in bucket.values():
         summary_data.append({
-            'employee': emp.name,
-            'total_leave': leave_count,
-            'leave_types': leave_types,
-            'leave_statuses': leave_statuses,
+            'employee': it['employee'],
+            'total_days': it['total_days'],
+            'requests': it['requests'],
+            'type_breakdown': ', '.join(f"{k}:{v}" for k, v in sorted(it['type_days'].items())),
         })
+    summary_data.sort(key=lambda x: (x['employee'] or '').lower())
 
-    html_string = render_to_string('leave_summary_pdf.html', {'summary_data': summary_data})
-    html = HTML(string=html_string)
-    pdf = html.write_pdf()
+    context = {
+        'summary': summary_data,             # ⬅️ PDF টেমপ্লেটে 'summary' ব্যবহার করুন
+        'generated_on': date.today(),
+        'q': q, 'status': status, 'department': dept_id,
+        'date_from': d_from, 'date_to': d_to,
+    }
 
-    response = HttpResponse(pdf, content_type='application/pdf')
-    response['Content-Disposition'] = 'inline; filename="leave_summary.pdf"'
-    return response
+    html_string = render_to_string('leave_summary_pdf.html', context)
+
+    # WeasyPrint না থাকলে HTML fallback
+    if HTML is None:
+        return HttpResponse(html_string)
+
+    pdf = HTML(string=html_string, base_url=request.build_absolute_uri('/')).write_pdf()
+    resp = HttpResponse(pdf, content_type='application/pdf')
+    resp['Content-Disposition'] = 'inline; filename="leave_summary.pdf"'
+    return resp
+
+
+
+@login_required
+def leave_summary_pdf(request):
+    # --- Same filters as leave_summary ---
+    q        = (request.GET.get('q') or '').strip()
+    status   = (request.GET.get('status') or '').strip()
+    dept_id  = (request.GET.get('department') or '').strip()
+    d_from   = parse_date(request.GET.get('date_from') or '')
+    d_to     = parse_date(request.GET.get('date_to') or '')
+
+    qs = (LeaveRequest.objects
+          .select_related('employee', 'employee__department')
+          .only('employee__id', 'employee__name', 'employee__department__name',
+                'start_date', 'end_date', 'status', 'leave_type', 'remarks')
+          .order_by('-start_date', '-id'))
+
+    if q:
+        qs = qs.filter(Q(employee__name__icontains=q) | Q(remarks__icontains=q))
+    if status:
+        qs = qs.filter(status=status)
+    if dept_id:
+        qs = qs.filter(employee__department_id=dept_id)
+    if d_from:
+        qs = qs.filter(end_date__gte=d_from)
+    if d_to:
+        qs = qs.filter(start_date__lte=d_to)
+
+    # --- Aggregate days by employee ---
+    bucket = {}
+    rows = qs.values('employee_id', 'employee__name', 'start_date', 'end_date', 'leave_type')
+
+    for r in rows:
+        emp_id = r['employee_id']
+        if emp_id not in bucket:
+            bucket[emp_id] = {
+                'employee': r['employee__name'],
+                'total_days': 0,
+                'requests': 0,
+                'type_days': defaultdict(int),
+            }
+        days = _clip_days(r['start_date'], r['end_date'], d_from, d_to)
+        if days <= 0:
+            continue
+        bucket[emp_id]['total_days'] += days
+        bucket[emp_id]['requests'] += 1
+        if r['leave_type']:
+            bucket[emp_id]['type_days'][r['leave_type']] += days
+
+    summary_data = []
+    for it in bucket.values():
+        summary_data.append({
+            'employee': it['employee'],
+            'total_days': it['total_days'],
+            'requests': it['requests'],
+            'type_breakdown': ', '.join(f"{k}:{v}" for k, v in sorted(it['type_days'].items())),
+        })
+    summary_data.sort(key=lambda x: (x['employee'] or '').lower())
+
+    context = {
+        'summary': summary_data,
+        'generated_on': date.today(),
+        'q': q, 'status': status, 'department': dept_id,
+        'date_from': d_from, 'date_to': d_to,
+    }
+
+    html_string = render_to_string('leave_summary_pdf.html', context)
+
+    if HTML is None:
+        return HttpResponse(html_string)
+
+    pdf = HTML(string=html_string, base_url=request.build_absolute_uri('/')).write_pdf()
+    resp = HttpResponse(pdf, content_type='application/pdf')
+    resp['Content-Disposition'] = 'inline; filename="leave_summary.pdf"'
+    return resp
+
 
 @login_required
 def leave_create(request):

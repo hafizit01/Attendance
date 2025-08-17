@@ -1,154 +1,30 @@
-from django.shortcuts import render, redirect
-from django.utils.timezone import make_aware, is_naive
-from datetime import datetime, timedelta, date, time
-from collections import defaultdict
-from decimal import Decimal
-
-from attendance_app.models import *
-from .models import *
+from io import BytesIO
 import os
-from django.contrib.auth.decorators import login_required
-from django.template.loader import get_template
-from weasyprint import HTML
-from django.http import HttpResponse
+import re
 import tempfile
-from django.contrib.auth.decorators import user_passes_test
+from collections import defaultdict
+from calendar import month_name
+from datetime import datetime, timedelta, date, time
+from decimal import Decimal, InvalidOperation
 
+from django.contrib import messages
+from django.contrib.auth.decorators import login_required, user_passes_test
+from django.core.paginator import Paginator
+from django.db import transaction
+from django.db.models import Q
+from django.http import HttpResponse, HttpResponseBadRequest
+from django.shortcuts import render, redirect
+from django.template.loader import get_template
+from django.utils import timezone
+from django.utils.timezone import is_naive, make_aware
+from weasyprint import HTML
 
-from django.contrib.auth.decorators import user_passes_test
+from attendance_app.models import Employee
+from .models import EmployeeSalary
+
 
 def is_not_attendance_group(user):
     return not user.groups.filter(name='attendance').exists()
-
-
-
-# def generate_salary_for_month(request):
-#     if request.method == 'POST':
-#         month_str = request.POST.get('month')  # format: YYYY-MM
-#         year, month = map(int, month_str.split('-'))
-#         start_date = date(year, month, 1)
-#         end_date = (start_date.replace(day=28) + timedelta(days=4)).replace(day=1) - timedelta(days=1)
-
-#         employees = Employee.objects.select_related('department').all()
-
-#         for emp in employees:
-#             # Skip if salary not set
-#             try:
-#                 emp_salary = emp.employeesalary.base_salary
-#             except EmployeeSalary.DoesNotExist:
-#                 continue
-
-#             attendances = Attendance.objects.filter(
-#                 employee=emp,
-#                 timestamp__date__range=(start_date, end_date)
-#             ).order_by('timestamp')
-
-#             approved_leaves = LeaveRequest.objects.filter(
-#                 employee=emp,
-#                 status='Approved',
-#                 start_date__lte=end_date,
-#                 end_date__gte=start_date
-#             )
-
-#             leave_dates = {
-#                 leave.start_date + timedelta(days=i)
-#                 for leave in approved_leaves
-#                 for i in range((min(leave.end_date, end_date) - max(leave.start_date, start_date)).days + 1)
-#             }
-
-#             daily_attendance = defaultdict(list)
-#             for att in attendances:
-#                 daily_attendance[att.timestamp.date()].append(att)
-
-#             off_day = emp.department.weekly_off_day if emp.department else None
-#             expected_start_time = time(10, 30)
-#             regular_work_time = timedelta(hours=10)
-
-#             total_days = (end_date - start_date).days + 1
-#             present_days = leave_days_count = weekly_off_count = 0
-#             total_work_time = total_late_time = total_over_time = timedelta()
-
-#             for n in range(total_days):
-#                 current_date = start_date + timedelta(days=n)
-#                 weekday = current_date.strftime('%A')
-
-#                 if off_day == weekday:
-#                     weekly_off_count += 1
-#                     continue
-
-#                 if current_date in leave_dates:
-#                     leave_days_count += 1
-#                     continue
-
-#                 records = daily_attendance.get(current_date, [])
-#                 in_times = [r.timestamp for r in records if r.status == 'In']
-#                 out_times = [r.timestamp for r in records if r.status == 'Out']
-
-#                 if in_times and out_times:
-#                     in_time = min(in_times)
-#                     out_time = max(out_times)
-
-#                     if is_naive(in_time): in_time = make_aware(in_time)
-#                     if is_naive(out_time): out_time = make_aware(out_time)
-
-#                     adjusted_in_time = datetime.combine(in_time.date(), expected_start_time)
-#                     if is_naive(adjusted_in_time): adjusted_in_time = make_aware(adjusted_in_time)
-
-#                     actual_in_time = max(in_time, adjusted_in_time)
-
-#                     if out_time > actual_in_time:
-#                         duration = out_time - actual_in_time
-#                         present_days += 1
-#                         total_work_time += duration
-
-#                         if in_time.time() > expected_start_time:
-#                             late = datetime.combine(current_date, in_time.time()) - datetime.combine(current_date, expected_start_time)
-#                             total_late_time += late
-
-#                         if duration > regular_work_time:
-#                             total_over_time += duration - regular_work_time
-
-#             absent_days = total_days - present_days - leave_days_count - weekly_off_count
-#             per_day_salary = emp_salary / Decimal(total_days)
-#             earned_salary = per_day_salary * Decimal(present_days + leave_days_count + weekly_off_count)
-
-#             # Save summary
-#             SalarySummary.objects.update_or_create(
-#                 employee=emp,
-#                 month=month_str,
-#                 defaults={
-#                     'base_salary': emp_salary,
-#                     'present_days': present_days,
-#                     'absent_days': absent_days,
-#                     'leave_days': leave_days_count,
-#                     'weekly_off_days': weekly_off_count,
-#                     'total_work_hours': total_work_time,
-#                     'late_time': total_late_time,
-#                     'early_leave_time': timedelta(),  # Placeholder
-#                     'over_time': total_over_time,
-#                     'final_salary': earned_salary
-#                 }
-#             )
-
-#         return redirect('salary_summary_list')  # ✅ Make sure this URL name exists in urls.py
-
-#     return render(request, 'payroll/generate_salary.html')
-
-# payroll/views.py
-
-from collections import defaultdict
-from datetime import datetime, timedelta, time
-from decimal import Decimal
-
-from django.contrib.auth.decorators import login_required, user_passes_test
-from django.http import HttpResponseForbidden
-from django.shortcuts import render, redirect
-from django.utils.timezone import is_naive, make_aware
-
-from .models import EmployeeSalary
-
-# def is_not_attendance_group(user): ...
-
 
 def get_salary_summary_data(request, month_str, department_id=None, employee_id=None):
     """
@@ -162,6 +38,7 @@ def get_salary_summary_data(request, month_str, department_id=None, employee_id=
           * Attendance না থাকলে total_work_time += 10h
         present_days কেবল attendance থাকলেই বাড়বে
       - Absent কখনোই negative হবে না
+      - 🎁 Bonus: payout মাসে final_salary-তে যোগ হবে
     """
     user_company = getattr(getattr(request.user, "profile", None), "company", None)
     if not user_company:
@@ -370,10 +247,18 @@ def get_salary_summary_data(request, month_str, department_id=None, employee_id=
                     + Decimal(extra) * hourly_rate * Decimal('1.5')
                 )
 
-            payable_cash = earned_salary - bank_transfer
+            # 🎁 BONUS: payout মাসে যোগ করো
+            bonus_amount = sal.bonus_for_month(year, month)  # Decimal
 
+            # Final salary = earned + bonus
+            final_salary = earned_salary + bonus_amount
+
+            # Payable cash = final - bank transfer
+            payable_cash = final_salary - bank_transfer
+
+            # Totals
             total_base_salary += base_salary
-            total_final_salary += earned_salary
+            total_final_salary += final_salary
             total_payable_cash += payable_cash
 
             # Formatting HH:MM:SS
@@ -416,7 +301,9 @@ def get_salary_summary_data(request, month_str, department_id=None, employee_id=
                 'late_time': fmt_late,
                 'over_time': total_over_time,  # timedelta হিসেবেই রাখা
 
-                'final_salary': round(earned_salary, 2),
+                'earned_salary': round(earned_salary, 2),  # (info only)
+                'bonus_amount': round(bonus_amount, 2),     # 🎁 নতুন ফিল্ড
+                'final_salary': round(final_salary, 2),     # earned + bonus
                 'payable_cash': round(payable_cash, 2),
             })
 
@@ -445,12 +332,13 @@ def get_salary_summary_data(request, month_str, department_id=None, employee_id=
         'selected_employee_id': int(employee_id) if employee_id else '',
 
         'total_base_salary': round(total_base_salary, 2),
-        'total_final_salary': round(total_final_salary, 2),
-        'total_salary_difference': round(total_salary_difference, 2),
+        'total_final_salary': round(total_final_salary, 2),            # 🎁 bonus সহ
+        'total_salary_difference': round(total_salary_difference, 2),  # (final - base)
         'total_bank_transfer': round(total_bank_transfer, 2),
         'total_cash_amount': round(total_cash_amount, 2),
-        'total_payable_cash': round(total_payable_cash, 2),
+        'total_payable_cash': round(total_payable_cash, 2),            # 🎁 bonus সহ
     }
+
 
 
 @login_required
@@ -474,49 +362,38 @@ def salary_summary_list(request):
 
 @user_passes_test(is_not_attendance_group)
 def export_salary_summary_pdf(request):
-    month_str = request.GET.get('month') or datetime.today().strftime('%Y-%m')  # default current month
-    department_id = request.GET.get('department')
-    employee_id = request.GET.get('employee')
+    # month (YYYY-MM), default current month
+    month_str = request.GET.get('month') or timezone.localdate().strftime('%Y-%m')
+    if not re.fullmatch(r"\d{4}-(0[1-9]|1[0-2])", month_str):
+        return HttpResponseBadRequest("Invalid month format. Use YYYY-MM.")
 
-    # convert properly
-    department_id = int(department_id) if department_id else None
-    employee_id = int(employee_id) if employee_id else None
+    # optional ids
+    dep_raw = request.GET.get('department')
+    emp_raw = request.GET.get('employee')
+    try:
+        department_id = int(dep_raw) if dep_raw else None
+        employee_id = int(emp_raw) if emp_raw else None
+    except (TypeError, ValueError):
+        return HttpResponseBadRequest("Invalid department/employee id.")
 
-    # get context
-    context = get_salary_summary_data(month_str, department_id, employee_id)
+    # ✅ pass request into your helper
+    context = get_salary_summary_data(request, month_str, department_id, employee_id)
+    context["print_mode"] = True  # চাইলে টেমপ্লেটে এই ফ্ল্যাগ চেক করতে পারেন
 
+    # render template
     template = get_template('payroll/salary_summary_pdf.html')
     html_string = template.render(context)
 
-    html = HTML(string=html_string, base_url=request.build_absolute_uri('/'))
+    # make PDF (no external CSS passed here)
+    pdf_io = BytesIO()
+    HTML(string=html_string, base_url=request.build_absolute_uri('/')).write_pdf(target=pdf_io)
+    pdf_io.seek(0)
 
-    temp_path = os.path.join(tempfile.gettempdir(), "salary_summary_temp.pdf")
-    html.write_pdf(temp_path)
+    filename = f"salary_summary_{month_str}.pdf"
+    resp = HttpResponse(pdf_io.read(), content_type='application/pdf')
+    resp['Content-Disposition'] = f'inline; filename="{filename}"'
+    return resp
 
-    with open(temp_path, 'rb') as pdf_file:
-        pdf = pdf_file.read()
-    os.remove(temp_path)
-
-    response = HttpResponse(pdf, content_type='application/pdf')
-    response['Content-Disposition'] = 'inline; filename="salary_summary.pdf"'
-    return response
-
-# payroll/views.py
-
-
-# payroll/views.py
-from decimal import Decimal, InvalidOperation
-from calendar import month_name
-
-from django.contrib import messages
-from django.contrib.auth.decorators import login_required, user_passes_test
-from django.core.paginator import Paginator
-from django.db import transaction
-from django.db.models import Q
-from django.shortcuts import render, redirect
-
-from attendance_app.models import Employee
-from .models import EmployeeSalary
 
 # def is_not_attendance_group(user): ...
 

@@ -1,33 +1,72 @@
 {% extends "base.html" %}
 {% block content %}
-<h2 class="text-xl font-bold mb-4">📅 Leave Summary</h2>
-<!-- PDF Button -->
-<div class="mb-4">
-  <a href="{% url 'leave_summary_pdf' %}" target="_blank" class="bg-green-600 text-white px-4 py-2 rounded">
-    🧾 Download Leave Summary PDF
-  </a>
+
+<div class="mx-auto max-w-6xl p-4 sm:p-6 bg-white rounded-2xl shadow">
+  <div class="flex items-center justify-between mb-4">
+    <h2 class="text-2xl font-bold">🧾 Leave Summary (by days)</h2>
+
+    <a href="{% url 'leave_summary_pdf' %}?q={{ q }}&status={{ status }}&department={{ department }}&date_from={{ date_from|date:'Y-m-d' }}&date_to={{ date_to|date:'Y-m-d' }}"
+       target="_blank"
+       class="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 shadow">
+      ⬇️ Export PDF
+    </a>
+  </div>
+
+  <!-- Filters -->
+  <form method="get" class="grid grid-cols-1 md:grid-cols-6 gap-3 mb-4">
+    <input name="q" value="{{ q|default_if_none:'' }}" placeholder="Search name/remark" class="md:col-span-2 border rounded px-3 py-2" />
+
+    <select name="status" class="border rounded px-3 py-2">
+      <option value="">All Status</option>
+      <option value="Pending"  {% if status == 'Pending' %}selected{% endif %}>Pending</option>
+      <option value="Approved" {% if status == 'Approved' %}selected{% endif %}>Approved</option>
+      <option value="Rejected" {% if status == 'Rejected' %}selected{% endif %}>Rejected</option>
+    </select>
+
+    <select name="department" class="border rounded px-3 py-2">
+      <option value="">All Departments</option>
+      {% for d in departments %}
+        <option value="{{ d.id }}" {% if department == d.id|stringformat:'s' %}selected{% endif %}>{{ d.name }}</option>
+      {% endfor %}
+    </select>
+
+    <input type="date" name="date_from" value="{{ date_from|date:'Y-m-d' }}" class="border rounded px-3 py-2" />
+    <input type="date" name="date_to"   value="{{ date_to|date:'Y-m-d' }}"   class="border rounded px-3 py-2" />
+
+    <div class="md:col-span-6 flex justify-end">
+      <button class="px-4 py-2 rounded bg-blue-600 text-white">Filter</button>
+    </div>
+  </form>
+
+  <!-- Table -->
+  <div class="overflow-x-auto rounded border">
+    <table class="min-w-full text-sm">
+      <thead class="bg-gray-50">
+        <tr class="*:*:px-3 *:*:py-2 *:*:text-left">
+          <th>#</th>
+          <th>Employee</th>
+          <th>Total Leave (days)</th>
+          <th>Requests</th>
+          <th>Types (days)</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y">
+        {% for r in summary %}
+        <tr class="hover:bg-gray-50">
+          <td class="px-3 py-2">{{ forloop.counter }}</td>
+          <td class="px-3 py-2">{{ r.employee }}</td>
+          <td class="px-3 py-2 tabular-nums">{{ r.total_days }}</td>
+          <td class="px-3 py-2 tabular-nums">{{ r.requests }}</td>
+          <td class="px-3 py-2">{{ r.type_breakdown|default:"—" }}</td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="5" class="px-3 py-6 text-center text-gray-500">No data.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
 </div>
-<table class="table-auto w-full mt-4 border">
-  <thead>
-    <tr class="bg-gray-200">
-      <th class="border px-4 py-2">#</th>
-      <th class="border px-4 py-2">Employee</th>
-      <th class="border px-4 py-2">Total Approved Leaves</th>
-      <th class="border px-4 py-2">Leave Types</th>
-      <th class="border px-4 py-2">Status</th>
-    </tr>
-  </thead>
-  <tbody>
-    {% for item in summary_data %}
-    <tr>
-      <td class="border px-4 py-2">{{ forloop.counter }}</td>
-      <td class="border px-4 py-2">{{ item.employee }}</td>
-      <td class="border px-4 py-2">{{ item.total_leave }}</td>
-      <td class="border px-4 py-2">{{ item.leave_types }}</td>
-      <td class="border px-4 py-2">{{ item.leave_statuses }}</td>
-    </tr>
-    {% endfor %}
-  </tbody>
-</table>
 
 {% endblock %}
