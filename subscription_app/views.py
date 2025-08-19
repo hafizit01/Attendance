@@ -65,6 +65,15 @@ def is_subscription_active(sub: UserSubscription) -> bool:
         end = timezone.make_aware(end, timezone.get_current_timezone())
     return timezone.now() <= end
 
+# subscription_app/views.py  (বা যেখানে এই ভিউটা রেখেছেন)
+from django.contrib.auth.decorators import login_required
+from django.utils import timezone
+from django.shortcuts import render
+
+from .models import UserSubscription
+# যদি আপনার নিজের helper থাকে, সেটাই ব্যবহার করুন
+from .utils import is_subscription_active  # না থাকলে নিচে @NOTE দেখুন
+
 @login_required
 def subscription_expired(request):
     last_sub = (
@@ -74,17 +83,28 @@ def subscription_expired(request):
         .first()
     )
 
-    active = is_subscription_active(last_sub)
+    today = timezone.localdate()
+
+    # Active/Expired নির্ধারণ
+    active = is_subscription_active(last_sub) if last_sub else False
+
+    # টেমপ্লেটে ব্যবহৃত days_left গণনা (active হলে পজিটিভ/০, expired হলে ০)
+    days_left = None
+    if last_sub:
+        # end_date যদি DateTimeField হয়, date বানিয়ে নিন: last_sub.end_date.date()
+        delta = (getattr(last_sub.end_date, "date", lambda: last_sub.end_date)() - today) \
+                if hasattr(last_sub.end_date, "date") else (last_sub.end_date - today)
+        days_left = max(delta.days, 0)
 
     return render(
         request,
-        "subscription_app/expired.html",
+        "subscription_app/expired.html",  # ✅ ফাইলটা সত্যিই এই পাথে আছে কিনা নিশ্চিত করুন
         {
             "has_plan": bool(last_sub),
             "is_active": active,
             "last_end_date": last_sub.end_date if last_sub else None,
-            # ছোট্ট ডিবাগ/ভিজ্যুয়াল চেকের জন্য আজকের তারিখ পাঠাচ্ছি
-            "today": timezone.localdate(),
+            "days_left": days_left,          # ✅ টেমপ্লেটে ইউজ করছেন, তাই context-এ যোগ করলাম
+            "today": today,
         },
     )
 

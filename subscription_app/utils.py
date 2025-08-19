@@ -9,11 +9,10 @@ def _end_as_dt(end_value):
         return end_value if timezone.is_aware(end_value) else timezone.make_aware(end_value, tz)
     return timezone.make_aware(datetime.combine(end_value, time(23, 59, 59, 999999)), tz)
 
-def is_subscription_active(user) -> bool:
-    last = (UserSubscription.objects
-            .filter(user=user)
-            .order_by("-end_date")
-            .first())
-    if not last or not last.end_date:
+def is_subscription_active(sub):
+    if not sub:
         return False
-    return timezone.now() <= _end_as_dt(last.end_date)
+    today = timezone.localdate()
+    end_date = sub.end_date.date() if hasattr(sub.end_date, "date") else sub.end_date
+    return end_date >= today and getattr(sub, "status", "active") != "cancelled"
+
