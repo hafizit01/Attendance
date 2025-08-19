@@ -59,7 +59,7 @@
         {% endfor %}
       {% endif %}
 
-      <form method="post" action="{% url 'login' %}" novalidate>
+      <form method="post" action="{% url 'userapp:login' %}" novalidate>
         {% csrf_token %}
         <div class="mb-5">
           <label for="username" class="block text-gray-700 font-medium mb-1">Username</label>

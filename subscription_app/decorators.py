@@ -37,7 +37,7 @@ def subscription_required(view_func):
             try:
                 return redirect(reverse("subscription_app:my_plans"))
             except Exception:
-                return redirect("my_plans")
+                return redirect("subscription_app:my_plans")
 
         return view_func(request, *args, **kwargs)
     return _wrapped

@@ -5,13 +5,15 @@ from django.db import models
 from django.contrib.auth.models import User
 from django.utils.text import slugify
 from datetime import timedelta, date
+from ckeditor_uploader.fields import RichTextUploadingField
+
 
 class SubscriptionPlan(models.Model):
     name = models.CharField(max_length=100)
     slug = models.SlugField(max_length=120, unique=True, blank=True)
     price = models.DecimalField(max_digits=10, decimal_places=2)
     duration_days = models.PositiveIntegerField(default=30)
-    description = models.TextField(blank=True, null=True)
+    description = RichTextUploadingField(blank=True, null=True)
 
     def save(self, *args, **kwargs):
         if not self.slug:

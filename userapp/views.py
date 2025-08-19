@@ -40,7 +40,7 @@ def login_view(request):
             # ✅ লগইনের পরই expired চেক
             if _is_expired(user):
                 messages.warning(request, "Your subscription has expired.")
-                return redirect("my_plans")  # 🔁 সরাসরি My Plans/Expired পেজে
+                return redirect("subscription_app:my_plans")  # 🔁 সরাসরি My Plans/Expired পেজে
 
             messages.success(request, f'Welcome back, {user.get_username()}!')
             return redirect(_safe_next(request))  # next বা dashboard

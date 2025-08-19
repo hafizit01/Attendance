@@ -21,7 +21,7 @@ from weasyprint import HTML
 
 from attendance_app.models import *
 from .models import EmployeeSalary
-
+from django.http import HttpResponseForbidden
 
 def is_not_attendance_group(user):
     return not user.groups.filter(name='attendance').exists()
@@ -412,7 +412,7 @@ def set_base_salaries(request):
     user_company = getattr(getattr(request.user, "profile", None), "company", None)
     if not user_company:
         messages.error(request, "আপনার প্রোফাইলে কোম্পানি সেট করা নেই।")
-        return redirect("dashboard")
+        return redirect("attendance_app:dashboard")
 
     # query params
     q = (request.GET.get("q") or "").strip()
