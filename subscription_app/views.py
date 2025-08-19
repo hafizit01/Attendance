@@ -15,7 +15,7 @@ from django.utils.dateparse import parse_date   # ⬅️ এটা যোগ ক
 from .models import UserSubscription
 
 
-from .utils import is_subscription_active  # utils.py তে helper ফাংশন রেখেছিলাম
+from .utils import is_subscription_active_for  # utils.py তে helper ফাংশন রেখেছিলাম
 
 @login_required
 def post_login_router(request):
@@ -28,10 +28,10 @@ def post_login_router(request):
 
     # চাইলে staff/superuser bypass করো
     if user.is_superuser or user.is_staff:
-        return redirect("dashboard")
+        return redirect('attendance_app:dashboard')
 
     if is_subscription_active(user):
-        return redirect("dashboard")
+        return redirect('attendance_app:dashboard')
     return redirect("subscription_app:expired")
 
 
@@ -72,42 +72,43 @@ from django.shortcuts import render
 
 from .models import UserSubscription
 # যদি আপনার নিজের helper থাকে, সেটাই ব্যবহার করুন
-from .utils import is_subscription_active  # না থাকলে নিচে @NOTE দেখুন
+
+from .utils import is_subscription_active_for    # ✅ user-ভিত্তিক helper
 
 @login_required
 def subscription_expired(request):
+    # ইউজারের লাস্ট সাবস্ক্রিপশন
     last_sub = (
         UserSubscription.objects
         .filter(user=request.user)
+        .select_related("plan")
         .order_by("-end_date")
         .first()
     )
 
+    # ✅ এখানে user পাঠান, subscription নয়
+    active = is_subscription_active_for(request.user)
+
+    # days_left হিসাব (টেমপ্লেটের জন্য)
     today = timezone.localdate()
-
-    # Active/Expired নির্ধারণ
-    active = is_subscription_active(last_sub) if last_sub else False
-
-    # টেমপ্লেটে ব্যবহৃত days_left গণনা (active হলে পজিটিভ/০, expired হলে ০)
     days_left = None
-    if last_sub:
-        # end_date যদি DateTimeField হয়, date বানিয়ে নিন: last_sub.end_date.date()
-        delta = (getattr(last_sub.end_date, "date", lambda: last_sub.end_date)() - today) \
-                if hasattr(last_sub.end_date, "date") else (last_sub.end_date - today)
-        days_left = max(delta.days, 0)
+    last_end_date = None
+    if last_sub and last_sub.end_date:
+        end = last_sub.end_date.date() if hasattr(last_sub.end_date, "date") else last_sub.end_date
+        last_end_date = end
+        days_left = max((end - today).days, 0)
 
     return render(
         request,
-        "subscription_app/expired.html",  # ✅ ফাইলটা সত্যিই এই পাথে আছে কিনা নিশ্চিত করুন
+        "subscription_app/expired.html",
         {
             "has_plan": bool(last_sub),
             "is_active": active,
-            "last_end_date": last_sub.end_date if last_sub else None,
-            "days_left": days_left,          # ✅ টেমপ্লেটে ইউজ করছেন, তাই context-এ যোগ করলাম
+            "last_end_date": last_end_date,
+            "days_left": days_left,
             "today": today,
         },
     )
-
 
 
 def subscription_list(request):

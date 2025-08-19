@@ -19,7 +19,7 @@ from django.utils import timezone
 from django.utils.timezone import is_naive, make_aware
 from weasyprint import HTML
 
-from attendance_app.models import Employee
+from attendance_app.models import *
 from .models import EmployeeSalary
 
 

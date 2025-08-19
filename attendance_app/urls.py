@@ -2,6 +2,8 @@ from django.urls import path
 
 from attendance_app.views import attendance_pdf_report
 from .views import *
+app_name = "attendance_app"
+
 urlpatterns = [
     path('', dashboard, name='dashboard'),
 

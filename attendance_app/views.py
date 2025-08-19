@@ -276,7 +276,7 @@ def sync_attendance_view(request):
     user_company = getattr(request.user.profile, 'company', None)
     if not user_company:
         messages.error(request, "আপনার কোম্পানি সেট করা নেই। সিস্টেম অ্যাডমিনের সাথে যোগাযোগ করুন।")
-        return redirect('dashboard')
+        return redirect('attendance_app:dashboard')
 
     # ওই কোম্পানির ডিপার্টমেন্টগুলো নাও
     departments = Department.objects.filter(company=user_company)
@@ -289,7 +289,7 @@ def sync_attendance_view(request):
                 from django.http import JsonResponse
                 return JsonResponse({'status': 'error', 'message': error_msg})
             messages.error(request, error_msg)
-            return redirect('sync_attendance')
+            return redirect('attendance_app:sync_attendance')
 
         try:
             department = departments.get(id=department_id)
@@ -822,7 +822,7 @@ def employee_list(request):
     user_company = getattr(request.user.profile, 'company', None)
     if not user_company:
         messages.error(request, "আপনার কোম্পানি সেট করা নেই। সিস্টেম অ্যাডমিনের সাথে যোগাযোগ করুন।")
-        return redirect('dashboard')
+        return redirect('attendance_app:dashboard')
 
     # শুধুমাত্র ইউজারের কোম্পানির এমপ্লয়ি
     employees = Employee.objects.select_related('department').filter(department__company=user_company)
@@ -1937,7 +1937,7 @@ def holiday_edit(request, pk):
     user_company = getattr(request.user.profile, 'company', None)
     if not user_company:
         messages.error(request, "আপনার কোম্পানি সেট করা নেই।")
-        return redirect('dashboard')
+        return redirect('attendance_app:dashboard')
 
     holiday = get_object_or_404(Holiday, pk=pk, company=user_company)
     form = HolidayForm(request.POST or None, instance=holiday)
@@ -1952,7 +1952,7 @@ def holiday_delete(request, pk):
     user_company = getattr(request.user.profile, 'company', None)
     if not user_company:
         messages.error(request, "আপনার কোম্পানি সেট করা নেই।")
-        return redirect('dashboard')
+        return redirect('attendance_app:dashboard')
 
     holiday = get_object_or_404(Holiday, pk=pk, company=user_company)
     if request.method == 'POST':

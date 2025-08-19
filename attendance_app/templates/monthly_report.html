@@ -53,7 +53,7 @@
 
 
 <!-- PDF Export -->
-<form method="get" action="{% url 'monthly_work_time_pdf' %}" target="_blank" class="mb-6">
+<form method="get" action="{% url 'attendance_app:monthly_work_time_pdf' %}" target="_blank" class="mb-6">
   <input type="hidden" name="start_date" value="{{ start_date|date:'Y-m-d' }}">
   <input type="hidden" name="end_date" value="{{ end_date|date:'Y-m-d' }}">
   {% if selected_department %}

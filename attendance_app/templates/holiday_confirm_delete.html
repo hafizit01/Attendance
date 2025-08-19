@@ -6,7 +6,7 @@
   <form method="post">
     {% csrf_token %}
     <div class="flex justify-center gap-3">
-      <a href="{% url 'holiday_list' %}" class="bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600">Cancel</a>
+      <a href="{% url 'attendance_app:holiday_list' %}" class="bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600">Cancel</a>
       <button type="submit" class="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700">Delete</button>
     </div>
   </form>

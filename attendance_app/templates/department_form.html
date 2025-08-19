@@ -6,7 +6,7 @@
     {% csrf_token %}
     {{ form.as_p }}
     <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded">Save</button>
-    <a href="{% url 'department_list' %}" class="ml-4 text-gray-600 hover:underline">Cancel</a>
+    <a href="{% url 'attendance_app:department_list' %}" class="ml-4 text-gray-600 hover:underline">Cancel</a>
   </form>
 </div>
 {% endblock %}

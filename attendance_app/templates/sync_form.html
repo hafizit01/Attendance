@@ -4,7 +4,7 @@
 <div class="max-w-md mx-auto mt-12 p-6 bg-white rounded shadow-md">
   <h2 class="text-2xl font-semibold mb-6 text-center text-gray-800">Attendance Sync</h2>
 
-  <form id="syncForm" method="post" action="{% url 'sync_attendance' %}" class="space-y-6">
+  <form id="syncForm" method="post" action="{% url 'attendance_app:sync_attendance' %}" class="space-y-6">
     {% csrf_token %}
     <div>
       <label for="department_id" class="block mb-2 font-medium text-gray-700">Select Department:</label>

@@ -2,7 +2,7 @@
 {% block content %}
 <div class="p-6 bg-white rounded shadow">
   <h1 class="text-2xl font-bold mb-4">Departments</h1>
-  <a href="{% url 'department_add' %}" class="bg-blue-600 text-white px-4 py-2 rounded mb-4 inline-block">➕ Add Department</a>
+  <a href="{% url 'attendance_app:department_add' %}" class="bg-blue-600 text-white px-4 py-2 rounded mb-4 inline-block">➕ Add Department</a>
   
   <table class="table-auto w-full border border-gray-300">
     <thead>
@@ -23,14 +23,14 @@
 
         <!-- ✏️ Edit -->
         <td class="border px-4 py-2 text-center">
-          <a href="{% url 'department_edit' dept.id %}" class="flex items-center justify-center gap-1 text-blue-600 hover:underline">
+          <a href="{% url 'attendance_app:department_edit' dept.id %}" class="flex items-center justify-center gap-1 text-blue-600 hover:underline">
             ✏️ Edit
           </a>
         </td>
 
         <!-- 🗑️ Delete -->
         <td class="border px-4 py-2 text-center">
-          <a href="{% url 'department_delete' dept.id %}" class="flex items-center justify-center gap-1 text-red-600 hover:underline">
+          <a href="{% url 'attendance_app:department_delete' dept.id %}" class="flex items-center justify-center gap-1 text-red-600 hover:underline">
             🗑️ Delete
           </a>
         </td>

@@ -5,7 +5,7 @@
   <div class="flex items-center justify-between mb-4">
     <h2 class="text-2xl font-bold">🧾 Leave Summary (by days)</h2>
 
-    <a href="{% url 'leave_summary_pdf' %}?q={{ q }}&status={{ status }}&department={{ department }}&date_from={{ date_from|date:'Y-m-d' }}&date_to={{ date_to|date:'Y-m-d' }}"
+    <a href="{% url 'attendance_app:leave_summary_pdf' %}?q={{ q }}&status={{ status }}&department={{ department }}&date_from={{ date_from|date:'Y-m-d' }}&date_to={{ date_to|date:'Y-m-d' }}"
        target="_blank"
        class="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 shadow">
       ⬇️ Export PDF

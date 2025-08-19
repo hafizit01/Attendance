@@ -6,6 +6,7 @@ from django.contrib.auth.models import User
 from django.utils import timezone
 from autoslug import AutoSlugField
 
+from subscription_app.models import SubscriptionPlan, UserSubscription
 
 class BkashPayment(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
@@ -42,6 +43,11 @@ class BkashPaymentExecute(models.Model):
     customerMsisdn = models.CharField(max_length=150)
     title = models.CharField(max_length=150, blank=True, null=True)
     batch = models.CharField(max_length=50, blank=True, null=True)
+    # models.py
+    subscription = models.OneToOneField(
+        UserSubscription, on_delete=models.SET_NULL, null=True, blank=True, related_name="bkash_payment"
+    )
+
     slug = AutoSlugField(populate_from='merchantInvoiceNumber' ,unique=True,blank=True,null=True)
 
     class Meta:

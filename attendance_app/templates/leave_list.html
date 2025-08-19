@@ -5,13 +5,13 @@
 
   <div class="flex flex-col md:flex-row md:justify-between mb-4 gap-2">
   <div class="flex gap-2">
-    <a href="{% url 'leave_create' %}" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded shadow">
+    <a href="{% url 'attendance_app:leave_create' %}" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded shadow">
       ➕ Add New Leave
     </a>
-    <a href="{% url 'leave_summary' %}" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded shadow">
+    <a href="{% url 'attendance_app:leave_summary' %}" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded shadow">
       🧾 Show Leave Summary
     </a>
-    <a href="{% url 'leave_summary_pdf' %}" target="_blank" class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded shadow">
+    <a href="{% url 'attendance_app:leave_summary_pdf' %}" target="_blank" class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded shadow">
       📄 Download PDF
     </a>
   </div>
