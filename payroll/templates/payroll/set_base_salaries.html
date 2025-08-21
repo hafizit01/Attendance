@@ -4,24 +4,23 @@
 <!-- Page Wrapper -->
 <div class="mx-auto max-w-6xl p-4 sm:p-6">
   <!-- Sticky Header / Filters -->
-  <div class="sticky top-0 z-30 -mx-4 sm:-mx-6 px-4 sm:px-6 pt-4 pb-3 bg-white/80 backdrop-blur border-b">
+  <div class="sticky top-0 z-30 -mx-4 sm:-mx-6 px-4 sm:px-6 pt-4 pb-3 bg-white/80 dark:bg-gray-900/80 backdrop-blur border-b dark:border-gray-700">
     <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
       <div>
-        <h1 class="text-2xl sm:text-3xl font-bold tracking-tight">🧾 Employee Salaries & Bonus</h1>
-        <p class="text-sm text-gray-600 mt-1">Set base salary, bank transfer, and yearly bonus for employees in your company scope.</p>
+        <h1 class="text-2xl sm:text-3xl font-bold tracking-tight dark:text-gray-100">🧾 Employee Salaries & Bonus</h1>
+        <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">Set base salary, bank transfer, and yearly bonus for employees in your company scope.</p>
       </div>
 
-      <!-- Search / Per-Page Controls (GET) -->
+      <!-- Search / Per-Page Controls -->
       <form method="get" class="grid grid-cols-1 sm:grid-cols-10 gap-2 w-full sm:w-auto sm:min-w-[520px]">
         <input type="hidden" name="page" value="{{ page_obj.number }}" />
         <div class="sm:col-span-7">
-          <label class="sr-only" for="q">Search</label>
-          <input id="q" name="q" value="{{ q }}" placeholder="Search by name or device user ID…"
-                 class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-emerald-500 focus:outline-none" />
+          <input id="q" name="q" value="{{ q }}" placeholder="🔍 Search by name or device user ID…"
+                 class="w-full border dark:border-gray-700 rounded-lg px-3 py-2 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-200 focus:ring-2 focus:ring-emerald-500 focus:outline-none" />
         </div>
         <div class="sm:col-span-3 flex items-center gap-2">
-          <label for="per" class="text-sm text-gray-600">Per page</label>
-          <select id="per" name="per" class="border rounded-lg px-2 py-2 focus:ring-2 focus:ring-emerald-500">
+          <label for="per" class="text-sm text-gray-600 dark:text-gray-400">Per page</label>
+          <select id="per" name="per" class="border dark:border-gray-700 rounded-lg px-2 py-2 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-200 focus:ring-2 focus:ring-emerald-500">
             {% for n in per_choices %}
               <option value="{{ n }}" {% if per == n %}selected{% endif %}>{{ n }}</option>
             {% endfor %}
@@ -31,9 +30,9 @@
       </form>
     </div>
 
-    <!-- Meta / Pagination Summary -->
-    <div class="mt-2 text-xs text-gray-600">
-      Showing <span class="font-medium">{{ employees|length }}</span> of page <span class="font-medium">{{ page_obj.number }}</span>
+    <!-- Meta -->
+    <div class="mt-2 text-xs text-gray-600 dark:text-gray-400">
+      Showing <span class="font-medium">{{ employees|length }}</span> on page <span class="font-medium">{{ page_obj.number }}</span>
       {% if page_obj.paginator.num_pages %} / {{ page_obj.paginator.num_pages }}{% endif %}
     </div>
   </div>
@@ -42,30 +41,30 @@
   <form method="post" id="salary-form" class="mt-4">
     {% csrf_token %}
 
-    <!-- Save Bar (sticky) -->
+    <!-- Save Bar -->
     <div id="save-bar" class="sticky top-[68px] z-20 hidden">
-      <div class="mx-auto max-w-6xl bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3 flex items-center justify-between shadow-sm">
-        <p class="text-sm text-emerald-900">
+      <div class="mx-auto max-w-6xl bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-200 dark:border-emerald-700 rounded-xl px-4 py-3 flex items-center justify-between shadow-sm">
+        <p class="text-sm text-emerald-900 dark:text-emerald-200">
           <span class="font-semibold" id="changes-count">0</span> field(s) changed on this page.
         </p>
         <div class="flex items-center gap-2">
-          <button type="button" id="reset-btn" class="px-3 py-2 rounded-lg border border-emerald-300 text-emerald-900 hover:bg-emerald-100">Reset page</button>
+          <button type="button" id="reset-btn" class="px-3 py-2 rounded-lg border border-emerald-300 dark:border-emerald-700 text-emerald-900 dark:text-emerald-200 hover:bg-emerald-100 dark:hover:bg-emerald-800">Reset page</button>
           <button type="submit" class="px-5 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white shadow">💾 Save Changes</button>
         </div>
       </div>
     </div>
 
-    <!-- Grid of Employee Cards -->
+    <!-- Employee Cards -->
     <div class="grid gap-4 sm:gap-5 lg:gap-6">
       {% for emp in employees %}
-        <section class="rounded-2xl border bg-white shadow-sm p-4 sm:p-5">
+        <section class="rounded-2xl border bg-white dark:bg-gray-900 dark:border-gray-700 shadow-sm hover:shadow-md transition p-4 sm:p-5">
           <header class="flex items-center justify-between mb-3">
             <div>
-              <h2 class="text-lg sm:text-xl font-semibold flex items-center gap-2">
-                <span class="text-gray-400">{{ forloop.counter }}.</span>
+              <h2 class="text-lg sm:text-xl font-semibold flex items-center gap-2 dark:text-gray-100">
+                <span class="text-gray-400">#{{ forloop.counter }}</span>
                 <span>{{ emp.name }}</span>
               </h2>
-              <p class="text-xs text-gray-500 mt-0.5">
+              <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
                 {% if emp.department %}Dept: {{ emp.department.name }} · {% endif %}
                 ID: {{ emp.id }}{% if emp.device_user_id %} · Device: {{ emp.device_user_id }}{% endif %}
               </p>
@@ -75,72 +74,72 @@
           <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             <!-- Base Salary -->
             <div>
-              <label class="block text-sm font-medium mb-1">💰 Base Salary (Tk)</label>
+              <label class="block text-sm font-medium mb-1 dark:text-gray-300">💰 Base Salary (Tk)</label>
               <input type="number" step="0.01" min="0" inputmode="decimal" name="salary_{{ emp.id }}"
                      value="{{ emp.employeesalary.base_salary|default_if_none:'0.00' }}"
-                     class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                     class="w-full border dark:border-gray-700 rounded-lg px-3 py-2 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-200 focus:ring-2 focus:ring-emerald-500"
                      data-field="base" data-emp="{{ emp.id }}">
-              <p class="text-[11px] text-gray-500 mt-1">Required. Use decimals as needed.</p>
+              <p class="text-[11px] text-gray-500 dark:text-gray-400 mt-1">Required. Use decimals as needed.</p>
             </div>
 
             <!-- Bank Transfer -->
             <div>
-              <label class="block text-sm font-medium mb-1">🏦 Bank Transfer (Tk)</label>
+              <label class="block text-sm font-medium mb-1 dark:text-gray-300">🏦 Bank Transfer (Tk)</label>
               <input type="number" step="0.01" min="0" inputmode="decimal" name="bank_transfer_{{ emp.id }}"
                      value="{{ emp.employeesalary.bank_transfer_amount|default_if_none:'0.00' }}"
-                     class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                     class="w-full border dark:border-gray-700 rounded-lg px-3 py-2 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-200 focus:ring-2 focus:ring-emerald-500"
                      data-field="bank" data-emp="{{ emp.id }}">
-              <p class="text-[11px] text-gray-500 mt-1">Must be ≤ Base Salary. Auto-adjusts while typing.</p>
+              <p class="text-[11px] text-gray-500 dark:text-gray-400 mt-1">Must be ≤ Base Salary. Auto-adjusts.</p>
             </div>
 
             <!-- Bonus % -->
             <div>
-              <label class="block text-sm font-medium mb-1">🎁 Bonus (%)</label>
+              <label class="block text-sm font-medium mb-1 dark:text-gray-300">🎁 Bonus (%)</label>
               <input type="number" step="0.01" min="0" inputmode="decimal" name="bonus_percent_{{ emp.id }}"
                      value="{{ emp.employeesalary.yearly_bonus_percent|default_if_none:'0.00' }}"
-                     class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-emerald-500 focus:outline-none">
-              <p class="text-[11px] text-gray-500 mt-1">Percentage of annual base (optional).</p>
+                     class="w-full border dark:border-gray-700 rounded-lg px-3 py-2 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-200 focus:ring-2 focus:ring-emerald-500">
+              <p class="text-[11px] text-gray-500 dark:text-gray-400 mt-1">Percentage of annual base.</p>
             </div>
 
             <!-- Bonus Fixed -->
             <div>
-              <label class="block text-sm font-medium mb-1">🎁 Bonus (Fixed Tk)</label>
+              <label class="block text-sm font-medium mb-1 dark:text-gray-300">🎁 Bonus (Fixed Tk)</label>
               <input type="number" step="0.01" min="0" inputmode="decimal" name="bonus_fixed_{{ emp.id }}"
                      value="{{ emp.employeesalary.yearly_bonus_fixed|default_if_none:'0.00' }}"
-                     class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-emerald-500 focus:outline-none">
-              <p class="text-[11px] text-gray-500 mt-1">Flat amount bonus (optional).</p>
+                     class="w-full border dark:border-gray-700 rounded-lg px-3 py-2 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-200 focus:ring-2 focus:ring-emerald-500">
+              <p class="text-[11px] text-gray-500 dark:text-gray-400 mt-1">Flat amount bonus.</p>
             </div>
 
             <!-- Bonus Month -->
             <div>
-              <label class="block text-sm font-medium mb-1">📅 Bonus Month</label>
-              <select name="bonus_month_{{ emp.id }}" class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+              <label class="block text-sm font-medium mb-1 dark:text-gray-300">📅 Bonus Month</label>
+              <select name="bonus_month_{{ emp.id }}" class="w-full border dark:border-gray-700 rounded-lg px-3 py-2 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-200 focus:ring-2 focus:ring-emerald-500">
                 {% for val,label in month_choices %}
                   <option value="{{ val }}" {% if emp.employeesalary and emp.employeesalary.bonus_payout_month == val %}selected{% endif %}>{{ label }}</option>
                 {% endfor %}
               </select>
-              <p class="text-[11px] text-gray-500 mt-1">If not set, December will be used.</p>
+              <p class="text-[11px] text-gray-500 dark:text-gray-400 mt-1">Default is December.</p>
             </div>
           </div>
         </section>
       {% endfor %}
     </div>
 
-    <!-- Bottom Save / Pagination Controls -->
+    <!-- Bottom Pagination + Save -->
     <div class="mt-6 flex flex-col sm:flex-row items-center justify-between gap-3">
-      <div class="flex items-center gap-2 text-sm text-gray-600">
+      <div class="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
         <span>Page</span>
-        <div class="inline-flex rounded-lg border overflow-hidden">
+        <div class="inline-flex rounded-lg border dark:border-gray-700 overflow-hidden">
           {% if page_obj.has_previous %}
-            <a href="?q={{ q }}&per={{ per }}&page={{ page_obj.previous_page_number }}" class="px-3 py-2 hover:bg-gray-50">Prev</a>
+            <a href="?q={{ q }}&per={{ per }}&page={{ page_obj.previous_page_number }}" class="px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-800">Prev</a>
           {% else %}
             <span class="px-3 py-2 text-gray-400">Prev</span>
           {% endif %}
-          <span class="px-3 py-2 border-l bg-gray-50">{{ page_obj.number }}</span>
+          <span class="px-3 py-2 border-l dark:border-gray-700 bg-gray-50 dark:bg-gray-800">{{ page_obj.number }}</span>
           {% if page_obj.has_next %}
-            <a href="?q={{ q }}&per={{ per }}&page={{ page_obj.next_page_number }}" class="px-3 py-2 border-l hover:bg-gray-50">Next</a>
+            <a href="?q={{ q }}&per={{ per }}&page={{ page_obj.next_page_number }}" class="px-3 py-2 border-l dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">Next</a>
           {% else %}
-            <span class="px-3 py-2 border-l text-gray-400">Next</span>
+            <span class="px-3 py-2 border-l dark:border-gray-700 text-gray-400">Next</span>
           {% endif %}
         </div>
         <span>of {{ page_obj.paginator.num_pages }}</span>
@@ -151,7 +150,7 @@
   </form>
 </div>
 
-<!-- Small helper script: clamp bank ≤ base, track changes, reset -->
+<!-- Script -->
 <script>
 (function(){
   const form = document.getElementById('salary-form');
@@ -171,7 +170,7 @@
     saveBar.classList.toggle('hidden', changed === 0);
   }
 
-  // Clamp bank transfer to ≤ base salary for same employee
+  // Clamp bank transfer to ≤ base salary
   function clampFor(empId){
     const base = form.querySelector(`[name="salary_${empId}"]`);
     const bank = form.querySelector(`[name="bank_transfer_${empId}"]`);

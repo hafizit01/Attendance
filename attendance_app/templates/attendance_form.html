@@ -1,12 +1,39 @@
 {% extends "base.html" %}
+
 {% block content %}
-<div class="p-6 bg-white rounded shadow max-w-md mx-auto">
-  <h1 class="text-2xl font-bold mb-4">{{ title }}</h1>
+<div class="p-6 bg-white dark:bg-gray-800 rounded shadow max-w-md mx-auto transition-colors duration-300">
+  <h1 class="text-2xl font-bold mb-4 text-gray-900 dark:text-gray-100">{{ title }}</h1>
+  
   <form method="post" class="space-y-4">
     {% csrf_token %}
-    {{ form.as_p }}
-    <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded">Save</button>
-    <a href="{% url 'attendance_app:attendance_list' %}" class="ml-4 text-gray-600 hover:underline">Cancel</a>
+    <div class="space-y-3">
+      {{ form.as_p }}
+    </div>
+
+    <div class="flex items-center gap-3">
+      <button type="submit"
+              class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded transition">
+        Save
+      </button>
+      <a href="{% url 'attendance_app:attendance_list' %}"
+         class="text-gray-700 dark:text-gray-300 hover:underline">
+        Cancel
+      </a>
+    </div>
   </form>
 </div>
+
+<style>
+  /* Django default {{ form.as_p }} এর input/textarea ফিল্ডগুলো styled করে দিচ্ছি */
+  form p label {
+    @apply block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1;
+  }
+  form p input, 
+  form p select, 
+  form p textarea {
+    @apply w-full rounded border border-gray-300 dark:border-gray-600 px-3 py-2 
+           bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100
+           focus:outline-none focus:ring-2 focus:ring-blue-500;
+  }
+</style>
 {% endblock %}

@@ -1,21 +1,34 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="p-6 bg-white rounded shadow">
-  <h1 class="text-2xl font-bold mb-4">Attendance Records</h1>
-  <a href="{% url 'attendance_app:attendance_add' %}" class="bg-blue-600 text-white px-4 py-2 rounded mb-4 inline-block">➕ Add Attendance</a>
+<div class="p-4 sm:p-6 bg-white dark:bg-gray-800 rounded shadow transition-colors duration-300">
+  <h1 class="text-xl sm:text-2xl font-bold mb-4 text-gray-900 dark:text-gray-100">Attendance Records</h1>
+
+  <!-- Add Attendance Button -->
+  <a href="{% url 'attendance_app:attendance_add' %}"
+     class="bg-blue-600 hover:bg-blue-700 text-white px-3 sm:px-4 py-2 rounded mb-4 inline-block text-sm sm:text-base transition">
+    ➕ Add Attendance
+  </a>
   
-  <form method="get" class="flex flex-wrap gap-2 mb-4">
-    <input type="date" name="start_date" value="{{ request.GET.start_date }}" class="border px-2 py-1 rounded">
-    <input type="date" name="end_date" value="{{ request.GET.end_date }}" class="border px-2 py-1 rounded">
-  
-    <select name="employee" class="border px-2 py-1 rounded">
+  <!-- Filter Form -->
+  <form method="get" class="flex flex-col sm:flex-row flex-wrap gap-2 mb-4">
+    <input type="date" name="start_date" value="{{ request.GET.start_date }}"
+           class="border px-2 py-1 rounded text-sm bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100">
+
+    <input type="date" name="end_date" value="{{ request.GET.end_date }}"
+           class="border px-2 py-1 rounded text-sm bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100">
+
+    <select name="employee"
+            class="border px-2 py-1 rounded text-sm bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100">
       <option value="">-- Select Employee --</option>
       {% for emp in employees %}
-        <option value="{{ emp.id }}" {% if request.GET.employee == emp.id|stringformat:"s" %}selected{% endif %}>{{ emp.name }}</option>
+        <option value="{{ emp.id }}" {% if request.GET.employee == emp.id|stringformat:"s" %}selected{% endif %}>
+          {{ emp.name }}
+        </option>
       {% endfor %}
     </select>
-  
-    <select name="department" class="border px-2 py-1 rounded">
+
+    <select name="department"
+            class="border px-2 py-1 rounded text-sm bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100">
       <option value="">-- Select Department --</option>
       {% for dept in departments %}
         <option value="{{ dept.id }}" {% if request.GET.department == dept.id|stringformat:"s" %}selected{% endif %}>
@@ -23,57 +36,60 @@
         </option>
       {% endfor %}
     </select>
-    
-  
-    <button type="submit" class="bg-blue-600 text-white px-4 py-1 rounded">🔍 Filter</button>
+
+    <button type="submit"
+            class="bg-blue-600 hover:bg-blue-700 text-white px-3 sm:px-4 py-1 sm:py-2 rounded text-sm sm:text-base transition">
+      🔍 Filter
+    </button>
   </form>
 
-  <table class="table-auto w-full border border-gray-300 text-sm">
-  <thead class="bg-gray-100">
-    <tr>
-      <th class="border px-4 py-2">Name</th>
-      <th class="border px-4 py-2">Date</th>
-      <th class="border px-4 py-2">Time</th>
-      <th class="border px-4 py-2">Status</th>
-    </tr>
-  </thead>
-  <tbody>
-    {% for record in attendance_summary %}
-    <tr>
-      <td class="border px-4 py-2">{{ record.employee.name }}</td>
-      <td class="border px-4 py-2">{{ record.date }}</td>
-      <td class="border px-4 py-2">
-        {% if record.in_time and record.out_time %}
-          {{ record.in_time|time:"h:i A" }} - {{ record.out_time|time:"h:i A" }}
-        {% elif record.in_time %}
-          {{ record.in_time|time:"h:i A" }} - --
-        {% elif record.out_time %}
-          -- - {{ record.out_time|time:"h:i A" }}
-        {% else %}
-          --
-        {% endif %}
-      </td>
-      <td class="border px-4 py-2
-        {% if record.status == 'Absent' %}
-          text-red-600 font-semibold
-        {% elif record.status == 'Present' %}
-          text-green-700 font-semibold
-        {% elif record.status == 'Weekly Off' %}
-          text-yellow-600 font-semibold
-        {% elif record.status == 'Public Holiday' %}
-          text-green-600 font-semibold
-        {% elif record.status == 'Leave' %}
-          text-blue-600 font-semibold
-        {% endif %}
-      ">
-        {{ record.status }}
-      </td>
-    </tr>
-    {% empty %}
-    <tr><td colspan="4" class="text-center py-4">No records found.</td></tr>
-    {% endfor %}
-  </tbody>
-</table>
-
+  <!-- Table -->
+  <div class="overflow-x-auto">
+    <table class="table-auto w-full border border-gray-300 dark:border-gray-700 text-xs sm:text-sm">
+      <thead class="bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-gray-100">
+        <tr>
+          <th class="border border-gray-300 dark:border-gray-700 px-2 sm:px-4 py-2">Name</th>
+          <th class="border border-gray-300 dark:border-gray-700 px-2 sm:px-4 py-2">Date</th>
+          <th class="border border-gray-300 dark:border-gray-700 px-2 sm:px-4 py-2">Time</th>
+          <th class="border border-gray-300 dark:border-gray-700 px-2 sm:px-4 py-2">Status</th>
+        </tr>
+      </thead>
+      <tbody class="text-gray-800 dark:text-gray-200">
+        {% for record in attendance_summary %}
+        <tr class="hover:bg-gray-50 dark:hover:bg-gray-900 transition">
+          <td class="border border-gray-300 dark:border-gray-700 px-2 sm:px-4 py-2">{{ record.employee.name }}</td>
+          <td class="border border-gray-300 dark:border-gray-700 px-2 sm:px-4 py-2">{{ record.date }}</td>
+          <td class="border border-gray-300 dark:border-gray-700 px-2 sm:px-4 py-2">
+            {% if record.in_time and record.out_time %}
+              {{ record.in_time|time:"h:i A" }} - {{ record.out_time|time:"h:i A" }}
+            {% elif record.in_time %}
+              {{ record.in_time|time:"h:i A" }} - --
+            {% elif record.out_time %}
+              -- - {{ record.out_time|time:"h:i A" }}
+            {% else %}
+              --
+            {% endif %}
+          </td>
+          <td class="border border-gray-300 dark:border-gray-700 px-2 sm:px-4 py-2
+            {% if record.status == 'Absent' %} text-red-500 font-semibold
+            {% elif record.status == 'Present' %} text-green-500 font-semibold
+            {% elif record.status == 'Weekly Off' %} text-yellow-500 font-semibold
+            {% elif record.status == 'Public Holiday' %} text-indigo-400 font-semibold
+            {% elif record.status == 'Leave' %} text-blue-500 font-semibold
+            {% endif %}
+          ">
+            {{ record.status }}
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="4" class="text-center py-4 text-gray-600 dark:text-gray-400">
+            No records found.
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
 </div>
 {% endblock %}

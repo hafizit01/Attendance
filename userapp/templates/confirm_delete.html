@@ -1,0 +1,17 @@
+{% extends 'base.html' %}
+{% block title %}Delete Profile{% endblock %}
+
+{% block content %}
+<div class="bg-white dark:bg-gray-800 shadow rounded-lg p-6 max-w-lg mx-auto text-center">
+  <h2 class="text-xl font-bold mb-4">⚠️ Confirm Delete</h2>
+  <p>Are you sure you want to delete profile of <strong>{{ profile.employee.name }}</strong>?</p>
+
+  <form method="post" class="mt-6 flex justify-center gap-4">
+    {% csrf_token %}
+    <a href="{% url 'userapp:employee_profile_list' %}" 
+       class="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600">Cancel</a>
+    <button type="submit" 
+            class="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700">Yes, Delete</button>
+  </form>
+</div>
+{% endblock %}

@@ -1,31 +1,44 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="max-w-lg mx-auto mt-10 p-6 bg-white rounded-lg shadow-md">
-  <h2 class="text-xl font-semibold text-gray-800 mb-4 text-center">📝 Leave Application</h2>
+<div class="max-w-lg mx-auto mt-10 p-6 
+            bg-white dark:bg-gray-800 
+            rounded-lg shadow-md 
+            text-gray-900 dark:text-gray-200 
+            transition-colors duration-300">
+  
+  <h2 class="text-xl font-semibold text-gray-800 dark:text-gray-100 mb-4 text-center">
+    📝 Leave Application
+  </h2>
 
   <form method="post" class="space-y-4">
     {% csrf_token %}
     {{ form.non_field_errors }}
 
     {% for field in form %}
-      <div class="border border-gray-200 rounded-lg px-3 py-2">
-        <label for="{{ field.id_for_label }}" class="block text-sm font-medium text-gray-700 mb-1">
+      <div class="border border-gray-200 dark:border-gray-700 
+                  rounded-lg px-3 py-2 transition-colors duration-300">
+        <label for="{{ field.id_for_label }}" 
+               class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
           {{ field.label }}
         </label>
         {{ field }}
         {% if field.errors %}
-          <p class="text-xs text-red-600 mt-1">{{ field.errors.0 }}</p>
+          <p class="text-xs text-red-600 dark:text-red-400 mt-1">
+            {{ field.errors.0 }}
+          </p>
         {% endif %}
       </div>
     {% endfor %}
 
     <div class="text-center pt-2">
       <button type="submit"
-  class="bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-indigo-600 hover:to-blue-500 text-white text-sm font-semibold py-2 px-6 rounded-full shadow-lg transition duration-300">
-  ✅ Submit Your Leave Request
-</button>
-
+        class="bg-gradient-to-r from-blue-500 to-indigo-600 
+               hover:from-indigo-600 hover:to-blue-500 
+               text-white text-sm font-semibold py-2 px-6 
+               rounded-full shadow-lg transition duration-300">
+        ✅ Submit Your Leave Request
+      </button>
     </div>
   </form>
 </div>

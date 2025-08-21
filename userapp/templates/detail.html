@@ -1,0 +1,120 @@
+{% extends 'base.html' %}
+{% block title %}Profile Detail{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto mt-8 space-y-6">
+
+  <!-- Header Section -->
+  <div class="bg-white dark:bg-gray-800 shadow-xl rounded-2xl p-8 flex flex-col md:flex-row gap-6 items-center border dark:border-gray-700">
+    <div>
+      {% if profile.image %}
+        <img src="{{ profile.image.url }}" alt="Profile Image" 
+             class="w-32 h-32 rounded-full object-cover shadow-md border">
+      {% else %}
+        <div class="w-32 h-32 flex items-center justify-center rounded-full bg-gray-200 dark:bg-gray-700 text-gray-500">
+          No Image
+        </div>
+      {% endif %}
+    </div>
+    <div>
+      <h2 class="text-3xl font-bold text-gray-800 dark:text-gray-100">{{ profile.employee.name }}</h2>
+      <p class="text-lg text-gray-500 dark:text-gray-400">{{ profile.designation|default:"No Designation" }}</p>
+      <span class="inline-block mt-2 px-3 py-1 text-sm rounded-full 
+                   {% if profile.status == 'Active' %}
+                     bg-green-100 text-green-700 dark:bg-green-700 dark:text-green-100
+                   {% else %}
+                     bg-red-100 text-red-700 dark:bg-red-700 dark:text-red-100
+                   {% endif %}">
+        {{ profile.status }}
+      </span>
+    </div>
+  </div>
+
+  <!-- Personal Info -->
+  <div class="bg-white dark:bg-gray-800 shadow-lg rounded-xl p-6">
+    <h3 class="text-xl font-semibold mb-4">🧑 Personal Information</h3>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div><strong>Date of Birth:</strong> {{ profile.date_of_birth|default:"-" }}</div>
+      <div><strong>Gender:</strong> {{ profile.gender|default:"-" }}</div>
+      <div><strong>Marital Status:</strong> {{ profile.marital_status|default:"-" }}</div>
+      <div><strong>National ID:</strong> {{ profile.national_id|default:"-" }}</div>
+    </div>
+  </div>
+
+  <!-- Contact Info -->
+  <div class="bg-white dark:bg-gray-800 shadow-lg rounded-xl p-6">
+    <h3 class="text-xl font-semibold mb-4">📞 Contact Information</h3>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div><strong>Mobile:</strong> {{ profile.mobile_number|default:"-" }}</div>
+      <div><strong>Email:</strong> {{ profile.email|default:"-" }}</div>
+      <div class="md:col-span-2"><strong>Address:</strong> {{ profile.address|default:"-" }}</div>
+      <div><strong>Emergency Contact Name:</strong> {{ profile.emergency_contact_name|default:"-" }}</div>
+      <div><strong>Emergency Contact Number:</strong> {{ profile.emergency_contact_number|default:"-" }}</div>
+    </div>
+  </div>
+
+  <!-- Job Info -->
+  <div class="bg-white dark:bg-gray-800 shadow-lg rounded-xl p-6">
+    <h3 class="text-xl font-semibold mb-4">💼 Job Information</h3>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div><strong>Employee Code:</strong> {{ profile.employee_code|default:"-" }}</div>
+      <div><strong>Job Type:</strong> {{ profile.job_type|default:"-" }}</div>
+      <div><strong>Shift:</strong> {{ profile.shift|default:"-" }}</div>
+      <div><strong>Join Date:</strong> {{ profile.join_date|default:"-" }}</div>
+      <div><strong>Leave Date:</strong> {{ profile.leave_date|default:"-" }}</div>
+    </div>
+  </div>
+
+  <!-- Finance Info -->
+  <div class="bg-white dark:bg-gray-800 shadow-lg rounded-xl p-6">
+    <h3 class="text-xl font-semibold mb-4">💳 Finance Information</h3>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div><strong>Bank Account:</strong> {{ profile.bank_account|default:"-" }}</div>
+      <div><strong>Bank Name:</strong> {{ profile.bank_name|default:"-" }}</div>
+      <div><strong>Branch Name:</strong> {{ profile.branch_name|default:"-" }}</div>
+      <div><strong>Tax ID:</strong> {{ profile.tax_id|default:"-" }}</div>
+      <div><strong>Salary:</strong> {{ profile.salary|default:"-" }}</div>
+    </div>
+  </div>
+
+  <!-- Files -->
+  <div class="bg-white dark:bg-gray-800 shadow-lg rounded-xl p-6">
+    <h3 class="text-xl font-semibold mb-4">📂 Documents</h3>
+    <ul class="space-y-2">
+      <li>📄 Resume: 
+        {% if profile.resume %}
+          <a href="{{ profile.resume.url }}" class="text-blue-600 hover:underline" target="_blank">Download</a>
+        {% else %}<span class="text-gray-400">Not uploaded</span>{% endif %}
+      </li>
+      <li>📄 Offer Letter: 
+        {% if profile.offer_letter %}
+          <a href="{{ profile.offer_letter.url }}" class="text-blue-600 hover:underline" target="_blank">Download</a>
+        {% else %}<span class="text-gray-400">Not uploaded</span>{% endif %}
+      </li>
+      <li>📄 Joining Letter: 
+        {% if profile.joining_letter %}
+          <a href="{{ profile.joining_letter.url }}" class="text-blue-600 hover:underline" target="_blank">Download</a>
+        {% else %}<span class="text-gray-400">Not uploaded</span>{% endif %}
+      </li>
+    </ul>
+  </div>
+
+  <!-- Action Buttons -->
+  <div class="flex justify-end gap-4 px-4 py-6">
+    <a href="{% url 'userapp:employee_profile_update' profile.id %}" 
+       class="px-5 py-2 rounded-lg bg-yellow-500 text-white font-semibold hover:bg-yellow-600 transition">
+      ✏️ Edit
+    </a>
+    <a href="{% url 'userapp:employee_profile_list' %}" 
+       class="px-5 py-2 rounded-lg bg-gray-500 text-white font-semibold hover:bg-gray-600 transition">
+      ⬅️ Back
+    </a>
+    <!-- 🆕 PDF Button -->
+    <a href="{% url 'userapp:employee_profile_pdf' profile.id %}" target="_blank"
+       class="px-5 py-2 rounded-lg bg-blue-600 text-white font-semibold hover:bg-blue-700 transition">
+      📄 Download PDF
+    </a>
+  </div>
+
+</div>
+{% endblock %}

@@ -1,13 +1,20 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="bg-white p-6 rounded shadow-md">
+<div class="bg-white dark:bg-gray-800 p-6 rounded shadow-md 
+            text-gray-900 dark:text-gray-200 transition-colors duration-300">
+  
   <div class="flex justify-between items-center mb-4">
     <h2 class="text-2xl font-bold">📅 Public Holidays</h2>
-    <a href="{% url 'attendance_app:holiday_add' %}" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">Add Holiday</a>
+    <a href="{% url 'attendance_app:holiday_add' %}" 
+       class="bg-blue-600 dark:bg-blue-700 text-white px-4 py-2 rounded 
+              hover:bg-blue-700 dark:hover:bg-blue-800 transition">
+      Add Holiday
+    </a>
   </div>
-  <table class="w-full border border-gray-300 text-left">
+
+  <table class="w-full border border-gray-300 dark:border-gray-700 text-left text-sm">
     <thead>
-      <tr class="bg-gray-100">
+      <tr class="bg-gray-100 dark:bg-gray-700">
         <th class="p-2">Title</th>
         <th class="p-2">Start Date</th>
         <th class="p-2">End Date</th>
@@ -17,19 +24,24 @@
     </thead>
     <tbody>
       {% for holiday in holidays %}
-      <tr class="border-t">
+      <tr class="border-t border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-900">
         <td class="p-2">{{ holiday.title }}</td>
         <td class="p-2">{{ holiday.start_date }}</td>
         <td class="p-2">{{ holiday.end_date }}</td>
         <td class="p-2">{{ holiday.description }}</td>
         <td class="p-2">
-          <a href="{% url 'attendance_app:holiday_edit' holiday.pk %}" class="text-blue-600 hover:underline">Edit</a> |
-          <a href="{% url 'attendance_app:holiday_delete' holiday.pk %}" class="text-red-600 hover:underline">Delete</a>
+          <a href="{% url 'attendance_app:holiday_edit' holiday.pk %}" 
+             class="text-blue-600 dark:text-blue-400 hover:underline">Edit</a> |
+          <a href="{% url 'attendance_app:holiday_delete' holiday.pk %}" 
+             class="text-red-600 dark:text-red-400 hover:underline">Delete</a>
         </td>
       </tr>
       {% empty %}
       <tr>
-        <td colspan="5" class="p-2 text-center text-gray-500">No holidays added yet.</td>
+        <td colspan="5" 
+            class="p-2 text-center text-gray-500 dark:text-gray-400">
+          No holidays added yet.
+        </td>
       </tr>
       {% endfor %}
     </tbody>

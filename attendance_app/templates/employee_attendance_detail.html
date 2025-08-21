@@ -3,25 +3,23 @@
 {% load time_filters %}
 
 {% block content %}
-<div class="p-6 bg-white rounded shadow-md">
-  <!-- Header + Filter Form in One Line -->
+<div class="p-4 sm:p-6 bg-white dark:bg-gray-800 rounded shadow-md transition-colors duration-300">
+  <!-- Header + Filter Form -->
   <div class="flex flex-col md:flex-row justify-between items-end md:items-center mb-6 gap-4">
-    <!-- Heading -->
-    <h1 class="text-2xl md:text-3xl font-bold text-gray-800 border-b md:border-0 pb-2 md:pb-0">
-      🧾 Attendance Report: <span class="text-green-700">{{ employee.name }}</span>
+    <h1 class="text-xl sm:text-2xl md:text-3xl font-bold text-gray-900 dark:text-gray-100 border-b md:border-0 pb-2 md:pb-0">
+      🧾 Attendance Report: <span class="text-green-700 dark:text-green-400">{{ employee.name }}</span>
     </h1>
 
-    <!-- Filter Form -->
     <form method="get" class="flex flex-wrap md:flex-nowrap gap-3 items-end">
       <div class="flex flex-col">
-        <label for="start_date" class="text-sm text-gray-600 mb-1">Start Date</label>
+        <label for="start_date" class="text-sm text-gray-600 dark:text-gray-300 mb-1">Start Date</label>
         <input type="date" name="start_date" value="{{ start_date }}"
-               class="border border-gray-300 px-3 py-2 rounded w-full" />
+               class="border border-gray-300 dark:border-gray-600 px-3 py-2 rounded w-full bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100" />
       </div>
       <div class="flex flex-col">
-        <label for="end_date" class="text-sm text-gray-600 mb-1">End Date</label>
+        <label for="end_date" class="text-sm text-gray-600 dark:text-gray-300 mb-1">End Date</label>
         <input type="date" name="end_date" value="{{ end_date }}"
-               class="border border-gray-300 px-3 py-2 rounded w-full" />
+               class="border border-gray-300 dark:border-gray-600 px-3 py-2 rounded w-full bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100" />
       </div>
       <div class="flex gap-2 mt-2 md:mt-6">
         <button type="submit"
@@ -29,7 +27,7 @@
           🔍 Filter
         </button>
         <a href="{% url 'attendance_app:employee_list' %}"
-           class="text-gray-600 hover:text-gray-800 hover:underline text-sm mt-2">
+           class="text-gray-600 dark:text-gray-300 hover:underline text-sm mt-2">
           ⬅ Back
         </a>
       </div>
@@ -38,7 +36,7 @@
 
   <!-- PDF Download Button -->
   <div class="mb-4">
-    <a href="{% url 'attendance_pdf' employee.id %}?start_date={{ start_date }}&end_date={{ end_date }}"
+    <a href="{% url 'attendance_app:attendance_pdf' employee.id %}?start_date={{ start_date }}&end_date={{ end_date }}"
       class="inline-flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white font-semibold px-5 py-2 rounded shadow-md transition duration-200"
       target="_blank">
       ⬇ Attendance Report (PDF)
@@ -47,30 +45,30 @@
 
   <!-- Attendance Table -->
   <div class="overflow-x-auto">
-    <table class="min-w-full border border-gray-300 text-sm">
-      <thead class="bg-gray-100 text-gray-800 text-left">
+    <table class="min-w-full border border-gray-300 dark:border-gray-700 text-xs sm:text-sm">
+      <thead class="bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-100 text-left">
         <tr>
-          <th class="border px-4 py-2">👤 Name</th>
-          <th class="border px-4 py-2">📅 Date</th>
-          <th class="border px-4 py-2">🕒 In Time</th>
-          <th class="border px-4 py-2">🕔 Out Time</th>
-          <th class="border px-4 py-2">📌 Status</th>
+          <th class="border px-2 sm:px-4 py-2 border-gray-300 dark:border-gray-700">👤 Name</th>
+          <th class="border px-2 sm:px-4 py-2 border-gray-300 dark:border-gray-700">📅 Date</th>
+          <th class="border px-2 sm:px-4 py-2 border-gray-300 dark:border-gray-700">🕒 In Time</th>
+          <th class="border px-2 sm:px-4 py-2 border-gray-300 dark:border-gray-700">🕔 Out Time</th>
+          <th class="border px-2 sm:px-4 py-2 border-gray-300 dark:border-gray-700">📌 Status</th>
         </tr>
       </thead>
       <tbody>
         {% for date, data in attendance_summary %}
-        <tr class="
-          {% if data.status == 'Absent' %} bg-red-100
-          {% elif data.status == 'Holiday' %} bg-yellow-100
-          {% elif data.status == 'Public Holiday' %} bg-indigo-100
-          {% elif data.status == 'Leave' %} bg-blue-100
-          {% elif data.status == 'Present' %} bg-green-100
+        <tr class="transition
+          {% if data.status == 'Absent' %} bg-red-100 dark:bg-red-900/40
+          {% elif data.status == 'Holiday' %} bg-yellow-100 dark:bg-yellow-900/40
+          {% elif data.status == 'Public Holiday' %} bg-indigo-100 dark:bg-indigo-900/40
+          {% elif data.status == 'Leave' %} bg-blue-100 dark:bg-blue-900/40
+          {% elif data.status == 'Present' %} bg-green-100 dark:bg-green-900/40
           {% endif %}">
-          <td class="border px-4 py-2">{{ employee.name }}</td>
-          <td class="border px-4 py-2">{{ date }}</td>
+          <td class="border px-2 sm:px-4 py-2 border-gray-300 dark:border-gray-700">{{ employee.name }}</td>
+          <td class="border px-2 sm:px-4 py-2 border-gray-300 dark:border-gray-700">{{ date }}</td>
 
           <!-- In Time -->
-          <td class="border px-4 py-2">
+          <td class="border px-2 sm:px-4 py-2 border-gray-300 dark:border-gray-700">
             {% if data.in_time %}
               {{ data.in_time|localtime|time:"h:i A" }}
             {% else %}
@@ -79,30 +77,30 @@
           </td>
 
           <!-- Out Time -->
-          <td class="border px-4 py-2">
+          <td class="border px-2 sm:px-4 py-2 border-gray-300 dark:border-gray-700">
             {% if data.out_time %}
               {{ data.out_time|localtime|time:"h:i A" }}
             {% elif data.in_time %}
-              <span class="text-gray-500" title="Out time missing">- ⏰</span>
+              <span class="text-gray-500 dark:text-gray-400" title="Out time missing">- ⏰</span>
             {% else %}
               -
             {% endif %}
           </td>
 
           <!-- Status -->
-          <td class="border px-4 py-2 font-semibold
-            {% if data.status == 'Absent' %} text-red-600
-            {% elif data.status == 'Holiday' %} text-yellow-700
-            {% elif data.status == 'Public Holiday' %} text-indigo-700
-            {% elif data.status == 'Leave' %} text-blue-600
-            {% elif data.status == 'Present' %} text-green-700
+          <td class="border px-2 sm:px-4 py-2 font-semibold border-gray-300 dark:border-gray-700
+            {% if data.status == 'Absent' %} text-red-600 dark:text-red-400
+            {% elif data.status == 'Holiday' %} text-yellow-700 dark:text-yellow-400
+            {% elif data.status == 'Public Holiday' %} text-indigo-700 dark:text-indigo-400
+            {% elif data.status == 'Leave' %} text-blue-600 dark:text-blue-400
+            {% elif data.status == 'Present' %} text-green-700 dark:text-green-400
             {% endif %}">
             {{ data.status }}
           </td>
         </tr>
         {% empty %}
         <tr>
-          <td colspan="5" class="text-center py-4 text-gray-500">
+          <td colspan="5" class="text-center py-4 text-gray-500 dark:text-gray-400">
             ⚠️ No attendance records found for this employee.
           </td>
         </tr>
@@ -112,15 +110,15 @@
   </div>
 
   <!-- Summary Section -->
-  <div class="mt-6 flex flex-wrap justify-between gap-3 text-sm">
-    <div class="text-green-700">✅ Approved Leave Days: <strong>{{ approved_leave_count }}</strong></div>
-    <div class="text-red-700">🚫 Absent Days: <strong>{{ absent_days }}</strong></div>
-    <div class="text-yellow-700">🗓️ Weekly Holidays: <strong>{{ weekly_holiday_count }}</strong></div>
-    <div class="text-indigo-700">🏛️ Public Holidays: <strong>{{ public_holiday_count }}</strong></div>
-    <div class="text-gray-700">📄 Total Leave Requests: <strong>{{ total_leave_requests }}</strong></div>
+  <div class="mt-6 flex flex-wrap justify-between gap-3 text-xs sm:text-sm">
+    <div class="text-green-700 dark:text-green-400">✅ Approved Leave Days: <strong>{{ approved_leave_count }}</strong></div>
+    <div class="text-red-700 dark:text-red-400">🚫 Absent Days: <strong>{{ absent_days }}</strong></div>
+    <div class="text-yellow-700 dark:text-yellow-400">🗓️ Weekly Holidays: <strong>{{ weekly_holiday_count }}</strong></div>
+    <div class="text-indigo-700 dark:text-indigo-400">🏛️ Public Holidays: <strong>{{ public_holiday_count }}</strong></div>
+    <div class="text-gray-700 dark:text-gray-300">📄 Total Leave Requests: <strong>{{ total_leave_requests }}</strong></div>
 
     {% if total_work_duration.total_seconds > 0 %}
-    <div class="text-blue-700 font-semibold">
+    <div class="text-blue-700 dark:text-blue-400 font-semibold">
       🕓 Total Work Time: {{ total_work_duration|format_timedelta }}
     </div>
     {% endif %}

@@ -1,46 +1,59 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="p-6 bg-white rounded shadow">
-  <h1 class="text-2xl font-bold mb-4">Departments</h1>
-  <a href="{% url 'attendance_app:department_add' %}" class="bg-blue-600 text-white px-4 py-2 rounded mb-4 inline-block">➕ Add Department</a>
+<div class="p-4 sm:p-6 bg-white dark:bg-gray-800 rounded shadow transition-colors duration-300">
+  <h1 class="text-xl sm:text-2xl font-bold mb-4 text-gray-900 dark:text-gray-100">Departments</h1>
   
-  <table class="table-auto w-full border border-gray-300">
-    <thead>
-      <tr class="bg-gray-100">
-        <th class="border px-4 py-2">ID</th>
-        <th class="border px-4 py-2">Name</th>
-        <th class="border px-4 py-2">Weekly Off Day</th>
-        <th class="border px-4 py-2 text-center">Edit</th>
-        <th class="border px-4 py-2 text-center">Delete</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for dept in departments %}
-      <tr>
-        <td class="border px-4 py-2">{{ dept.id }}</td>
-        <td class="border px-4 py-2">{{ dept.name }}</td>
-        <td class="border px-4 py-2">{{ dept.weekly_off_day }}</td>
+  <!-- Add Department Button -->
+  <a href="{% url 'attendance_app:department_add' %}"
+     class="bg-blue-600 hover:bg-blue-700 text-white px-3 sm:px-4 py-2 rounded mb-4 inline-block text-sm sm:text-base transition">
+    ➕ Add Department
+  </a>
+  
+  <!-- Table Wrapper for Mobile Scroll -->
+  <div class="overflow-x-auto">
+    <table class="table-auto w-full border border-gray-300 dark:border-gray-700 text-sm">
+      <thead class="bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-gray-100">
+        <tr>
+          <th class="border border-gray-300 dark:border-gray-700 px-2 sm:px-4 py-2">ID</th>
+          <th class="border border-gray-300 dark:border-gray-700 px-2 sm:px-4 py-2">Name</th>
+          <th class="border border-gray-300 dark:border-gray-700 px-2 sm:px-4 py-2">Weekly Off Day</th>
+          <th class="border border-gray-300 dark:border-gray-700 px-2 sm:px-4 py-2 text-center">Edit</th>
+          <th class="border border-gray-300 dark:border-gray-700 px-2 sm:px-4 py-2 text-center">Delete</th>
+        </tr>
+      </thead>
+      <tbody class="text-gray-800 dark:text-gray-200">
+        {% for dept in departments %}
+        <tr class="hover:bg-gray-50 dark:hover:bg-gray-900 transition">
+          <td class="border border-gray-300 dark:border-gray-700 px-2 sm:px-4 py-2">{{ dept.id }}</td>
+          <td class="border border-gray-300 dark:border-gray-700 px-2 sm:px-4 py-2">{{ dept.name }}</td>
+          <td class="border border-gray-300 dark:border-gray-700 px-2 sm:px-4 py-2">{{ dept.weekly_off_day }}</td>
 
-        <!-- ✏️ Edit -->
-        <td class="border px-4 py-2 text-center">
-          <a href="{% url 'attendance_app:department_edit' dept.id %}" class="flex items-center justify-center gap-1 text-blue-600 hover:underline">
-            ✏️ Edit
-          </a>
-        </td>
+          <!-- ✏️ Edit -->
+          <td class="border border-gray-300 dark:border-gray-700 px-2 sm:px-4 py-2 text-center">
+            <a href="{% url 'attendance_app:department_edit' dept.id %}"
+               class="flex items-center justify-center gap-1 text-blue-600 hover:underline">
+              ✏️ Edit
+            </a>
+          </td>
 
-        <!-- 🗑️ Delete -->
-        <td class="border px-4 py-2 text-center">
-          <a href="{% url 'attendance_app:department_delete' dept.id %}" class="flex items-center justify-center gap-1 text-red-600 hover:underline">
-            🗑️ Delete
-          </a>
-        </td>
-      </tr>
-      {% empty %}
-      <tr>
-        <td colspan="5" class="text-center py-4">No departments found.</td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
+          <!-- 🗑️ Delete -->
+          <td class="border border-gray-300 dark:border-gray-700 px-2 sm:px-4 py-2 text-center">
+            <a href="{% url 'attendance_app:department_delete' dept.id %}"
+               class="flex items-center justify-center gap-1 text-red-600 hover:underline">
+              🗑️ Delete
+            </a>
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="5"
+              class="text-center py-4 text-gray-600 dark:text-gray-400">
+            No departments found.
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
 </div>
 {% endblock %}

@@ -1,0 +1,39 @@
+{% extends 'base.html' %}
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto mt-8 bg-white dark:bg-gray-800 shadow-2xl rounded-2xl p-10">
+  <h2 class="text-3xl font-bold mb-8 text-gray-800 dark:text-gray-100 border-b pb-4">
+    {{ title }}
+  </h2>
+
+  <form method="post" enctype="multipart/form-data" class="grid grid-cols-1 md:grid-cols-2 gap-6">
+    {% csrf_token %}
+    {{ form.non_field_errors }}
+
+    {% for field in form %}
+      <div class="flex flex-col">
+        <label class="mb-2 font-semibold text-gray-700 dark:text-gray-300">
+          {{ field.label }}
+        </label>
+        {{ field }}
+        {% if field.errors %}
+          <p class="text-red-500 text-sm mt-1">{{ field.errors|striptags }}</p>
+        {% endif %}
+      </div>
+    {% endfor %}
+
+    <!-- Action Buttons -->
+    <div class="md:col-span-2 flex justify-end gap-4 mt-8">
+      <a href="{% url 'userapp:employee_profile_list' %}" 
+         class="px-6 py-3 rounded-lg bg-gray-400 hover:bg-gray-500 text-white font-semibold shadow-lg transition duration-200">
+        ❌ Cancel
+      </a>
+      <button type="submit" 
+              class="px-6 py-3 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold shadow-lg transition duration-200">
+        ✅ Save
+      </button>
+    </div>
+  </form>
+</div>
+{% endblock %}

@@ -1,0 +1,97 @@
+{% extends 'base.html' %}
+{% block title %}Employee Profiles{% endblock %}
+
+{% block content %}
+<div class="bg-white dark:bg-gray-800 shadow-xl rounded-lg p-6">
+  <div class="flex justify-between items-center mb-6">
+    <h2 class="text-2xl font-bold">👥 Employee Profiles</h2>
+
+    <!-- 🔍 Search Bar -->
+    <form method="get" class="flex gap-2">
+      <input type="text" name="q" value="{{ search_query }}"
+             placeholder="Search..."
+             class="px-3 py-2 border rounded-lg dark:bg-gray-700 dark:text-gray-200 focus:outline-none">
+      <button type="submit" 
+              class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+        Search
+      </button>
+    </form>
+
+
+    <a href="{% url 'userapp:employee_profile_list_pdf' %}?q={{ search_query }}"
+     class="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700">
+    📄 Export PDF
+  </a>
+  </div>
+
+  <a href="{% url 'userapp:employee_profile_create' %}" 
+     class="mb-4 inline-block px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">
+    ➕ Add Profile
+  </a>
+
+  <!-- Employee Table -->
+  <div class="overflow-x-auto">
+    <table class="min-w-full border border-gray-300 dark:border-gray-700 rounded-lg">
+      <thead class="bg-gray-100 dark:bg-gray-700">
+        <tr>
+          <th class="px-4 py-2 text-left">Image</th>
+          <th class="px-4 py-2 text-left">Name</th>
+          <th class="px-4 py-2 text-left">Designation</th>
+          <th class="px-4 py-2 text-left">Mobile</th>
+          <th class="px-4 py-2 text-left">Join Date</th>
+          <th class="px-4 py-2 text-left">Status</th>
+          <th class="px-4 py-2 text-left">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for profile in profiles %}
+        <tr class="border-t dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700">
+          <td class="px-4 py-2">
+            {% if profile.image %}
+              <img src="{{ profile.image.url }}" class="w-12 h-12 rounded-full object-cover">
+            {% else %}
+              <span class="text-gray-400">No Image</span>
+            {% endif %}
+          </td>
+          <td class="px-4 py-2">{{ profile.employee.name }}</td>
+          <td class="px-4 py-2">{{ profile.designation|default:"-" }}</td>
+          <td class="px-4 py-2">{{ profile.mobile_number|default:"-" }}</td>
+          <td class="px-4 py-2">{{ profile.join_date|default:"-" }}</td>
+          <td class="px-4 py-2">
+            {% if profile.status == "Active" %}
+              <span class="text-green-600 font-semibold">Active</span>
+            {% else %}
+              <span class="text-red-600 font-semibold">Inactive</span>
+            {% endif %}
+          </td>
+          <td class="px-4 py-2 space-x-2">
+            <a href="{% url 'userapp:employee_profile_detail' profile.id %}" class="text-blue-600 hover:underline">🔍 View</a>
+            <a href="{% url 'userapp:employee_profile_update' profile.id %}" class="text-yellow-600 hover:underline">✏️ Edit</a>
+            <a href="{% url 'userapp:employee_profile_delete' profile.id %}" class="text-red-600 hover:underline">🗑 Delete</a>
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="7" class="text-center py-4">No profiles found</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- 📄 Pagination -->
+  <div class="mt-6 flex justify-center gap-2">
+    {% if profiles.has_previous %}
+      <a href="?q={{ search_query }}&page=1" class="px-3 py-1 border rounded">⏮ First</a>
+      <a href="?q={{ search_query }}&page={{ profiles.previous_page_number }}" class="px-3 py-1 border rounded">⬅ Prev</a>
+    {% endif %}
+
+    <span class="px-3 py-1 bg-blue-600 text-white rounded">
+      Page {{ profiles.number }} of {{ profiles.paginator.num_pages }}
+    </span>
+
+    {% if profiles.has_next %}
+      <a href="?q={{ search_query }}&page={{ profiles.next_page_number }}" class="px-3 py-1 border rounded">Next ➡</a>
+      <a href="?q={{ search_query }}&page={{ profiles.paginator.num_pages }}" class="px-3 py-1 border rounded">Last ⏭</a>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
