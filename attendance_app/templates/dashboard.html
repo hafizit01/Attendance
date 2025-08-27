@@ -158,5 +158,27 @@
 {% endblock content %}
 
 {% block extra_scripts %}
-{# চার্ট script আগের মতোই থাকবে (dark/light aware) #}
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+  const loadMoreBtn = document.getElementById("loadMoreBtn");
+  if (!loadMoreBtn) return;
+
+  const hiddenRows = document.querySelectorAll("#employeeTableBody .hidden-row");
+  let visibleCount = 10;   // শুরুর 10টা শো হয়
+
+  loadMoreBtn.addEventListener("click", function() {
+    let shown = 0;
+    for (let i = visibleCount; i < hiddenRows.length && shown < 10; i++) {
+      hiddenRows[i].classList.remove("hidden");
+      shown++;
+    }
+    visibleCount += shown;
+    if (visibleCount >= hiddenRows.length) {
+      loadMoreBtn.style.display = "none"; // সব দেখানো হলে বাটন হাইড
+    }
+  });
+});
+</script>
+
+
 {% endblock %}

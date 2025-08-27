@@ -36,18 +36,40 @@ class EmployeeForm(forms.ModelForm):
         return device_user_id
 
 
+from django import forms
+from .models import Department
+
 class DepartmentForm(forms.ModelForm):
     class Meta:
         model = Department
-        fields = ['name', 'weekly_off_day']
+        fields = "__all__"   # 👉 সব ফিল্ড দেখাবে
         widgets = {
-            'name': forms.TextInput(attrs={
-                'class': 'w-full border rounded px-3 py-2',
-                'placeholder': 'Department name',
+            "company": forms.Select(attrs={
+                "class": "w-full border rounded px-3 py-2",
             }),
-            'weekly_off_day': forms.Select(attrs={
-                'class': 'w-full border rounded px-3 py-2',
+            "name": forms.TextInput(attrs={
+                "class": "w-full border rounded px-3 py-2",
+                "placeholder": "Department name",
             }),
+            "weekly_off_day": forms.Select(attrs={
+                "class": "w-full border rounded px-3 py-2",
+            }),
+            "device_ip": forms.TextInput(attrs={
+                "class": "w-full border rounded px-3 py-2",
+                "placeholder": "Device IP (optional)",
+            }),
+            "device_port": forms.NumberInput(attrs={
+                "class": "w-full border rounded px-3 py-2",
+                "placeholder": "Device Port (optional)",
+            }),
+            "in_time": forms.TimeInput(attrs={
+                "type": "time",
+                "class": "w-full border rounded px-3 py-2",
+            }, format="%H:%M"),
+            "out_time": forms.TimeInput(attrs={
+                "type": "time",
+                "class": "w-full border rounded px-3 py-2",
+            }, format="%H:%M"),
         }
 
 
@@ -57,16 +79,9 @@ class AttendanceForm(forms.ModelForm):
         model = Attendance
         fields = ['employee', 'timestamp', 'status']
         widgets = {
-            'employee': forms.Select(attrs={
-                'class': 'w-full border px-3 py-2 rounded'
-            }),
-            'timestamp': forms.DateTimeInput(attrs={
-                'type': 'datetime-local',
-                'class': 'w-full border px-3 py-2 rounded'
-            }),
-            'status': forms.Select(attrs={
-                'class': 'w-full border px-3 py-2 rounded'
-            }),
+            "employee": forms.Select(attrs={"class": "w-full rounded border px-3 py-2 dark:bg-gray-900 dark:text-white"}),
+            "timestamp": forms.DateTimeInput(attrs={"type": "datetime-local", "class": "w-full rounded border px-3 py-2 dark:bg-gray-900 dark:text-white"}),
+            "status": forms.Select(attrs={"class": "w-full rounded border px-3 py-2 dark:bg-gray-900 dark:text-white"}),
         }
 
     def clean(self):
@@ -113,11 +128,16 @@ class LeaveRequestForm(forms.ModelForm):
         model = LeaveRequest
         fields = '__all__'
         widgets = {
-            'start_date': forms.DateInput(attrs={'type': 'date', 'class': 'form-input border-gray-300 rounded w-full'}),
-            'end_date': forms.DateInput(attrs={'type': 'date', 'class': 'form-input border-gray-300 rounded w-full'}),
-            'reason': forms.Textarea(attrs={'rows': 3, 'class': 'form-textarea border-gray-300 rounded w-full'}),
-            'leave_type': forms.Select(attrs={'class': 'form-select border-gray-300 rounded w-full'}),
-            'status': forms.Select(attrs={'class': 'form-select border-gray-300 rounded w-full'}),
+            "leave_type": forms.Select(attrs={"class": "w-full px-3 py-2 border rounded-md dark:bg-gray-900 dark:text-white"}),
+            "start_date": forms.DateInput(attrs={"type": "date", "class": "w-full px-3 py-2 border rounded-md dark:bg-gray-900 dark:text-white"}),
+            "end_date": forms.DateInput(attrs={"type": "date", "class": "w-full px-3 py-2 border rounded-md dark:bg-gray-900 dark:text-white"}),
+            "reason": forms.Textarea(attrs={"rows": 3, "class": "w-full px-3 py-2 border rounded-md dark:bg-gray-900 dark:text-white"}),
+            "company": forms.Select(attrs={"class": "w-full px-3 py-2 border rounded-md dark:bg-gray-900 dark:text-white"}),
+            "employee": forms.Select(attrs={"class": "w-full px-3 py-2 border rounded-md dark:bg-gray-900 dark:text-white"}),
+            "status": forms.Select(attrs={"class": "w-full px-3 py-2 border rounded-md dark:bg-gray-900 dark:text-white"}),
+            "approved_by": forms.Select(attrs={"class": "w-full px-3 py-2 border rounded-md dark:bg-gray-900 dark:text-white"}),
+            "applied_on": forms.Select(attrs={"class": "w-full px-3 py-2 border rounded-md dark:bg-gray-900 dark:text-white"}),
+
         }
 
     def __init__(self, *args, **kwargs):

@@ -1,38 +1,73 @@
 {% extends "base.html" %}
+{% load widget_tweaks %}
 {% block content %}
-<div class="p-6 bg-white dark:bg-gray-800 rounded shadow max-w-md mx-auto transition-colors duration-300">
-  <h1 class="text-2xl font-bold mb-4 text-gray-900 dark:text-gray-100">{{ title }}</h1>
 
-  <form method="post" class="space-y-4">
-    {% csrf_token %}
-    <div class="space-y-3">
-      {{ form.as_p }}
+<div class="max-w-2xl mx-auto">
+  <div class="p-6 bg-white dark:bg-gray-800 rounded-lg shadow transition-colors duration-300">
+    <div class="mb-6">
+      <h1 class="text-2xl font-bold text-gray-900 dark:text-gray-100">{{ title }}</h1>
+      {% if subtitle %}
+        <p class="mt-1 text-sm text-gray-600 dark:text-gray-300">{{ subtitle }}</p>
+      {% endif %}
     </div>
 
-    <div class="flex items-center gap-3">
-      <button type="submit"
-              class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded transition">
-        Save
-      </button>
-      <a href="{% url 'attendance_app:department_list' %}"
-         class="text-gray-700 dark:text-gray-300 hover:underline">
-        Cancel
-      </a>
-    </div>
-  </form>
+    <form method="post" class="space-y-5">
+      {% csrf_token %}
+
+     {% for field in form %}
+  <div>
+    {% if field.field.widget.input_type == "checkbox" %}
+      <!-- Checkbox -->
+      <label class="inline-flex items-start gap-3">
+        {{ field }}
+        <span>
+          <span class="text-sm font-medium text-gray-800 dark:text-gray-200">
+            {{ field.label }}
+            {% if field.field.required %}<span class="text-red-600">*</span>{% endif %}
+          </span>
+          {% if field.help_text %}
+            <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">{{ field.help_text }}</p>
+          {% endif %}
+        </span>
+      </label>
+      {% if field.errors %}
+        <p class="mt-1 text-sm text-red-600 dark:text-red-400">{{ field.errors|striptags }}</p>
+      {% endif %}
+    {% else %}
+      <!-- Inputs / Selects / Textareas -->
+      <label for="{{ field.id_for_label }}" 
+             class="block text-sm font-medium text-gray-800 dark:text-gray-200 mb-1">
+        {{ field.label }}
+        {% if field.field.required %}<span class="text-red-600">*</span>{% endif %}
+      </label>
+
+      {% if field.errors %}
+        {{ field }}
+        <p class="mt-1 text-sm text-red-600 dark:text-red-400">{{ field.errors|striptags }}</p>
+      {% else %}
+        {{ field }}
+      {% endif %}
+
+      {% if field.help_text %}
+        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ field.help_text }}</p>
+      {% endif %}
+    {% endif %}
+  </div>
+{% endfor %}
+
+
+      <div class="flex items-center gap-3 pt-2">
+        <button type="submit"
+                class="inline-flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md transition">
+          <span>Save</span>
+        </button>
+        <a href="{% url 'attendance_app:department_list' %}"
+           class="text-gray-700 dark:text-gray-300 hover:underline">
+          Cancel
+        </a>
+      </div>
+    </form>
+  </div>
 </div>
 
-<style>
-  /* Django form.as_p default elements styled */
-  form p label {
-    @apply block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1;
-  }
-  form p input,
-  form p select,
-  form p textarea {
-    @apply w-full rounded border border-gray-300 dark:border-gray-600 px-3 py-2
-           bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100
-           focus:outline-none focus:ring-2 focus:ring-blue-500;
-  }
-</style>
 {% endblock %}

@@ -55,8 +55,8 @@
             {{ leave.status }}
           </td>
           <td class="px-6 py-4 whitespace-nowrap text-sm">
-            <a href="{% url 'leave_update' leave.pk %}" class="text-blue-600 hover:underline">Edit</a> |
-            <a href="{% url 'leave_delete' leave.pk %}" class="text-red-600 hover:underline" onclick="return confirm('Delete this leave?');">Delete</a>
+            <a href="{% url 'attendance_app:leave_update' leave.pk %}" class="text-blue-600 hover:underline">Edit</a> |
+            <a href="{% url 'attendance_app:leave_delete' leave.pk %}" class="text-red-600 hover:underline" onclick="return confirm('Delete this leave?');">Delete</a>
           </td>
         </tr>
         {% empty %}

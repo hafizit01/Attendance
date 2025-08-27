@@ -1,29 +1,34 @@
-from datetime import datetime, timedelta, time as dtime
+# Python built-ins
+import json
+import calendar
+import logging
+from datetime import datetime, timedelta, time
 from collections import defaultdict, OrderedDict
-from django.contrib.auth.decorators import login_required
-from django.shortcuts import render, redirect, get_object_or_404
-from django.http import HttpResponse, JsonResponse
+
+# Django core
 from django.contrib import messages
-from django.utils.timezone import localtime, localdate, make_aware, is_naive, now
+from django.contrib.auth.decorators import login_required
 from django.db.models import Q, Min, Max, Count
+from django.db.models.functions import TruncDate
+from django.http import HttpResponse, JsonResponse, HttpResponseForbidden
+from django.shortcuts import render, redirect, get_object_or_404
 from django.template.loader import render_to_string
+from django.utils import timezone
+from django.utils.timezone import localtime, localdate, make_aware, is_naive, now
 from django.views.decorators.csrf import csrf_exempt
 
+# Third-party libs
+from weasyprint import HTML
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import A4, letter
 from reportlab.lib.units import inch
 
-from weasyprint import HTML
-
+# Local apps
 from .forms import *
-from .models import Employee, Department, Attendance
+from .models import Employee, Department, Attendance, Holiday, LeaveRequest
 from attendance_app.utils.zk_import import import_attendance
-
 from subscription_app.models import UserSubscription
 from subscription_app.decorators import subscription_required
-
-import json
-import calendar
 
 
 # ---------- Subscription helper (Date/DateTime দুই কেস) ----------
@@ -57,10 +62,6 @@ def _has_active_subscription(user) -> bool:
     return timezone.now() <= end_dt
 
 # ---------- Dashboard (Optimized) ----------
-from datetime import timedelta, datetime, time
-from collections import defaultdict
-
-from django.db.models.functions import TruncDate
 
 @login_required
 def dashboard(request):
@@ -262,11 +263,6 @@ def zkteco_push_view(request):
 
 # 📌 Manual Sync Button with Department Filter
 
-from django.contrib.auth.decorators import login_required
-from django.shortcuts import render, redirect
-from django.contrib import messages
-from .models import Department
-import logging
 
 logger = logging.getLogger(__name__)
 
@@ -379,17 +375,6 @@ def generate_attendance_table(employee_qs, start_date, end_date):
         start += delta
 
     return days
-
-from collections import defaultdict
-from datetime import datetime, timedelta, time
-
-from django.contrib.auth.decorators import login_required
-from django.http import HttpResponseForbidden
-from django.shortcuts import render
-from django.utils import timezone
-from django.utils.timezone import is_naive, make_aware
-
-from .models import Employee, Department, Attendance, Holiday, LeaveRequest
 
 
 # ---------------Monthly Report (Company-scoped)---------------
@@ -595,17 +580,6 @@ def monthly_work_time_report(request):
 
 
 # --------------Monthly Work Time PDF (Leave বাদ না দিয়ে Expected ঠিক রাখা)---------------
-from collections import defaultdict
-from datetime import datetime, timedelta, time
-
-from django.contrib.auth.decorators import login_required
-from django.http import HttpResponse, HttpResponseForbidden
-from django.template.loader import render_to_string
-from django.utils import timezone
-from django.utils.timezone import make_aware, is_naive
-from weasyprint import HTML
-
-from .models import Employee, Department, Attendance, LeaveRequest, Holiday
 
 
 @login_required
@@ -900,16 +874,22 @@ def employee_delete(request, pk):
 # ----------------------------
 # Department List
 # ----------------------------
-@login_required
+from django.core.paginator import Paginator
 def department_list(request):
-    # শুধুমাত্র current user's company-এর department দেখাবে
-    user_company = getattr(request.user.profile, 'company', None)
-    if not user_company:
-        departments = Department.objects.none()
-    else:
-        departments = Department.objects.filter(company=user_company)
+    q = (request.GET.get("q") or "").strip()
+    qs = Department.objects.select_related("company").order_by("id")
+    if q:
+        qs = qs.filter(Q(name__icontains=q) | Q(company__name__icontains=q))
 
-    return render(request, 'department_list.html', {'departments': departments})
+    paginator = Paginator(qs, 10)  # প্রতি পেজে 10টি
+    page_number = request.GET.get("page")
+    page_obj = paginator.get_page(page_number)
+
+    return render(request, "department_list.html", {
+        "departments": page_obj.object_list,
+        "page_obj": page_obj,
+        "q": q,
+    })
 
 
 # ----------------------------
@@ -949,14 +929,16 @@ def department_form_view(request, pk=None):
 # ----------------------------
 # Department Delete
 # ----------------------------
+from django.views.decorators.http import require_POST
 @login_required
+@require_POST
 def department_delete(request, pk):
-    user_company = getattr(request.user.profile, 'company', None)
+    user_company = getattr(request.user.profile, "company", None)
     dept = get_object_or_404(Department, pk=pk, company=user_company)
+    name = dept.name  # শুধু মেসেজে দেখানোর জন্য আগে রেখে দিলাম
     dept.delete()
-    messages.success(request, "Department deleted successfully.")
-    return redirect('department_list')
-
+    messages.success(request, f"Department '{name}' deleted successfully.")
+    return redirect("department_list")
 
 # ---------------------Attendance---------
 # views.py
@@ -1883,7 +1865,7 @@ def leave_create(request):
         leave = form.save(commit=False)
         leave.approved_by = request.user
         leave.save()
-        return redirect('leave_list')
+        return redirect('attendance_app:leave_list')
     return render(request, 'leave_form.html', {'form': form, 'title': 'Create Leave'})
 
 
@@ -1893,7 +1875,7 @@ def leave_update(request, pk):
     form = LeaveRequestForm(request.POST or None, instance=leave, user=request.user)
     if form.is_valid():
         form.save()
-        return redirect('leave_list')
+        return redirect('attendance_app:leave_list')
     return render(request, 'leave_form.html', {'form': form, 'title': 'Update Leave'})
 
 
@@ -1901,7 +1883,7 @@ def leave_update(request, pk):
 def leave_delete(request, pk):
     leave = get_object_or_404(LeaveRequest, pk=pk)
     leave.delete()
-    return redirect('leave_list')
+    return redirect('attendance_app:leave_list')
 
 
 # ----------------Holi day ---------------
@@ -1925,10 +1907,10 @@ def holiday_create(request):
         if user_company:
             holiday.company = user_company
             holiday.save()
-            return redirect('holiday_list')
+            return redirect('attendance_app:holiday_list')
         else:
             messages.error(request, "আপনার কোম্পানি সেট করা নেই।")
-            return redirect('holiday_list')
+            return redirect('attendance_app:holiday_list')
     return render(request, 'holiday_form.html', {'form': form, 'title': 'Add Holiday'})
 
 
@@ -1943,7 +1925,7 @@ def holiday_edit(request, pk):
     form = HolidayForm(request.POST or None, instance=holiday)
     if form.is_valid():
         form.save()
-        return redirect('holiday_list')
+        return redirect('attendance_app:holiday_list')
 
     return render(request, 'holiday_form.html', {'form': form, 'title': 'Edit Holiday'})
 
@@ -1957,6 +1939,6 @@ def holiday_delete(request, pk):
     holiday = get_object_or_404(Holiday, pk=pk, company=user_company)
     if request.method == 'POST':
         holiday.delete()
-        return redirect('holiday_list')
+        return redirect('attendance_app:holiday_list')
 
     return render(request, 'holiday_confirm_delete.html', {'holiday': holiday})
