@@ -4,13 +4,13 @@ import calendar
 import logging
 from collections import defaultdict, OrderedDict
 from datetime import datetime, timedelta, time, date
-
+from io import BytesIO
 # Django core
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.db.models import Q, Min, Max, Count
 from django.db.models.functions import TruncDate
-from django.http import HttpResponse, JsonResponse, HttpResponseForbidden
+from django.http import HttpResponse, JsonResponse, HttpResponseForbidden, FileResponse
 from django.shortcuts import render, redirect, get_object_or_404
 from django.template.loader import render_to_string
 from django.utils import timezone
@@ -19,7 +19,7 @@ from django.utils.timezone import localtime, localdate, make_aware, is_naive, no
 from django.views.decorators.csrf import csrf_exempt
 
 # Third-party libs
-from weasyprint import HTML
+from weasyprint import HTML,CSS
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import A4, letter
 from reportlab.lib.units import inch
@@ -1115,6 +1115,163 @@ def attendance_list(request):
         'start_date': start_date,
         'end_date': end_date,
     })
+
+
+@login_required
+def attendance_list_pdf(request):
+    """
+    Attendance -> PDF (inline, no download).
+    ডিজাইন/ফন্ট/স্টাইল সব টেমপ্লেটে থাকবে।
+    """
+
+    # Company scope
+    user_company = getattr(request.user.profile, 'company', None)
+    if not user_company:
+        employees = Employee.objects.none()
+    else:
+        employees = Employee.objects.filter(company=user_company).select_related('department')
+
+    # Filters
+    start_date = request.GET.get('start_date')
+    end_date = request.GET.get('end_date')
+    employee_id = request.GET.get('employee')
+    department_id = request.GET.get('department')
+
+    if not start_date or not end_date:
+        today = date.today()
+        start_date = end_date = today.strftime('%Y-%m-%d')
+
+    if employee_id:
+        employees = employees.filter(id=employee_id)
+    if department_id:
+        employees = employees.filter(department__id=department_id)
+
+    # Raw data
+    attendance_summary = generate_attendance_table(employees, start_date, end_date)
+
+    # Helpers
+    def _get(d, *keys):
+        if isinstance(d, dict):
+            for k in keys:
+                if k in d and d[k] not in (None, ''):
+                    return d[k]
+        for k in keys:
+            if hasattr(d, k):
+                v = getattr(d, k)
+                try:
+                    v = v() if callable(v) else v
+                except TypeError:
+                    pass
+                if v not in (None, ''):
+                    return v
+        return None
+
+    def _fmt_time(t):
+        if not t: return ''
+        try:
+            if isinstance(t, (datetime, time)): return t.strftime('%H:%M')
+            return str(t)
+        except Exception:
+            return str(t)
+
+    def _parse_hours(v):
+        if v in (None, ''): return 0
+        if isinstance(v, timedelta): return int(v.total_seconds())
+        if isinstance(v, (int, float)): return int(float(v) * 3600)
+        s = str(v).strip()
+        if ':' in s:
+            try:
+                h, m = s.split(':', 1); return int(h)*3600 + int(m)*60
+            except Exception: pass
+        try:
+            return int(float(s) * 3600)
+        except Exception:
+            return 0
+
+    # Normalize rows + total
+    rows, total_seconds = [], 0
+    for r in attendance_summary:
+        src = r if isinstance(r, dict) else getattr(r, '__dict__', {})
+
+        emp  = _get(src, 'employee', 'emp', 'user', 'staff')
+        dept = _get(src, 'department') or (getattr(emp, 'department', None) if emp else None)
+
+        employee_name = (
+            _get(src, 'employee_name', 'emp_name')
+            or (_get(emp, 'get_full_name') if emp else None)
+            or _get(emp, 'full_name', 'name', 'username')
+            or (f"{getattr(getattr(emp, 'user', None), 'first_name', '')} {getattr(getattr(emp, 'user', None), 'last_name', '')}".strip() if hasattr(emp, 'user') else None)
+            or (getattr(getattr(emp, 'user', None), 'username', None) if hasattr(emp, 'user') else None)
+            or (str(emp) if emp else '')
+        )
+
+        department_name = (
+            _get(src, 'department_name') or
+            _get(dept, 'name') or
+            _get(src, 'dept_name') or
+            ''
+        )
+
+        check_in  = _get(src, 'check_in', 'in_time', 'check_in_time', 'clock_in')
+        check_out = _get(src, 'check_out', 'out_time', 'check_out_time', 'clock_out')
+        worked    = _get(src, 'worked_hours', 'work_hours', 'total_hours', 'duration')
+        status    = _get(src, 'status', 'attendance_status', 'state')
+        adate     = _get(src, 'date', 'attendance_date', 'day')
+
+        worked_seconds = _parse_hours(worked)
+        if worked_seconds == 0 and check_in and check_out:
+            try:
+                if isinstance(check_in, datetime) and isinstance(check_out, datetime):
+                    worked_seconds = int((check_out - check_in).total_seconds())
+                elif isinstance(check_in, time) and isinstance(check_out, time):
+                    from datetime import datetime as dt
+                    dt0 = dt.combine(date.today(), check_in)
+                    dt1 = dt.combine(date.today(), check_out)
+                    worked_seconds = int((dt1 - dt0).total_seconds())
+                else:
+                    worked_seconds = _parse_hours(_fmt_time(check_out)) - _parse_hours(_fmt_time(check_in))
+                    if worked_seconds < 0:
+                        worked_seconds += 24*3600
+            except Exception:
+                worked_seconds = 0
+
+        total_seconds += max(0, worked_seconds)
+        wh = worked_seconds
+        worked_hhmm = f"{wh // 3600:02d}:{(wh % 3600)//60:02d}" if wh > 0 else (_fmt_time(worked) or '—')
+
+        rows.append({
+            'employee_name': (employee_name or '—'),
+            'department_name': (department_name or '—'),
+            'date': adate or '—',
+            'check_in': _fmt_time(check_in) or '—',
+            'check_out': _fmt_time(check_out) or '—',
+            'worked_hours': worked_hhmm,
+            'status': status or '—',
+        })
+
+    total_h = total_seconds // 3600
+    total_m = (total_seconds % 3600) // 60
+    total_worked = f"{total_h:02d}:{total_m:02d}"
+
+    # Render HTML (সব ডিজাইন টেমপ্লেটে)
+    html_string = render_to_string('attendance_list_pdf.html', {
+        'rows': rows,
+        'start_date': start_date,
+        'end_date': end_date,
+        'user': request.user,
+        'total_worked': total_worked,
+    })
+
+    # Build PDF (টেমপ্লেটের CSS/Google Fonts-ই ইউজ হবে)
+    pdf_io = BytesIO()
+    HTML(string=html_string, base_url=request.build_absolute_uri('/')).write_pdf(target=pdf_io)
+    pdf_io.seek(0)
+
+    # Inline view
+    resp = FileResponse(pdf_io, content_type='application/pdf', as_attachment=False)
+    resp['Content-Disposition'] = f'inline; filename="attendance_{start_date}_to_{end_date}.pdf"'
+    return resp
+
 
 
 @login_required

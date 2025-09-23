@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+  <meta charset="utf-8">
+  <title>Attendance Report</title>
+
+  <!-- ✅ Google Fonts: Noto Sans Bengali + Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=Noto+Sans+Bengali:wght@400;600&display=swap" rel="stylesheet">
+
+  <style>
+    /* Print page */
+    @page { size: A4; margin: 14mm 12mm; }
+    thead { display: table-header-group; }
+    tfoot { display: table-footer-group; }
+
+    /* Typography */
+    body {
+      font-family: "Noto Sans Bengali", "Inter", system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+      font-size: 11pt; color: #111;
+    }
+    h2 { margin: 0 0 6px; font-weight: 600; }
+    .muted { font-size: 10pt; color: #666; margin-bottom: 10px; }
+
+    /* Table */
+    table { width: 100%; border-collapse: collapse; }
+    th, td { border: 1px solid #e5e7eb; padding: 6px 8px; }
+    th { background: #f3f4f6; text-align: left; font-weight: 600; }
+    tr:nth-child(even) td { background: #fafafa; }
+    tfoot td { font-weight: 600; background: #f3f4f6; }
+
+    /* Badges */
+    .badge { display:inline-block; padding:2px 6px; border-radius:6px; font-size:9pt; line-height: 1.1; }
+    .ok     { background:#e0f2fe; color:#075985; }  /* Present */
+    .late   { background:#fee2e2; color:#991b1b; }  /* Late */
+    .absent { background:#fef3c7; color:#92400e; }  /* Absent */
+
+    /* Helper */
+    .text-right { text-align: right; }
+    .center { text-align: center; }
+  </style>
+</head>
+<body>
+  <h2>Attendance Report</h2>
+  <div class="muted">
+    তারিখ: {{ start_date }} – {{ end_date }}<br>
+    ইউজার: {{ user.get_full_name|default:user.username }}
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>কর্মী</th>
+        <th>ডিপার্টমেন্ট</th>
+        <th>তারিখ</th>
+        <th>ইন</th>
+        <th>আউট</th>
+        <th>স্ট্যাটাস</th>
+        <th>ওয়ার্কড (ঘন্টা)</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in rows %}
+      <tr>
+        <td>{{ row.employee_name }}</td>
+        <td>{{ row.department_name }}</td>
+        <td>{{ row.date }}</td>
+        <td>{{ row.check_in }}</td>
+        <td>{{ row.check_out }}</td>
+        <td>
+          {% if row.status == 'Present' %}<span class="badge ok">Present</span>
+          {% elif row.status == 'Late' %}<span class="badge late">Late</span>
+          {% elif row.status == 'Absent' %}<span class="badge absent">Absent</span>
+          {% else %}{{ row.status|default:"—" }}{% endif %}
+        </td>
+        <td class="center">{{ row.worked_hours }}</td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="7" class="center" style="padding:16px;">কোনো ডাটা নেই</td></tr>
+      {% endfor %}
+    </tbody>
+    
+  </table>
+</body>
+</html>

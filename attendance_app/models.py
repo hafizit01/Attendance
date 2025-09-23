@@ -151,6 +151,7 @@ class LeaveRequest(models.Model):
     LEAVE_TYPES = [
         ('Casual', 'Casual Leave'),
         ('Sick', 'Sick Leave'),
+        ('Jamat', 'Jamat Leave'),
         ('Earned', 'Earned Leave'),
         ('Unpaid', 'Unpaid Leave'),
         ('Other', 'Other'),

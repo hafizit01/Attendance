@@ -1,6 +1,6 @@
 from django.urls import path
 
-from attendance_app.views import attendance_pdf_report
+from attendance_app.views import attendance_pdf_report, attendance_list_pdf
 from .views import *
 app_name = "attendance_app"
 
@@ -36,6 +36,7 @@ urlpatterns = [
     path('attendance/', attendance_list, name='attendance_list'),
     path('attendance/add/', attendance_add, name='attendance_add'),
     path('attendance/delete/<int:pk>/', attendance_delete, name='attendance_delete'),
+    path('attendance/pdf/', attendance_list_pdf, name='attendance_list_pdf'),
 
     # ------------------Leave Request--------------
 

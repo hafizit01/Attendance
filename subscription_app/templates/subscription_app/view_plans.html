@@ -1,70 +1,179 @@
 {% extends 'base.html' %}
 {% block content %}
 
-<div class="mx-auto max-w-6xl p-4 sm:p-6">
+<!-- Container -->
+<div class="mx-auto max-w-7xl px-4 sm:px-6 py-10">
+
   <!-- Header -->
-  <div class="text-center mb-6">
-    <h2 class="text-2xl md:text-3xl font-bold tracking-tight text-gray-900 dark:text-gray-100">
-      📦 Available Subscription Plans
+  <header class="mb-10 text-center">
+    <h2 class="text-3xl md:text-4xl font-extrabold tracking-tight text-gray-900 dark:text-gray-100">
+      📦 Subscription Plans
     </h2>
-    <p class="text-gray-600 dark:text-gray-400 text-sm mt-1">
-      Choose a plan that fits your team. Secure payment via bKash.
+    <p class="mt-3 text-sm md:text-base text-gray-600 dark:text-gray-400">
+      Pick a plan that fits your team. Pay securely via bKash.
     </p>
-  </div>
+  </header>
 
   {% if plans %}
-    <!-- Plans Grid -->
-    <div class="grid gap-5 sm:gap-6 md:grid-cols-2 lg:grid-cols-3">
-      {% for plan in plans %}
-        <section class="group relative rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-5 sm:p-6 shadow-sm hover:shadow-md transition">
-          <!-- Name -->
-          <h3 class="text-lg sm:text-xl font-semibold text-gray-900 dark:text-gray-100 flex items-center justify-between">
-            <span>{{ plan.name }}</span>
-            <span class="ml-3 inline-flex items-center rounded-full border border-gray-300 dark:border-gray-600 px-2.5 py-0.5 text-xs text-gray-600 dark:text-gray-300 bg-gray-50 dark:bg-gray-700">
-              {{ plan.duration_days }} days
-            </span>
+  <!-- Plans Grid -->
+  <div class="grid gap-6 sm:gap-7 md:grid-cols-2 lg:grid-cols-3">
+
+    {% for plan in plans %}
+    <article
+      class="group relative flex flex-col overflow-hidden rounded-2xl border border-gray-200/80 dark:border-gray-700/70 bg-white/80 dark:bg-gray-800/70 shadow-sm hover:shadow-xl transition-all duration-300 will-change-transform">
+
+      <!-- Animated top band (brand stripe) with gradient -->
+      <div class="h-1.5 w-full rounded-t-2xl overflow-hidden">
+        <div class="h-full w-full animate-[pulse_5s_ease-in-out_infinite] 
+          {% if forloop.counter0|divisibleby:3 %} bg-gradient-to-r from-blue-600 via-indigo-600 to-cyan-500
+          {% elif forloop.counter0|add:1|divisibleby:3 %} bg-gradient-to-r from-emerald-600 via-teal-600 to-lime-500
+          {% else %} bg-gradient-to-r from-amber-500 via-orange-600 to-pink-600 {% endif %}"></div>
+      </div>
+
+      <!-- Soft gradient wash inside the card -->
+      <div aria-hidden="true" class="pointer-events-none absolute inset-0 opacity-20 dark:opacity-25 mix-blend-normal">
+        <div class="absolute -top-16 -right-16 h-56 w-56 rounded-full blur-2xl 
+          {% if forloop.counter0|divisibleby:3 %} bg-gradient-to-br from-blue-400 via-indigo-300 to-cyan-300
+          {% elif forloop.counter0|add:1|divisibleby:3 %} bg-gradient-to-br from-emerald-300 via-teal-200 to-lime-200
+          {% else %} bg-gradient-to-br from-amber-300 via-orange-200 to-pink-200 {% endif %}"></div>
+        <div class="absolute -bottom-20 -left-20 h-60 w-60 rounded-full blur-3xl 
+          {% if forloop.counter0|divisibleby:3 %} bg-gradient-to-tr from-cyan-200 via-sky-200 to-indigo-200
+          {% elif forloop.counter0|add:1|divisibleby:3 %} bg-gradient-to-tr from-lime-200 via-green-200 to-teal-200
+          {% else %} bg-gradient-to-tr from-pink-200 via-rose-200 to-amber-200 {% endif %}"></div>
+      </div>
+
+      <!-- Content -->
+      <div class="relative p-6">
+
+        <!-- Title + duration -->
+        <div class="flex items-start justify-between gap-3">
+          <h3 class="text-lg sm:text-xl font-semibold text-gray-900 dark:text-gray-100">
+            {{ plan.name }}
           </h3>
 
-          <!-- Price -->
-          <div class="mt-2">
-            <div class="text-2xl font-bold text-blue-700 dark:text-blue-400 leading-none">৳ {{ plan.price }}</div>
-            <p class="text-xs text-gray-500 dark:text-gray-400">BDT, billed once</p>
-          </div>
+          <span class="inline-flex items-center rounded-full border border-gray-300/70 dark:border-gray-600/70
+                       bg-white/60 dark:bg-gray-700/60 backdrop-blur px-2.5 py-0.5 text-[11px] font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap">
+            {{ plan.duration_days }} days
+          </span>
+        </div>
 
-          <!-- Description -->
-          <p class="mt-3 text-sm text-gray-700 dark:text-gray-300">
-            {{ plan.description|default:"No description available." }}
+        <!-- Price -->
+        <div class="mt-3 flex items-end gap-2">
+          <p class="text-3xl font-extrabold tracking-tight leading-none bg-clip-text text-transparent 
+                     {% if forloop.counter0|divisibleby:3 %} bg-gradient-to-r from-blue-700 to-cyan-500 dark:from-blue-300 dark:to-cyan-200
+                     {% elif forloop.counter0|add:1|divisibleby:3 %} bg-gradient-to-r from-emerald-700 to-lime-500 dark:from-emerald-300 dark:to-lime-200
+                     {% else %} bg-gradient-to-r from-amber-600 to-pink-600 dark:from-amber-300 dark:to-pink-200 {% endif %}">
+            ৳ {{ plan.price }}
           </p>
+          <span class="mb-1 text-xs text-gray-600 dark:text-gray-400">BDT • one-time</span>
+        </div>
 
-          <!-- Divider -->
-          <div class="mt-4 h-px bg-gray-100 dark:bg-gray-700"></div>
+        <!-- Meta tag (optional ribbon) -->
+        {% if plan.is_popular or plan.tag %}
+        <span class="mt-3 inline-flex items-center gap-1 rounded-full 
+                     px-2.5 py-1 text-[11px] font-semibold text-white shadow-sm
+                     {% if forloop.counter0|divisibleby:3 %} bg-gradient-to-r from-blue-600 to-indigo-600
+                     {% elif forloop.counter0|add:1|divisibleby:3 %} bg-gradient-to-r from-emerald-600 to-teal-600
+                     {% else %} bg-gradient-to-r from-amber-600 to-pink-600 {% endif %}">
+          {{ plan.tag|default:"Most Popular" }}
+        </span>
+        {% endif %}
 
-          <!-- Actions -->
-          <div class="mt-4 flex items-center justify-between gap-3">
-            <a href="{% url 'payment_app:create_bkash_payment' plan.slug %}"
-               class="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-white font-medium shadow hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 focus:ring-offset-white dark:focus:ring-offset-gray-800"
-               aria-label="Buy {{ plan.name }} with bKash">
-              <span>Buy Now</span>
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-4">
-                <path d="M13.5 4.5a.75.75 0 0 0 0 1.5h5.69l-7.72 7.72a.75.75 0 1 0 1.06 1.06l7.72-7.72V15a.75.75 0 0 0 1.5 0V5.25A.75.75 0 0 0 21 4.5h-7.5Z"/>
-                <path d="M5.25 6A2.25 2.25 0 0 0 3 8.25v10.5A2.25 2.25 0 0 0 5.25 21h10.5A2.25 2.25 0 0 0 18 18.75V14a.75.75 0 0 0-1.5 0v4.75c0 .414-.336.75-.75.75H5.25a.75.75 0 0 1-.75-.75V8.25c0-.414.336-.75.75-.75H10a.75.75 0 0 0 0-1.5H5.25Z"/>
-              </svg>
-            </a>
-          </div>
+        <!-- Description -->
+        {% if plan.description %}
+        <p class="mt-3 text-sm leading-6 text-gray-700 dark:text-gray-300">
+          {{ plan.description|safe }}
+        </p>
+        {% endif %}
 
-          <!-- Subtle hover ring -->
-          <span class="pointer-events-none absolute inset-0 rounded-2xl ring-1 ring-transparent group-hover:ring-gray-200 dark:group-hover:ring-gray-600"></span>
-        </section>
-      {% endfor %}
-    </div>
+        <!-- Features (optional) -->
+        {% if plan.features %}
+        <ul class="mt-4 space-y-2 text-sm">
+          {% for feat in plan.features %}
+          <li class="flex items-start gap-2 text-gray-700 dark:text-gray-300">
+            <svg class="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+              <path fill-rule="evenodd" d="M16.704 5.29a1 1 0 0 1 .006 1.414l-7.07 7.142a1 1 0 0 1-1.425.01L3.29 9.29a1 1 0 1 1 1.42-1.41l3.06 3.08 6.37-6.43a1 1 0 0 1 1.564.76z" clip-rule="evenodd"/>
+            </svg>
+            <span>{{ feat }}</span>
+          </li>
+          {% endfor %}
+        </ul>
+        {% endif %}
+
+        <!-- Divider -->
+        <div class="mt-5 h-px bg-gradient-to-r from-transparent via-gray-200 dark:via-gray-700 to-transparent"></div>
+
+        <!-- Actions -->
+        <div class="mt-5 grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <a href="{% url 'payment_app:create_bkash_payment' plan.slug %}"
+   <a href="{% url 'payment_app:create_bkash_payment' plan.slug %}"
+   class="relative inline-flex items-center whitespace-nowrap justify-center gap-1.5 rounded-lg
+          px-4 py-1.5 text-sm text-white font-medium shadow-md
+          transition-all duration-300 ease-out
+          focus:outline-none focus:ring-2 focus:ring-offset-2
+          dark:focus:ring-offset-gray-800 overflow-hidden group
+          
+          {% if forloop.counter0|divisibleby:3 %}
+            bg-gradient-to-r from-blue-600 via-indigo-600 to-cyan-500 
+            hover:from-blue-700 hover:via-indigo-700 hover:to-cyan-600
+            focus:ring-blue-400
+          {% elif forloop.counter0|add:1|divisibleby:3 %}
+            bg-gradient-to-r from-emerald-600 via-teal-600 to-lime-500
+            hover:from-emerald-700 hover:via-teal-700 hover:to-lime-600
+            focus:ring-emerald-400
+          {% else %}
+            bg-gradient-to-r from-amber-500 via-orange-600 to-pink-600
+            hover:from-amber-600 hover:via-orange-700 hover:to-pink-700
+            focus:ring-amber-400
+          {% endif %}"
+   aria-label="Buy {{ plan.name }} with bKash">
+
+  <!-- Shine animation -->
+  <span class="absolute inset-0 bg-gradient-to-r from-white/20 via-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500"></span>
+
+  <!-- Button Content -->
+  <span class="relative z-10 flex items-center gap-1.5">
+    Buy with bKash
+    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
+      <path d="M13.5 4.5a.75.75 0 0 0 0 1.5h5.69l-7.72 7.72a.75.75 0 1 0 1.06 1.06l7.72-7.72V15a.75.75 0 0 0 1.5 0V5.25A.75.75 0 0 0 21 4.5h-7.5Z"/>
+      <path d="M5.25 6A2.25 2.25 0 0 0 3 8.25v10.5A2.25 2.25 0 0 0 5.25 21h10.5A2.25 2.25 0 0 0 18 18.75V14a.75.75 0 0 0-1.5 0v4.75c0 .414-.336.75-.75.75H5.25a.75.75 0 0 1-.75-.75V8.25c0-.414.336-.75.75-.75H10a.75.75 0 0 0 0-1.5H5.25Z"/>
+    </svg>
+  </span>
+</a>
+
+
+
+
+          {% if plan.get_absolute_url %}
+          <a href="{{ plan.get_absolute_url }}"
+             class="inline-flex items-center justify-center rounded-xl border border-gray-300/70 dark:border-gray-600/70 
+                    bg-white/70 dark:bg-gray-800/70 backdrop-blur px-4 py-2.5 text-gray-800 dark:text-gray-100 font-medium 
+                    shadow-sm hover:bg-white/90 dark:hover:bg-gray-700/90 focus:outline-none focus:ring-2 focus:ring-gray-400/50">
+            View details
+          </a>
+          {% endif %}
+        </div>
+      </div>
+
+      <!-- Hover ring / glow -->
+      <span class="pointer-events-none absolute inset-0 rounded-2xl ring-1 ring-transparent group-hover:ring-gray-200/80 dark:group-hover:ring-gray-600/80 transition"></span>
+
+      <!-- Subtle gradient edge highlight -->
+      <div aria-hidden="true" class="absolute inset-x-0 bottom-0 h-px 
+        {% if forloop.counter0|divisibleby:3 %} bg-gradient-to-r from-transparent via-blue-400/40 to-transparent
+        {% elif forloop.counter0|add:1|divisibleby:3 %} bg-gradient-to-r from-transparent via-emerald-400/40 to-transparent
+        {% else %} bg-gradient-to-r from-transparent via-rose-400/40 to-transparent {% endif %}"></div>
+    </article>
+    {% endfor %}
+  </div>
 
   {% else %}
-    <!-- Empty state -->
-    <div class="mt-12 text-center">
-      <div class="mx-auto inline-flex items-center justify-center w-12 h-12 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300">📃</div>
-      <p class="text-gray-700 dark:text-gray-300 font-medium mt-3">No subscription plans available.</p>
-      <p class="text-sm text-gray-500 dark:text-gray-400">Please check back later or contact support.</p>
-    </div>
+  <!-- Empty state -->
+  <div class="mt-12 text-center">
+    <div class="mx-auto inline-flex h-12 w-12 items-center justify-center rounded-full bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300">📃</div>
+    <p class="mt-3 font-medium text-gray-800 dark:text-gray-200">No subscription plans available.</p>
+    <p class="text-sm text-gray-500 dark:text-gray-400">Please check back later or contact support.</p>
+  </div>
   {% endif %}
 </div>
 

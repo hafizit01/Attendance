@@ -1,76 +1,116 @@
 {% extends 'base.html' %}
 {% block content %}
 
-<div class="mx-auto max-w-lg px-4 py-12">
-  <div class="bg-white dark:bg-gray-900 border dark:border-gray-700 rounded-2xl shadow p-8 text-center">
+<div class="mx-auto max-w-xl px-4 py-12">
+  <section class="relative overflow-hidden rounded-2xl border border-gray-200/80 dark:border-gray-700/70 bg-white/80 dark:bg-gray-900/70 shadow-sm">
 
-    {% if has_plan %}
-      {% if is_active %}
-        <!-- Active state -->
-        <div class="mx-auto flex items-center justify-center w-16 h-16 rounded-full bg-emerald-100 dark:bg-emerald-900 text-emerald-700 dark:text-emerald-300 mb-4">✅</div>
-        <h2 class="text-2xl md:text-3xl font-bold text-emerald-700 dark:text-emerald-300 mb-3">
-          Your Subscription Is Active
-        </h2>
-        <p class="text-gray-700 dark:text-gray-300">
-          Expires on
-          <span class="font-medium">{{ last_end_date|date:"F j, Y" }}</span>.
-          {% if days_left and days_left > 0 %}
-            <span class="text-gray-500 dark:text-gray-400 text-sm">({{ days_left }} day{{ days_left|pluralize }} left)</span>
-          {% endif %}
-        </p>
-        <div class="mt-6">
-          <a href="{% url 'attendance_app:dashboard' %}"
-             class="inline-flex items-center justify-center px-5 py-3 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold shadow transition">
-            Go to Dashboard
-          </a>
-        </div>
+    <!-- Accent top bar that adapts to state -->
+    <div class="h-1.5 w-full
+      {% if has_plan and is_active %} bg-gradient-to-r from-emerald-500 via-teal-500 to-lime-500
+      {% elif has_plan and not is_active %} bg-gradient-to-r from-rose-500 via-red-500 to-orange-500
+      {% else %} bg-gradient-to-r from-sky-500 via-blue-600 to-indigo-600 {% endif %}"></div>
+
+    <!-- Soft gradient wash -->
+    <div aria-hidden="true" class="pointer-events-none absolute inset-0 opacity-20 dark:opacity-25">
+      <div class="absolute -top-20 -right-24 h-64 w-64 rounded-full blur-3xl
+        {% if has_plan and is_active %} bg-gradient-to-br from-emerald-300 via-teal-200 to-lime-200
+        {% elif has_plan and not is_active %} bg-gradient-to-br from-rose-300 via-red-200 to-orange-200
+        {% else %} bg-gradient-to-br from-sky-300 via-blue-200 to-indigo-200 {% endif %}"></div>
+      <div class="absolute -bottom-24 -left-24 h-64 w-64 rounded-full blur-3xl
+        {% if has_plan and is_active %} bg-gradient-to-tr from-lime-200 via-green-200 to-teal-200
+        {% elif has_plan and not is_active %} bg-gradient-to-tr from-orange-200 via-amber-200 to-rose-200
+        {% else %} bg-gradient-to-tr from-indigo-200 via-sky-200 to-blue-200 {% endif %}"></div>
+    </div>
+
+    <div class="relative p-8 text-center">
+
+      {% if has_plan %}
+        {% if is_active %}
+          <!-- Active state -->
+          <div class="mx-auto flex items-center justify-center w-16 h-16 rounded-full bg-emerald-100 dark:bg-emerald-900 text-emerald-700 dark:text-emerald-300 mb-4 ring-8 ring-emerald-50/70 dark:ring-emerald-800/50">✅</div>
+          <h2 class="text-2xl md:text-3xl font-extrabold bg-clip-text text-transparent bg-gradient-to-r from-emerald-600 to-teal-500 dark:from-emerald-300 dark:to-teal-200 mb-2">Your Subscription Is Active</h2>
+          <p class="text-gray-700 dark:text-gray-300">
+            Expires on <span class="font-semibold">{{ last_end_date|date:"F j, Y" }}</span>.
+            {% if days_left and days_left > 0 %}
+              <span class="text-gray-500 dark:text-gray-400 text-sm">({{ days_left }} day{{ days_left|pluralize }} left)</span>
+            {% endif %}
+          </p>
+
+          <div class="mt-6 flex flex-col sm:flex-row items-center justify-center gap-3">
+            <!-- Primary CTA (matches ACTIVE palette) -->
+            <a href="{% url 'attendance_app:dashboard' %}"
+               class="relative inline-flex items-center whitespace-nowrap justify-center gap-1.5 rounded-lg
+                      px-4 py-2 text-sm text-white font-medium shadow-md transition-all duration-300 ease-out
+                      bg-gradient-to-r from-emerald-600 via-teal-600 to-lime-500
+                      hover:from-emerald-700 hover:via-teal-700 hover:to-lime-600
+                      focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:ring-offset-2 dark:focus:ring-offset-gray-900">
+              Go to Dashboard
+            </a>
+
+            <a href="{% url 'subscription_app:view_plans' %}"
+               class="inline-flex items-center justify-center rounded-lg border border-emerald-300/60 dark:border-emerald-700/60
+                      bg-white/70 dark:bg-gray-900/70 backdrop-blur px-4 py-2 text-sm text-emerald-700 dark:text-emerald-300 font-medium
+                      hover:bg-white/90 dark:hover:bg-gray-800/90 transition focus:outline-none focus:ring-2 focus:ring-emerald-300/50">
+              Manage Plan
+            </a>
+          </div>
+
+        {% else %}
+          <!-- Expired state -->
+          <div class="mx-auto flex items-center justify-center w-16 h-16 rounded-full bg-rose-100 dark:bg-rose-900 text-rose-600 dark:text-rose-300 mb-4 ring-8 ring-rose-50/70 dark:ring-rose-800/50">⏳</div>
+          <h2 class="text-2xl md:text-3xl font-extrabold bg-clip-text text-transparent bg-gradient-to-r from-rose-600 to-orange-500 dark:from-rose-300 dark:to-orange-200 mb-2">Your Subscription Has Expired</h2>
+          <p class="text-gray-700 dark:text-gray-300 mb-2">
+            Your last subscription ended on <span class="font-semibold">{{ last_end_date|date:"F j, Y" }}</span>.
+          </p>
+          <p class="text-gray-500 dark:text-gray-400 text-sm">To continue using all features, please choose a new plan.</p>
+
+          <div class="mt-6 flex flex-col sm:flex-row items-center justify-center gap-3">
+            <!-- Primary CTA (matches EXPIRED palette) -->
+            <a href="{% url 'subscription_app:view_plans' %}"
+               class="relative inline-flex items-center whitespace-nowrap justify-center gap-1.5 rounded-lg
+                      px-4 py-2 text-sm text-white font-medium shadow-md transition-all duration-300 ease-out
+                      bg-gradient-to-r from-rose-600 via-red-600 to-orange-500
+                      hover:from-rose-700 hover:via-red-700 hover:to-orange-600
+                      focus:outline-none focus:ring-2 focus:ring-rose-400 focus:ring-offset-2 dark:focus:ring-offset-gray-900">
+              📦 View Plans
+            </a>
+
+            <a href="{% url 'attendance_app:dashboard' %}"
+               class="inline-flex items-center justify-center rounded-lg border border-rose-300/60 dark:border-rose-700/60
+                      bg-white/70 dark:bg-gray-900/70 backdrop-blur px-4 py-2 text-sm text-rose-700 dark:text-rose-300 font-medium
+                      hover:bg-white/90 dark:hover:bg-gray-800/90 transition focus:outline-none focus:ring-2 focus:ring-rose-300/50">
+              ← Back to Dashboard
+            </a>
+          </div>
+        {% endif %}
 
       {% else %}
-        <!-- Expired state -->
-        <div class="mx-auto flex items-center justify-center w-16 h-16 rounded-full bg-red-100 dark:bg-red-900 text-red-600 dark:text-red-300 mb-4">⏳</div>
-        <h2 class="text-2xl md:text-3xl font-bold text-red-600 dark:text-red-400 mb-3">
-          Your Subscription Has Expired
-        </h2>
-        <p class="text-gray-700 dark:text-gray-300 mb-2">
-          Your last subscription ended on
-          <span class="font-medium">{{ last_end_date|date:"F j, Y" }}</span>.
-        </p>
-        <p class="text-gray-500 dark:text-gray-400 text-sm mb-6">
-          To continue using all features, please choose a new plan.
-        </p>
-        <div class="flex flex-col sm:flex-row justify-center gap-3">
+        <!-- No plan state -->
+        <div class="mx-auto flex items-center justify-center w-16 h-16 rounded-full bg-sky-100 dark:bg-sky-900 text-sky-600 dark:text-sky-300 mb-4 ring-8 ring-sky-50/70 dark:ring-sky-800/50">📄</div>
+        <h2 class="text-2xl md:text-3xl font-extrabold bg-clip-text text-transparent bg-gradient-to-r from-sky-600 to-indigo-600 dark:from-sky-300 dark:to-indigo-200 mb-2">No Subscription Found</h2>
+        <p class="text-gray-700 dark:text-gray-300 mb-2">You don’t have any active or previous subscription.</p>
+        <p class="text-gray-500 dark:text-gray-400 text-sm">Pick a plan to get started.</p>
+
+        <div class="mt-6">
+          <!-- Primary CTA (matches NO PLAN palette) -->
           <a href="{% url 'subscription_app:view_plans' %}"
-             class="inline-flex items-center justify-center px-5 py-3 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold shadow transition">
-            📦 View Plans
-          </a>
-          <a href="{% url 'attendance_app:dashboard' %}"
-             class="inline-flex items-center justify-center px-5 py-3 rounded-lg border border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300 font-medium transition">
-            ← Back to Dashboard
+             class="relative inline-flex items-center whitespace-nowrap justify-center gap-1.5 rounded-lg
+                    px-4 py-2 text-sm text-white font-medium shadow-md transition-all duration-300 ease-out
+                    bg-gradient-to-r from-sky-600 via-blue-600 to-indigo-600
+                    hover:from-sky-700 hover:via-blue-700 hover:to-indigo-700
+                    focus:outline-none focus:ring-2 focus:ring-sky-400 focus:ring-offset-2 dark:focus:ring-offset-gray-900">
+            Choose a Plan
           </a>
         </div>
       {% endif %}
 
-    {% else %}
-      <!-- No plan state -->
-      <div class="mx-auto flex items-center justify-center w-16 h-16 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 mb-4">📄</div>
-      <h2 class="text-2xl md:text-3xl font-bold text-gray-800 dark:text-gray-200 mb-3">
-        No Subscription Found
-      </h2>
-      <p class="text-gray-700 dark:text-gray-300 mb-2">You don’t have any active or previous subscription.</p>
-      <p class="text-gray-500 dark:text-gray-400 text-sm mb-6">
-        Pick a plan to get started.
-      </p>
-      <div>
-        <a href="{% url 'subscription_app:view_plans' %}"
-           class="inline-flex items-center justify-center px-5 py-3 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold shadow transition">
-          Choose a Plan
-        </a>
-      </div>
-    {% endif %}
+      <!-- Divider -->
+      <div class="mt-8 h-px bg-gradient-to-r from-transparent via-gray-200 dark:via-gray-700 to-transparent"></div>
 
-    {# Debug helper (optional) #}
-    {# <p class="mt-6 text-xs text-gray-400 dark:text-gray-500">Today: {{ today|date:"F j, Y" }}</p> #}
-  </div>
+      <!-- Optional debug helper -->
+      {# <p class="mt-6 text-xs text-gray-400 dark:text-gray-500">Today: {{ today|date:"F j, Y" }}</p> #}
+    </div>
+  </section>
 </div>
 
 {% endblock %}

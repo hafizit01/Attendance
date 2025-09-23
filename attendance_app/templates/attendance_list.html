@@ -8,6 +8,13 @@
      class="bg-blue-600 hover:bg-blue-700 text-white px-3 sm:px-4 py-2 rounded mb-4 inline-block text-sm sm:text-base transition">
     ➕ Add Attendance
   </a>
+
+ <a class="inline-flex items-center gap-2 rounded bg-blue-600 px-3 py-2 text-white hover:bg-blue-700"
+   href="{% url 'attendance_app:attendance_list_pdf' %}?start_date={{ start_date }}&end_date={{ end_date }}{% if request.GET.employee %}&employee={{ request.GET.employee }}{% endif %}{% if request.GET.department %}&department={{ request.GET.department }}{% endif %}"
+   target="_blank" rel="noopener">
+  🧾 View PDF
+</a>
+
   
   <!-- Filter Form -->
   <form method="get" class="flex flex-col sm:flex-row flex-wrap gap-2 mb-4">

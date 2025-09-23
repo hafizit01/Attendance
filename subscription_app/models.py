@@ -15,6 +15,8 @@ class SubscriptionPlan(models.Model):
     duration_days = models.PositiveIntegerField(default=30)
     description = RichTextUploadingField(blank=True, null=True)
 
+    employee_limit = models.PositiveIntegerField(default=20)
+
     def save(self, *args, **kwargs):
         if not self.slug:
             self.slug = slugify(self.name)
