@@ -24,20 +24,10 @@ from django.http import HttpResponseForbidden
 
 def is_not_attendance_group(user):
     return not user.groups.filter(name='attendance').exists()
+
+
 def get_salary_summary_data(request, month_str, department_id=None, employee_id=None):
-    """
-    Company-scoped salary summary:
-      - Logged-in user's company ছাড়া কিছুই দেখা যাবে না
-      - Expected hours = (working days excluding weekly off & public holidays) * (dept shift hours)
-        (Leave বাদ হবে না)
-      - Leave day:
-          * Attendance থাকলে duration হিসাব হবে,
-            কিন্তু total_work_time-এ যোগ হবে max(duration, dept shift hours)
-          * Attendance না থাকলে total_work_time += dept shift hours
-        present_days কেবল attendance থাকলেই বাড়বে
-      - Absent কখনোই negative হবে না
-      - 🎁 Bonus: payout মাসে final_salary-তে যোগ হবে
-    """
+    
     user_company = getattr(getattr(request.user, "profile", None), "company", None)
     if not user_company:
         raise PermissionError("User has no company assigned")
@@ -163,7 +153,7 @@ def get_salary_summary_data(request, month_str, department_id=None, employee_id=
                     continue
                 working_days += 1
 
-            # Per-day calc
+                        # Per-day calc
             for n in range(total_days):
                 d = start_date + timedelta(days=n)
                 wd = d.strftime('%A')
@@ -215,7 +205,8 @@ def get_salary_summary_data(request, month_str, department_id=None, employee_id=
                         if duration > regular:
                             total_over_time += duration - regular
 
-                        # Attendance থাকলে present
+                    # ✅ নতুন রুল: In বা Out যেকোনো একটা থাকলেই Present
+                    if ins or outs:
                         present_days += 1
 
                     # ✅ Leave দিনে ক্রেডিট: max(duration, dept shift hours)
@@ -224,6 +215,10 @@ def get_salary_summary_data(request, month_str, department_id=None, employee_id=
                     continue
 
                 # --- Normal day (not leave) ---
+                # ✅ নতুন রুল: In বা Out যেকোনো একটা থাকলেই Present
+                if ins or outs:
+                    present_days += 1
+
                 if ins:
                     in_time = min(ins)
                     out_time = max(outs) if outs else None
@@ -242,7 +237,6 @@ def get_salary_summary_data(request, month_str, department_id=None, employee_id=
                         if out_time > real_in:
                             dur = out_time - real_in
 
-                    present_days += 1
                     total_work_time += dur
 
                     exp_dt = datetime.combine(in_time.date(), expected_start)
@@ -252,6 +246,7 @@ def get_salary_summary_data(request, month_str, department_id=None, employee_id=
                         total_late_time += in_time - exp_dt
                     if dur > regular:
                         total_over_time += dur - regular
+
 
             # Absent clamp (never negative)
             absent_days = max(0, working_days - present_days - leave_days)
