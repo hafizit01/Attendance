@@ -128,7 +128,7 @@ def import_attendance(devices):
                     skipped_count += 1
                     continue
 
-                status = 'In' if timestamp.hour < 13 else 'Out'
+                status = 'In' if timestamp.hour < 14 else 'Out'
 
                 try:
                     emp = Employee.objects.get(device_user_id=user_id, company=company)

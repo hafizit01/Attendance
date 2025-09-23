@@ -18,24 +18,22 @@ from django.template.loader import get_template
 from django.utils import timezone
 from django.utils.timezone import is_naive, make_aware
 from weasyprint import HTML
-
 from attendance_app.models import *
 from .models import EmployeeSalary
 from django.http import HttpResponseForbidden
 
 def is_not_attendance_group(user):
     return not user.groups.filter(name='attendance').exists()
-
 def get_salary_summary_data(request, month_str, department_id=None, employee_id=None):
     """
     Company-scoped salary summary:
       - Logged-in user's company ছাড়া কিছুই দেখা যাবে না
-      - Expected hours = (working days excluding weekly off & public holidays) * 10
+      - Expected hours = (working days excluding weekly off & public holidays) * (dept shift hours)
         (Leave বাদ হবে না)
       - Leave day:
           * Attendance থাকলে duration হিসাব হবে,
-            কিন্তু total_work_time-এ যোগ হবে max(duration, 10h)
-          * Attendance না থাকলে total_work_time += 10h
+            কিন্তু total_work_time-এ যোগ হবে max(duration, dept shift hours)
+          * Attendance না থাকলে total_work_time += dept shift hours
         present_days কেবল attendance থাকলেই বাড়বে
       - Absent কখনোই negative হবে না
       - 🎁 Bonus: payout মাসে final_salary-তে যোগ হবে
@@ -64,6 +62,34 @@ def get_salary_summary_data(request, month_str, department_id=None, employee_id=
         start_date = datetime(year, month, 1).date()
         # মাসের শেষ দিন
         end_date = (start_date.replace(day=28) + timedelta(days=4)).replace(day=1) - timedelta(days=1)
+
+        # ---- helper: Department থেকে শিফট টাইম ----
+        from datetime import time as _time
+        DEFAULT_IN = _time(10, 30)
+        DEFAULT_OUT = _time(20, 30)
+
+        def _dept_times_for(emp, anchor_date):
+            """
+            Department থেকে (expected_start_time: time, regular_work_time: timedelta) বের করে।
+            out_time < in_time হলে duration=0 ধরা হচ্ছে।
+            রাত-পেরোনো শিফট চাইলে নিচের TODO আনকমেন্ট করো।
+            """
+            dep = getattr(emp, 'department', None)
+            in_t = getattr(dep, 'in_time', None) if dep else None
+            out_t = getattr(dep, 'out_time', None) if dep else None
+
+            in_t = in_t or DEFAULT_IN
+            out_t = out_t or DEFAULT_OUT
+
+            dt_in = datetime.combine(anchor_date, in_t)
+            dt_out = datetime.combine(anchor_date, out_t)
+            duration = dt_out - dt_in
+            if duration.total_seconds() < 0:
+                # TODO (optional): রাত-পেরোনো শিফট সাপোর্ট
+                # duration += timedelta(days=1)
+                duration = timedelta(0)
+            return in_t, duration
+        # -------------------------------------------
 
         # Company-scoped public holidays
         holidays = Holiday.objects.filter(
@@ -114,8 +140,9 @@ def get_salary_summary_data(request, month_str, department_id=None, employee_id=
                 daily[a.timestamp.date()].append(a)
 
             off_day = emp.department.weekly_off_day if emp.department else None
-            expected_start = emp.department.in_time if emp.department else time(10, 30)
-            regular = timedelta(hours=10)
+
+            # >>> এখানে ডিপার্টমেন্ট থেকে শিফট সেট হচ্ছে <<<
+            expected_start, regular = _dept_times_for(emp, start_date)
 
             total_days = (end_date - start_date).days + 1
             present_days = 0
@@ -191,7 +218,7 @@ def get_salary_summary_data(request, month_str, department_id=None, employee_id=
                         # Attendance থাকলে present
                         present_days += 1
 
-                    # ✅ Leave দিনে ক্রেডিট: max(duration, 10h)
+                    # ✅ Leave দিনে ক্রেডিট: max(duration, dept shift hours)
                     credited = max(duration, regular)
                     total_work_time += credited
                     continue
@@ -230,7 +257,8 @@ def get_salary_summary_data(request, month_str, department_id=None, employee_id=
             absent_days = max(0, working_days - present_days - leave_days)
 
             # Expected hours: weekly off + public holidays বাদ, leave বাদ নয়
-            expected_hours = working_days * 10  # hours
+            hours_per_day = max(regular.total_seconds() / 3600, 0)  # float
+            expected_hours = working_days * hours_per_day  # hours
 
             # Actual hours (float)
             actual_hours = total_work_time.total_seconds() / 3600
@@ -278,7 +306,7 @@ def get_salary_summary_data(request, month_str, department_id=None, employee_id=
             late_sec = int(total_late_time.total_seconds())
             lh = late_sec // 3600
             lm = (late_sec % 3600) // 60
-            ls = late_sec % 60
+            ls = int(late_sec % 60)
             fmt_late = f"{lh:02d}:{lm:02d}:{ls:02d}"
 
             summary_data.append({
@@ -340,7 +368,6 @@ def get_salary_summary_data(request, month_str, department_id=None, employee_id=
     }
 
 
-
 @login_required
 @user_passes_test(is_not_attendance_group)
 def salary_summary_list(request):
@@ -357,6 +384,7 @@ def salary_summary_list(request):
 
     context = get_salary_summary_data(request, month_str, department_id, employee_id)
     return render(request, 'payroll/salary_summary_list.html', context)
+
 
 
 

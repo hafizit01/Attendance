@@ -2,8 +2,8 @@
 import json
 import calendar
 import logging
-from datetime import datetime, timedelta, time
 from collections import defaultdict, OrderedDict
+from datetime import datetime, timedelta, time, date
 
 # Django core
 from django.contrib import messages
@@ -14,6 +14,7 @@ from django.http import HttpResponse, JsonResponse, HttpResponseForbidden
 from django.shortcuts import render, redirect, get_object_or_404
 from django.template.loader import render_to_string
 from django.utils import timezone
+from django.utils.dateparse import parse_date
 from django.utils.timezone import localtime, localdate, make_aware, is_naive, now
 from django.views.decorators.csrf import csrf_exempt
 
@@ -24,11 +25,13 @@ from reportlab.lib.pagesizes import A4, letter
 from reportlab.lib.units import inch
 
 # Local apps
-from .forms import *
+from .forms import AttendanceForm, LeaveRequestForm, DepartmentForm, HolidayForm, EmployeeForm
 from .models import Employee, Department, Attendance, Holiday, LeaveRequest
 from attendance_app.utils.zk_import import import_attendance
+from attendance_app.utils.attendance_helpers import generate_attendance_table
 from subscription_app.models import UserSubscription
 from subscription_app.decorators import subscription_required
+
 
 
 # ---------- Subscription helper (Date/DateTime দুই কেস) ----------
@@ -375,8 +378,6 @@ def generate_attendance_table(employee_qs, start_date, end_date):
         start += delta
 
     return days
-
-
 # ---------------Monthly Report (Company-scoped)---------------
 @login_required
 def monthly_work_time_report(request):
@@ -429,13 +430,37 @@ def monthly_work_time_report(request):
         for i in range((min(holiday.end_date, end_date) - max(holiday.start_date, start_date)).days + 1)
     }
 
-    # NOTE: ক্যালকুলেশন আগের মতই রাখা হয়েছে
-    regular_work_time = timedelta(hours=10)
-    expected_start_time = time(10, 30)
+    # ---- Helper: per-employee expected start & regular work time from Department ----
+    from datetime import time as _time
+    from django.utils.timezone import make_aware, is_naive  # ✅ ensure imported
+
+    DEFAULT_IN = _time(10, 30)
+    DEFAULT_OUT = _time(20, 30)
+
+    def _dept_times(emp):
+        """Return (expected_start_time: time, regular_work_time: timedelta) for an employee."""
+        dep = getattr(emp, 'department', None)
+        in_t = getattr(dep, 'in_time', None) if dep else None
+        out_t = getattr(dep, 'out_time', None) if dep else None
+
+        # Fallbacks
+        in_t = in_t or DEFAULT_IN
+        out_t = out_t or DEFAULT_OUT
+
+        # Compute daily duration safely
+        dt_in = datetime.combine(start_date, in_t)
+        dt_out = datetime.combine(start_date, out_t)
+        duration = dt_out - dt_in
+        if duration.total_seconds() < 0:
+            duration = timedelta(0)
+
+        return in_t, duration
 
     report_data = []
 
     for emp in employees:
+        expected_start_time, regular_work_time = _dept_times(emp)
+
         attendances = (
             Attendance.objects
             .filter(
@@ -489,7 +514,7 @@ def monthly_work_time_report(request):
 
             if current_date in leave_dates:
                 leave_days_count += 1
-                # Leave day হলে 10 ঘণ্টা কৃতিত্ব
+                # Leave day হলে সম্পূর্ণ শিফট সময় কৃতিত্ব (Department-ভিত্তিক)
                 total_work_time += regular_work_time
                 continue
 
@@ -497,32 +522,39 @@ def monthly_work_time_report(request):
             in_times = [r.timestamp for r in records if r.status == 'In']
             out_times = [r.timestamp for r in records if r.status == 'Out']
 
+            # ✅ নতুন রুল: In বা Out – যেকোনো একটা থাকলে Present
+            if in_times or out_times:
+                present_days += 1
+
             if in_times:
-                in_time = min(in_times)
-                out_time = max(out_times) if out_times else None
+                in_time_val = min(in_times)
+            else:
+                in_time_val = None
 
-                if is_naive(in_time):
-                    in_time = make_aware(in_time)
-                if out_time and is_naive(out_time):
-                    out_time = make_aware(out_time)
+            out_time_val = max(out_times) if out_times else None
 
-                adjusted_in_time = datetime.combine(in_time.date(), expected_start_time)
-                if is_naive(adjusted_in_time):
-                    adjusted_in_time = make_aware(adjusted_in_time)
+            # Duration ক্যালকুলেশন কেবল তখনই যখন দুটোই আছে
+            if in_time_val and out_time_val:
+                if is_naive(in_time_val):
+                    in_time_val = make_aware(in_time_val)
+                if is_naive(out_time_val):
+                    out_time_val = make_aware(out_time_val)
 
-                actual_in_time = max(in_time, adjusted_in_time)
-                present_days += 1  # In থাকলেই Present
+                adjusted_in_dt = datetime.combine(in_time_val.date(), expected_start_time)
+                if is_naive(adjusted_in_dt):
+                    adjusted_in_dt = make_aware(adjusted_in_dt)
 
-                if out_time and out_time > actual_in_time:
-                    duration = out_time - actual_in_time
+                actual_in_time = max(in_time_val, adjusted_in_dt)
+
+                if out_time_val > actual_in_time:
+                    duration = out_time_val - actual_in_time
                     total_work_time += duration
 
-                    if in_time > adjusted_in_time:
-                        late = in_time - adjusted_in_time
-                        total_late_time += late
+                    if in_time_val > adjusted_in_dt:
+                        total_late_time += (in_time_val - adjusted_in_dt)
 
                     if duration > regular_work_time:
-                        total_over_time += duration - regular_work_time
+                        total_over_time += (duration - regular_work_time)
 
         expected_work_time = (present_days + leave_days_count) * regular_work_time
         total_less_time = max(expected_work_time - total_work_time, timedelta())
@@ -555,8 +587,8 @@ def monthly_work_time_report(request):
             'approved_leave_count': approved_leaves.count(),
             'start_date': start_date,
             'end_date': end_date,
-            'expected_work_time_excl_off': expected_work_time_excl_off,
-            'work_time_difference': work_time_difference,
+            'expected_work_time_excl_off': expected_work_time_excl_off,  # raw timedelta—টেমপ্লেটে কাস্টম ফিল্টার দিলে H:M:S দেখাবে
+            'work_time_difference': work_time_difference,                # raw timedelta—same
         })
 
     # Dropdown data: শুধুই নিজের কোম্পানির
@@ -577,6 +609,7 @@ def monthly_work_time_report(request):
     }
 
     return render(request, 'monthly_report.html', context)
+
 
 
 # --------------Monthly Work Time PDF (Leave বাদ না দিয়ে Expected ঠিক রাখা)---------------
@@ -868,20 +901,32 @@ def employee_delete(request, pk):
 
     return render(request, 'employee_confirm_delete.html', {'employee': employee})
 
-
-
-# ----------------Deperment -------------------
-# ----------------------------
-# Department List
-# ----------------------------
-from django.core.paginator import Paginator
+@login_required
 def department_list(request):
-    q = (request.GET.get("q") or "").strip()
-    qs = Department.objects.select_related("company").order_by("id")
-    if q:
-        qs = qs.filter(Q(name__icontains=q) | Q(company__name__icontains=q))
+    # User -> Profile -> Company
+    user_company = getattr(getattr(request.user, "profile", None), "company", None)
+    if not user_company:
+        messages.error(request, "আপনার কোম্পানি সেট করা নেই।")
+        return redirect("dashboard")  # বা যেকোনো সেফ রুট
 
-    paginator = Paginator(qs, 10)  # প্রতি পেজে 10টি
+    # base queryset: শুধুই ইউজারের কোম্পানির ডিপার্টমেন্ট
+    qs = (
+        Department.objects
+        .select_related("company")
+        .filter(company=user_company)
+        .order_by("id")
+    )
+
+    # search query (optional)
+    q = request.GET.get("q", "").strip()
+    if q:
+        qs = qs.filter(
+            Q(name__icontains=q) |
+            Q(company__name__icontains=q)  # চাইলে এটা বাদও দিতে পারো, যেহেতু company ফিক্সড
+        )
+
+    # pagination
+    paginator = Paginator(qs, 10)  # প্রতি পেজে ১০টি
     page_number = request.GET.get("page")
     page_obj = paginator.get_page(page_number)
 
@@ -891,16 +936,16 @@ def department_list(request):
         "q": q,
     })
 
-
+from django.core.paginator import Paginator
 # ----------------------------
-# Department Add/Edit
+# Department Add/Edit (আগের মতোই company-guarded)
 # ----------------------------
 @login_required
 def department_form_view(request, pk=None):
-    user_company = getattr(request.user.profile, 'company', None)
+    user_company = getattr(getattr(request.user, "profile", None), "company", None)
     if not user_company:
         messages.error(request, "আপনার কোম্পানি সেট করা নেই।")
-        return redirect('department_list')
+        return redirect('attendance_app:department_list')
 
     if pk:
         dept = get_object_or_404(Department, pk=pk, company=user_company)
@@ -913,10 +958,10 @@ def department_form_view(request, pk=None):
         form = DepartmentForm(request.POST, instance=dept)
         if form.is_valid():
             department = form.save(commit=False)
-            department.company = user_company  # ইউজারের কোম্পানি সেট করা
+            department.company = user_company  # user-এর কোম্পানি ফোর্স করা
             department.save()
             messages.success(request, f"Department {'updated' if pk else 'added'} successfully.")
-            return redirect('department_list')
+            return redirect('attendance_app:department_list')
     else:
         form = DepartmentForm(instance=dept)
 
@@ -924,7 +969,6 @@ def department_form_view(request, pk=None):
         'form': form,
         'title': title,
     })
-
 
 # ----------------------------
 # Department Delete
@@ -938,23 +982,9 @@ def department_delete(request, pk):
     name = dept.name  # শুধু মেসেজে দেখানোর জন্য আগে রেখে দিলাম
     dept.delete()
     messages.success(request, f"Department '{name}' deleted successfully.")
-    return redirect("department_list")
+    return redirect("attendance_app:department_list")
 
 # ---------------------Attendance---------
-# views.py
-from attendance_app.utils.attendance_helpers import generate_attendance_table
-
-from django.db.models import Min, Max
-from .models import Attendance, Employee
-
-from datetime import date
-from django.utils.dateparse import parse_date
-
-from collections import defaultdict
-from datetime import datetime, timedelta, time, date
-from django.utils.timezone import make_aware
-from django.shortcuts import render
-from .models import Employee, Attendance, Department, Holiday, LeaveRequest
 
 # ----------------------------
 # Weekday Mapping
@@ -1042,10 +1072,7 @@ def generate_attendance_table(employees, start_date, end_date):
             current += timedelta(days=1)
 
     return summary
-from django.contrib.auth.decorators import login_required
-from datetime import date
-from .models import Employee, Department, Attendance
-from .forms import AttendanceForm
+
 
 @login_required
 def attendance_list(request):
@@ -1100,7 +1127,7 @@ def attendance_add(request):
             attendance = form.save(commit=False)
             attendance.user = request.user
             attendance.save()
-            return redirect('attendance_list')
+            return redirect('attendance_app:attendance_list')
     else:
         form = AttendanceForm()
         # শুধু সেই কোম্পানির employees dropdown এ দেখাবে
@@ -1123,25 +1150,10 @@ def attendance_delete(request, pk):
     attendance = get_object_or_404(Attendance, pk=pk, user=request.user)  # শুধু নিজের ইউজারের ডাটা
     if request.method == 'POST':
         attendance.delete()
-        return redirect('attendance_list')
+        return redirect('attendance_app:attendance_list')
     return render(request, 'attendance_confirm_delete.html', {
         'attendance': attendance
     })
-
-
-# --------------emplyee details----------------
-
-
-# --------------emplyee details----------------
-
-
-from django.shortcuts import render, get_object_or_404
-from django.utils.timezone import make_aware, is_naive
-
-from .models import Employee, Attendance, LeaveRequest, Holiday
-from collections import defaultdict, OrderedDict
-from datetime import datetime, timedelta
-import calendar
 
 
 @login_required
@@ -1189,7 +1201,7 @@ def employee_attendance_detail(request, employee_id):
     if user_company:
         public_holidays = public_holidays.filter(company=user_company)
     else:
-        public_holidays = Holiday.objects.none()  # company না থাকলে কিছু দেখাবে না
+        public_holidays = Holiday.objects.none()
 
     public_holiday_dates = set()
     for holiday in public_holidays:
@@ -1216,14 +1228,46 @@ def employee_attendance_detail(request, employee_id):
         if att_date in summary:
             daily_attendance[att_date].append(att.timestamp)
 
+    from datetime import time as _time
+    threshold_time = _time(14, 0)  # 14:00 cutoff
+
     for att_date, timestamps in daily_attendance.items():
+        if not timestamps:
+            continue
+
         timestamps.sort()
-        in_time = timestamps[0]
-        out_time = timestamps[-1] if len(timestamps) > 1 else None
+
+        # 14:00-এর আগে/পরে ভাগ করো
+        before_14 = [ts for ts in timestamps if ts.time() < threshold_time]
+        after_14 = [ts for ts in timestamps if ts.time() >= threshold_time]
+
+        in_time = None
+        out_time = None
+
+        if before_14:
+            # আগে পাঞ্চ থাকলে earliest = in_time
+            in_time = before_14[0]
+            # out_time: preference after_14 last > before_14 last (if multiple)
+            if after_14:
+                out_time = after_14[-1]
+            elif len(before_14) > 1:
+                out_time = before_14[-1]
+        else:
+            # আগে কোনো পাঞ্চ নেই (সব 14:00-এর পরে)
+            if len(after_14) == 1:
+                # একটাই পাঞ্চ: শুধু out_time হবে
+                out_time = after_14[0]
+            else:
+                # একাধিক পাঞ্চ: প্রথমটা in_time, শেষটা out_time
+                in_time = after_14[0]
+                out_time = after_14[-1]
 
         summary[att_date]['in_time'] = in_time
         summary[att_date]['out_time'] = out_time
-        summary[att_date]['status'] = 'Present'
+
+        # ✅ in_time বা out_time যেকোনো একটা থাকলেই Present
+        if in_time or out_time:
+            summary[att_date]['status'] = 'Present'
 
     # ------------------------------
     # Approved Leaves
@@ -1265,8 +1309,22 @@ def employee_attendance_detail(request, employee_id):
     # Calculate Work Duration
     # ------------------------------
     total_work_duration = timedelta()
-    ten_hours = timedelta(hours=10)
-    expected_start_time = datetime.strptime("10:30", "%H:%M").time()
+
+    # Department-based shift
+    DEFAULT_IN = _time(10, 30)
+    DEFAULT_OUT = _time(20, 30)
+    dept = getattr(employee, "department", None)
+
+    dept_in = getattr(dept, "in_time", None) or DEFAULT_IN
+    dept_out = getattr(dept, "out_time", None) or DEFAULT_OUT
+
+    shift_start_dt = datetime.combine(start_date, dept_in)
+    shift_end_dt = datetime.combine(start_date, dept_out)
+    shift_duration = shift_end_dt - shift_start_dt
+    if shift_duration.total_seconds() < 0:
+        shift_duration = timedelta(0)
+
+    expected_start_time = dept_in
 
     for date_key, data in summary.items():
         if data['status'] == 'Present' and data['in_time'] and data['out_time']:
@@ -1290,7 +1348,8 @@ def employee_attendance_detail(request, employee_id):
                 total_work_duration += duration
 
         elif data['status'] == 'Leave':
-            total_work_duration += ten_hours
+            # Leave দিনে শিফটের সময় ক্রেডিট হবে
+            total_work_duration += shift_duration
 
     context = {
         'employee': employee,
@@ -1306,6 +1365,7 @@ def employee_attendance_detail(request, employee_id):
     }
 
     return render(request, 'employee_attendance_detail.html', context)
+
 
 
 # ----------------------attendance details pdf-------------
@@ -1554,18 +1614,6 @@ def attendance_pdf_report(request, employee_id):
 
 # --------------Leave Request--------
 
-# views.py
-from django.shortcuts import render, get_object_or_404, redirect
-from django.contrib.auth.decorators import login_required
-from .models import LeaveRequest, Employee
-from .forms import LeaveRequestForm
-
-from django.shortcuts import render
-from attendance_app.models import LeaveRequest
-from django.db.models import Q
-
-from django.shortcuts import render
-from attendance_app.models import LeaveRequest
 
 @login_required
 def leave_list(request):
@@ -1590,17 +1638,7 @@ def leave_list(request):
 
 
 # views.py
-from collections import defaultdict
-from datetime import date
 
-from django.contrib.auth.decorators import login_required
-from django.db.models import Q
-from django.http import HttpResponse
-from django.shortcuts import render
-from django.template.loader import render_to_string
-from django.utils.dateparse import parse_date
-
-from attendance_app.models import LeaveRequest, Department
 
 # Optional PDF library (WeasyPrint). না থাকলে HTML fallback হবে।
 try:

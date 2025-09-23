@@ -69,6 +69,8 @@
   </div>
 </form>
 
+{% load custom_filters %}
+
 
 {% if summaries %}
 <div class="overflow-x-auto rounded-lg border border-gray-300 dark:border-gray-700">
@@ -113,7 +115,7 @@
         <td class="px-4 py-2 border text-center">{{ s.weekly_off_days }}</td>
         <td class="px-4 py-2 border text-center">{{ s.holiday_days }}</td>
         <td class="px-4 py-2 border text-center">{{ s.late_time }}</td>
-        <td class="px-4 py-2 border text-center">{{ s.over_time }}</td>
+        <td class="px-4 py-2 border text-center">{{ s.over_time|format_timedelta }}</td>
         <td class="px-4 py-2 border text-center">{{ s.total_work_hours }}</td>
         <td class="px-4 py-2 border text-center">{{ s.expected_work_hours }}</td>
         <td class="px-4 py-2 border text-center">{{ s.work_time_difference }}</td>
