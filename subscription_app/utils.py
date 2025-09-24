@@ -1,6 +1,11 @@
 from django.utils import timezone
 from .models import UserSubscription
 
+from typing import Optional
+from django.utils import timezone
+from django.core.exceptions import ObjectDoesNotExist
+from .models import UserSubscription
+
 def get_effective_subscription(user):
     """
     company.subscription থাকলে সেটাই; না থাকলে ইউজারের latest active UserSubscription।
@@ -30,3 +35,28 @@ def is_subscription_active_for(user) -> bool:
 
 def is_subscription_expired_for(user) -> bool:
     return not is_subscription_active_for(user)
+
+
+
+
+def get_effective_subscription_details(user):
+    """
+    মিনিমাল ভার্সন: company.subscription থাকলে সেটাই, নইলে user-এর active UserSubscription।
+    (আগের অ্যাডভান্সড ভার্সনের সরল সংস্করণ)
+    """
+    company = getattr(user, "current_company", None) or getattr(user, "company", None)
+    if company:
+        try:
+            sub = getattr(company, "subscription", None)
+        except ObjectDoesNotExist:
+            sub = None
+        if sub:
+            return sub  # আপনার চাহিদা অনুযায়ী অবজেক্টই ফেরত দিচ্ছি
+
+    today = timezone.localdate()
+    return (
+        UserSubscription.objects
+        .filter(user=user, active=True, end_date__gte=today)
+        .order_by("-end_date")
+        .first()
+    )

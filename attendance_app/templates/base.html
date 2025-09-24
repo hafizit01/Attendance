@@ -21,7 +21,8 @@
   <style>[x-cloak]{display:none!important}</style>
 </head>
 
-<body class="bg-gray-100 dark:bg-gray-900 dark:text-gray-200 transition-colors duration-300 overflow-x-hidden">
+<body class="bg-gray-100 dark:bg-gray-900 dark:text-gray-200 transition-colors duration-300">
+
 
 <!-- 🔝 Top Navbar -->
 <header class="bg-white dark:bg-gray-800 shadow px-4 sm:px-6 py-3 flex justify-between items-center sticky top-0 z-40">
@@ -241,7 +242,8 @@
 
 
   <!-- ✅ Main Content -->
-  <main class="w-full flex-1 pl-2 sm:pl-3 pr-4 md:pr-6 py-4 md:py-6">
+  <main class="min-w-0 w-full flex-1 pl-2 sm:pl-3 pr-4 md:pr-6 py-4 md:py-6 overflow-x-auto">
+
     <!-- ⚠️ এখানে কোনও container/mx-auto/max-w-* রাখবেন না -->
     {% if messages %}
       <div class="w-full mt-4">
@@ -258,7 +260,7 @@
     {% endif %}
 
     <!-- আপনার ড্যাশবোর্ড কনটেন্ট -->
-    <div class="w-full">
+    <div class="w-full overflow-x-auto">
       {% block content %}{% endblock %}
     </div>
   </main>
@@ -317,6 +319,7 @@
     document.documentElement.classList.remove('dark');
   }
 </script>
+
 {% block extra_scripts %}{% endblock %}
 </body>
 </html>

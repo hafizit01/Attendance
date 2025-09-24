@@ -863,7 +863,7 @@ def employee_add(request):
             employee.department.company = user_company  # কোম্পানি সেট করা
             employee.save()
             messages.success(request, "Employee সফলভাবে যোগ হয়েছে।")
-            return redirect('employee_list')
+            return redirect('attendance_app:employee_list')
     else:
         form = EmployeeForm()
 
@@ -881,7 +881,7 @@ def employee_edit(request, pk):
         if form.is_valid():
             form.save()
             messages.success(request, "Employee তথ্য আপডেট হয়েছে।")
-            return redirect('employee_list')
+            return redirect('attendance_app:employee_list')
     else:
         form = EmployeeForm(instance=employee)
 
@@ -897,7 +897,7 @@ def employee_delete(request, pk):
     if request.method == 'POST':
         employee.delete()
         messages.success(request, "Employee ডিলিট হয়েছে।")
-        return redirect('employee_list')
+        return redirect('attendance_app:employee_list')
 
     return render(request, 'employee_confirm_delete.html', {'employee': employee})
 

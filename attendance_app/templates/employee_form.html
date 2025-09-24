@@ -3,6 +3,9 @@
 {% block content %}
 <div class="p-6 sm:p-8 bg-white dark:bg-gray-800 rounded shadow max-w-md mx-auto transition-colors duration-300">
   <h1 class="text-2xl font-bold mb-6 text-gray-900 dark:text-gray-100">{{ title }}</h1>
+
+  
+
   
   <form method="post" class="space-y-6">
     {% csrf_token %}
@@ -24,16 +27,31 @@
 </div>
 
 <style>
-  /* Django {{ form.as_p }} default fields style override */
-  form p label {
-    @apply block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1;
+  form p label{
+    display:block; font-size:0.875rem; font-weight:600; margin-bottom:0.25rem; color:#374151;
   }
-  form p input,
-  form p select,
-  form p textarea {
-    @apply w-full rounded border border-gray-300 dark:border-gray-600 px-3 py-2
-           bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100
-           focus:outline-none focus:ring-2 focus:ring-blue-500;
+  .dark form p label{ color:#D1D5DB; }
+
+  form p input, form p select, form p textarea{
+    width:100%; border-radius:0.5rem; border:1px solid #D1D5DB; padding:0.5rem 0.75rem;
+    background:#fff; color:#111827; outline: none;
+  }
+  .dark form p input, .dark form p select, .dark form p textarea{
+    border-color:#4B5563; background:#111827; color:#F3F4F6;
+  }
+  form p input:focus, form p select:focus, form p textarea:focus{
+    box-shadow:0 0 0 2px rgba(59,130,246,.5); border-color:#3B82F6;
+  }
+
+  ul.errorlist { list-style: none; padding: 0; margin: .5rem 0; }
+  ul.errorlist li {
+    color: #991b1b;               /* red-800 */
+    background: #fee2e2;          /* red-100 */
+    border: 1px solid #fecaca;    /* red-200 */
+    padding: .5rem .75rem;
+    border-radius: .5rem;
+    font-weight: 600;
   }
 </style>
+
 {% endblock %}
