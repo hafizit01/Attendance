@@ -222,3 +222,15 @@ class HolidayForm(forms.ModelForm):
         }
 
 
+
+class DayAttendanceForm(forms.Form):
+    in_time = forms.DateTimeField(required=False, widget=forms.DateTimeInput(attrs={'type': 'datetime-local'}))
+    out_time = forms.DateTimeField(required=False, widget=forms.DateTimeInput(attrs={'type': 'datetime-local'}))
+
+    def clean(self):
+        data = super().clean()
+        in_t = data.get('in_time')
+        out_t = data.get('out_time')
+        if in_t and out_t and out_t <= in_t:
+            raise forms.ValidationError("Out time must be after In time.")
+        return data

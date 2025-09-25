@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="max-w-lg mx-auto p-6 bg-white dark:bg-gray-800 rounded-lg shadow-lg transition-colors duration-300">
+  <h1 class="text-2xl sm:text-3xl font-bold mb-6 text-gray-900 dark:text-gray-100 text-center">
+    {{ title }}
+  </h1>
+
+  <form method="post" class="space-y-6">
+    {% csrf_token %}
+
+    <!-- In time -->
+    <div>
+      <label for="id_in_time" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">In time</label>
+      <input type="datetime-local" name="in_time" id="id_in_time"
+             value="{{ in_value|default:'' }}"
+             class="w-full rounded-lg border border-gray-300 dark:border-gray-600 px-3 py-2
+                    bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100
+                    focus:outline-none focus:ring-2 focus:ring-blue-500" />
+      {% if form.in_time.errors %}
+        <p class="text-red-500 text-xs mt-1">{% for e in form.in_time.errors %}{{ e }}{% endfor %}</p>
+      {% endif %}
+    </div>
+
+    <!-- Out time -->
+    <div>
+      <label for="id_out_time" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Out time</label>
+      <input type="datetime-local" name="out_time" id="id_out_time"
+             value="{{ out_value|default:'' }}"
+             class="w-full rounded-lg border border-gray-300 dark:border-gray-600 px-3 py-2
+                    bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100
+                    focus:outline-none focus:ring-2 focus:ring-blue-500" />
+      {% if form.out_time.errors %}
+        <p class="text-red-500 text-xs mt-1">{% for e in form.out_time.errors %}{{ e }}{% endfor %}</p>
+      {% endif %}
+    </div>
+
+    {% if form.non_field_errors %}
+      <div class="text-red-600 text-sm bg-red-100 dark:bg-red-900 dark:text-red-300 p-3 rounded">
+        {% for error in form.non_field_errors %}<p>{{ error }}</p>{% endfor %}
+      </div>
+    {% endif %}
+
+    <div class="flex items-center justify-between gap-4 pt-2">
+      <button type="submit" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold px-4 py-2 rounded-lg transition text-center">
+        💾 Save
+      </button>
+      <a href="{% url 'attendance_app:attendance_list' %}" class="flex-1 text-center bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 font-medium px-4 py-2 rounded-lg transition">
+        ❌ Cancel
+      </a>
+    </div>
+  </form>
+</div>
+{% endblock %}

@@ -25,7 +25,7 @@ from reportlab.lib.pagesizes import A4, letter
 from reportlab.lib.units import inch
 
 # Local apps
-from .forms import AttendanceForm, LeaveRequestForm, DepartmentForm, HolidayForm, EmployeeForm
+from .forms import AttendanceForm, LeaveRequestForm, DepartmentForm, HolidayForm, EmployeeForm,DayAttendanceForm
 from .models import Employee, Department, Attendance, Holiday, LeaveRequest
 from attendance_app.utils.zk_import import import_attendance
 from attendance_app.utils.attendance_helpers import generate_attendance_table
@@ -998,43 +998,94 @@ WEEKDAY_MAP = {
     'Saturday': 5,
     'Sunday': 6,
 }
+# ----------------------------
+# Generate Attendance Table (updated)
+# ----------------------------
+from collections import defaultdict
 
-# ----------------------------
-# Generate Attendance Table
-# ----------------------------
+
+def _daterange(d1, d2):
+    cur = d1
+    while cur <= d2:
+        yield cur
+        cur += timedelta(days=1)
+
+def _expand_date_range(start_d, end_d):
+    """Start/End (date) থেকে সব মধ্যবর্তী date এর set বানায়"""
+    return {d for d in _daterange(start_d, end_d)}
+
+def _align_tz(dt: datetime, ref: datetime) -> datetime:
+    """
+    dt (naive) কে ref এর timezone-awareness এর সাথে মিলিয়ে দেয়।
+    ref যদি aware হয়, dt কে aware বানায় (current timezone দিয়ে)।
+    ref যদি naive হয়, dt naive-ই থাকে।
+    """
+    if timezone.is_aware(ref) and timezone.is_naive(dt):
+        return timezone.make_aware(dt, timezone.get_current_timezone())
+    if timezone.is_naive(ref) and timezone.is_aware(dt):
+        return timezone.make_naive(dt, timezone.get_current_timezone())
+    return dt
+
 def generate_attendance_table(employees, start_date, end_date):
     summary = []
+
+    # Parse dates
     start = datetime.strptime(start_date, '%Y-%m-%d').date()
     end = datetime.strptime(end_date, '%Y-%m-%d').date()
-    holidays = Holiday.objects.all()
-    leave_requests = LeaveRequest.objects.filter(status='Approved')
-    standard_in_time = time(10, 30)
 
-    for emp in employees:
+    # Preload holidays within range -> set of dates
+    holiday_qs = Holiday.objects.filter(start_date__lte=end, end_date__gte=start)
+    holiday_dates = set()
+    for h in holiday_qs:
+        s = max(h.start_date, start)
+        e = min(h.end_date, end)
+        holiday_dates |= _expand_date_range(s, e)
+
+    # Preload approved leaves within range -> per-employee set of dates
+    leaves_qs = LeaveRequest.objects.filter(
+        status='Approved',
+        start_date__lte=end,
+        end_date__gte=start
+    ).select_related('employee')
+    leaves_by_emp = defaultdict(set)
+    for lv in leaves_qs:
+        s = max(lv.start_date, start)
+        e = min(lv.end_date, end)
+        leaves_by_emp[lv.employee_id] |= _expand_date_range(s, e)
+
+    # Weekly off map দরকার (তোমার কোডে WEEKDAY_MAP আছে ধরে নিলাম)
+    # default: Friday -> 4 (Python weekday: Mon=0 ... Sun=6)
+    for emp in employees.select_related('department'):
         department = getattr(emp, 'department', None)
-        weekly_off_day_str = department.weekly_off_day if department else 'Friday'
+        weekly_off_day_str = getattr(department, 'weekly_off_day', 'Friday')
         weekly_off_day = WEEKDAY_MAP.get(weekly_off_day_str, 4)
 
-        attendance_records = Attendance.objects.filter(
-            employee=emp,
-            timestamp__date__range=(start, end)
-        ).order_by('timestamp')
+        # Pull all attendance for this emp within range in one go
+        # NOTE: তোমার মডেল অনুযায়ী date ফিল্ড আলাদা না, timestamp__date দিয়ে ফিল্টার করছো
+        emp_att_qs = (
+            Attendance.objects
+            .filter(employee=emp, timestamp__date__range=(start, end))
+            .order_by('timestamp')
+        )
 
+        # Group by date
         daily_records = defaultdict(list)
-        for record in attendance_records:
-            daily_records[record.timestamp.date()].append(record)
+        for rec in emp_att_qs:
+            daily_records[rec.timestamp.date()].append(rec)
 
-        current = start
-        while current <= end:
-            records = daily_records.get(current, [])
+        # Standard in-time (10:30) — দিনে apply করতে হবে
+        standard_in_time = time(10, 30)
+
+        for cur in _daterange(start, end):
+            records = daily_records.get(cur, [])
             in_time = None
             out_time = None
             attendance_id = None
 
-            # Check public holiday, weekly off, leave
-            is_public_holiday = holidays.filter(start_date__lte=current, end_date__gte=current).exists()
-            is_weekly_off = current.weekday() == weekly_off_day
-            is_on_leave = leave_requests.filter(employee=emp, start_date__lte=current, end_date__gte=current).exists()
+            # Fast checks using precomputed sets
+            is_public_holiday = cur in holiday_dates
+            is_weekly_off = (cur.weekday() == weekly_off_day)
+            is_on_leave = cur in leaves_by_emp.get(emp.id, set())
 
             if is_public_holiday:
                 status = 'Public Holiday'
@@ -1047,29 +1098,36 @@ def generate_attendance_table(employees, start_date, end_date):
                 outs = [r for r in records if r.status == 'Out']
 
                 if ins:
-                    earliest_in_record = min(ins, key=lambda r: r.timestamp)
-                    attendance_id = earliest_in_record.id
-                    standard_in_datetime = make_aware(datetime.combine(current, standard_in_time))
-                    in_time = max(earliest_in_record.timestamp, standard_in_datetime)
+                    earliest_in = min(ins, key=lambda r: r.timestamp)
+                    attendance_id = earliest_in.id
+
+                    # standard_in_datetime কে earliest_in.timestamp এর awareness অনুযায়ী align করো
+                    std_in_dt = datetime.combine(cur, standard_in_time)
+                    std_in_dt = _align_tz(std_in_dt, earliest_in.timestamp)
+
+                    # লগিক: 10:30 এর আগে ইন করলে 10:30 ধরবো, নইলে actual
+                    in_time = max(earliest_in.timestamp, std_in_dt)
 
                 if outs:
-                    latest_out_record = max(outs, key=lambda r: r.timestamp)
-                    out_time = latest_out_record.timestamp
+                    latest_out = max(outs, key=lambda r: r.timestamp)
+                    out_time = latest_out.timestamp
 
-                status = 'Present' if in_time or out_time else 'Absent'
+                status = 'Present' if (in_time or out_time) else 'Absent'
             else:
                 status = 'Absent'
 
-            summary.append({
+            # ইউনিফর্ম রো
+            row = {
                 'employee': emp,
-                'date': current,
+                'date': cur,
                 'in_time': in_time,
                 'out_time': out_time,
                 'status': status,
-                'id': attendance_id
-            })
-
-            current += timedelta(days=1)
+                'attendance_id': attendance_id,   # ✅ মূল key
+                'id': attendance_id,              # ✅ backward-compat (যদি কোথাও 'id' রেফারেন্স থাকে)
+                'editable': bool(attendance_id),  # টেমপ্লেটে কাজে লাগাতে পারো
+            }
+            summary.append(row)
 
     return summary
 
@@ -1299,19 +1357,125 @@ def attendance_add(request):
     })
 
 
+
+from django.utils.timezone import is_aware, make_naive, get_current_timezone
+
+def to_dt_local_str(dt):
+    """HTML datetime-local এর জন্য YYYY-MM-DDTHH:MM স্ট্রিং বানায়"""
+    if not dt:
+        return ""
+    # aware হলে naive এ রূপান্তর (current timezone)
+    if is_aware(dt):
+        dt = make_naive(dt, get_current_timezone())
+    return dt.strftime('%Y-%m-%dT%H:%M')
+
+@login_required
+def attendance_edit(request, pk):
+    user_company = getattr(getattr(request.user, 'profile', None), 'company', None)
+
+    # anchor record (company scope)
+    anchor = get_object_or_404(
+        Attendance.objects.select_related('employee'),
+        pk=pk,
+        employee__company=user_company
+    )
+    emp = anchor.employee
+    day = anchor.timestamp.date()
+
+    # ওই দিনের সব রেকর্ড
+    day_qs = Attendance.objects.filter(employee=emp, timestamp__date=day).order_by('timestamp')
+    ins  = [r for r in day_qs if r.status == 'In']
+    outs = [r for r in day_qs if r.status == 'Out']
+    earliest_in  = min(ins, key=lambda r: r.timestamp) if ins else None
+    latest_out   = max(outs, key=lambda r: r.timestamp) if outs else None
+
+    if request.method == 'POST':
+        form = DayAttendanceForm(request.POST)
+        if form.is_valid():
+            in_time  = form.cleaned_data['in_time']
+            out_time = form.cleaned_data['out_time']
+
+            # anchor.timestamp-এর aware/naive অনুযায়ী align
+            def align(dt):
+                if dt is None:
+                    return None
+                if is_aware(anchor.timestamp):
+                    return dt if is_aware(dt) else make_aware(dt, get_current_timezone())
+                else:
+                    return dt if not is_aware(dt) else make_naive(dt, get_current_timezone())
+
+            in_time  = align(in_time)
+            out_time = align(out_time)
+
+            # In update/create/delete
+            if in_time:
+                if earliest_in:
+                    earliest_in.timestamp = in_time
+                    earliest_in.save(update_fields=['timestamp'])
+                else:
+                    Attendance.objects.create(
+                        employee=emp, timestamp=in_time, status='In',
+                        company=getattr(emp, 'company', None)  # থাকলে
+                    )
+            else:
+                if earliest_in:
+                    earliest_in.delete()
+
+            # Out update/create/delete
+            if out_time:
+                if latest_out:
+                    latest_out.timestamp = out_time
+                    latest_out.save(update_fields=['timestamp'])
+                else:
+                    Attendance.objects.create(
+                        employee=emp, timestamp=out_time, status='Out',
+                        company=getattr(emp, 'company', None)  # থাকলে
+                    )
+            else:
+                if latest_out:
+                    latest_out.delete()
+
+            return redirect('attendance_app:attendance_list')
+    else:
+        # ❗️HTML datetime-local এর জন্য স্ট্রিং বানিয়ে টেমপ্লেটে পাঠাই
+        in_value  = to_dt_local_str(earliest_in.timestamp if earliest_in else None)
+        out_value = to_dt_local_str(latest_out.timestamp if latest_out else None)
+        form = DayAttendanceForm(initial={
+            # initial রাখলেও আমরা ম্যানুয়াল ইনপুটে value বসাব
+            'in_time':  in_value,
+            'out_time': out_value,
+        })
+
+    return render(request, 'attendance_edit_form.html', {
+        'form': form,
+        'title': f'Edit Attendance for {emp} on {day}',
+        'in_value': in_value if request.method == 'GET' else "",
+        'out_value': out_value if request.method == 'GET' else "",
+    })
 # ----------------------------
 # Delete Attendance
 # ----------------------------
 @login_required
 def attendance_delete(request, pk):
-    attendance = get_object_or_404(Attendance, pk=pk, user=request.user)  # শুধু নিজের ইউজারের ডাটা
-    if request.method == 'POST':
-        attendance.delete()
-        return redirect('attendance_app:attendance_list')
-    return render(request, 'attendance_confirm_delete.html', {
-        'attendance': attendance
-    })
+    user_company = getattr(getattr(request.user, 'profile', None), 'company', None)
 
+    # pk থেকে দিন ও employee বের করি
+    anchor = get_object_or_404(
+        Attendance.objects.select_related('employee'),
+        pk=pk,
+        employee__company=user_company
+    )
+    day = anchor.timestamp.date()
+
+    if request.method == 'POST':
+        # ✅ সেই দিনের একই employee-র সব In/Out রেকর্ড ডিলিট
+        Attendance.objects.filter(
+            employee=anchor.employee,
+            timestamp__date=day
+        ).delete()
+        return redirect('attendance_app:attendance_list')
+
+    return render(request, 'attendance_confirm_delete.html', {'attendance': anchor})
 
 @login_required
 def employee_attendance_detail(request, employee_id):
