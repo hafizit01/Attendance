@@ -195,4 +195,133 @@
 })();
 </script>
 
+
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+
+  // helper — extract id from name like 'bonus_percent_123' -> '123'
+  function idFromName(name) {
+    const parts = name.split('_');
+    return parts[parts.length - 1];
+  }
+
+  // create or update hidden fallback input (so disabled field value still submitted)
+  function ensureHiddenInput(name, value) {
+    let existing = document.querySelector(`input[type="hidden"][data-hidden-for="${name}"]`);
+    if (existing) {
+      existing.value = value;
+      return existing;
+    }
+    const inp = document.createElement('input');
+    inp.type = 'hidden';
+    inp.name = name;
+    inp.value = value;
+    inp.setAttribute('data-hidden-for', name);
+    // append to nearest form if possible, otherwise to body
+    const form = document.querySelector('input[name="'+name+'"]')?.closest('form') || document.querySelector('form');
+    (form || document.body).appendChild(inp);
+    return inp;
+  }
+
+  function removeHiddenInput(name) {
+    const existing = document.querySelector(`input[type="hidden"][data-hidden-for="${name}"]`);
+    if (existing) existing.remove();
+  }
+
+  function setDisabled(el, disabled) {
+    if (!el) return;
+    if (disabled) {
+      el.setAttribute('aria-disabled','true');
+      el.disabled = true;
+      el.classList.add('opacity-60'); // visual hint (Tailwind-style)
+      ensureHiddenInput(el.name, '0.00');
+    } else {
+      el.removeAttribute('aria-disabled');
+      el.disabled = false;
+      el.classList.remove('opacity-60');
+      removeHiddenInput(el.name);
+    }
+  }
+
+  // main logic per emp id: if percent >0 -> disable fixed. if fixed >0 -> disable percent.
+  function evaluatePair(empId) {
+    const percent = document.querySelector(`input[name="bonus_percent_${empId}"]`);
+    const fixed   = document.querySelector(`input[name="bonus_fixed_${empId}"]`);
+    const valP = percent ? parseFloat((percent.value||'').toString().trim()) : 0;
+    const valF = fixed   ? parseFloat((fixed.value||'').toString().trim()) : 0;
+
+    // treat NaN as 0
+    const p = isNaN(valP) ? 0 : valP;
+    const f = isNaN(valF) ? 0 : valF;
+
+    if (p > 0 && f > 0) {
+      // If both somehow >0, prefer the most recently changed one.
+      // We'll check a data attribute 'data-last-changed' to resolve; default prefer percent.
+      const lastP = percent?.getAttribute('data-last-changed') || '';
+      const lastF = fixed?.getAttribute('data-last-changed') || '';
+      if (lastF > lastP) {
+        setDisabled(percent, true);
+        setDisabled(fixed, false);
+      } else {
+        setDisabled(fixed, true);
+        setDisabled(percent, false);
+      }
+    } else if (p > 0) {
+      setDisabled(fixed, true);
+      setDisabled(percent, false);
+    } else if (f > 0) {
+      setDisabled(percent, true);
+      setDisabled(fixed, false);
+    } else {
+      // both zero -> enable both
+      setDisabled(percent, false);
+      setDisabled(fixed, false);
+    }
+  }
+
+  // initialize all pairs on page and attach listeners
+  function initPairs() {
+    // find all percent inputs (name starts with bonus_percent_)
+    const percentInputs = Array.from(document.querySelectorAll('input[name^="bonus_percent_"]'));
+    const fixedInputs   = Array.from(document.querySelectorAll('input[name^="bonus_fixed_"]'));
+
+    // union of emp ids from both lists
+    const ids = new Set();
+    percentInputs.forEach(i => ids.add(idFromName(i.name)));
+    fixedInputs.forEach(i => ids.add(idFromName(i.name)));
+
+    ids.forEach(empId => {
+      const p = document.querySelector(`input[name="bonus_percent_${empId}"]`);
+      const f = document.querySelector(`input[name="bonus_fixed_${empId}"]`);
+
+      // attach input/change listeners
+      if (p) {
+        p.addEventListener('input', function(e){
+          // mark last-changed timestamp to resolve conflicts if both >0
+          p.setAttribute('data-last-changed', Date.now().toString());
+          evaluatePair(empId);
+        });
+        p.addEventListener('blur', function(){ evaluatePair(empId); });
+      }
+      if (f) {
+        f.addEventListener('input', function(e){
+          f.setAttribute('data-last-changed', Date.now().toString());
+          evaluatePair(empId);
+        });
+        f.addEventListener('blur', function(){ evaluatePair(empId); });
+      }
+
+      // INITIAL EVALUATION (handles default '0.00' or '0' states)
+      evaluatePair(empId);
+    });
+  }
+
+  // run init
+  initPairs();
+
+  // If you dynamically add more employee blocks (AJAX), call initPairs() again after adding.
+});
+</script>
+
 {% endblock %}

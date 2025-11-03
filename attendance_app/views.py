@@ -32,7 +32,7 @@ from attendance_app.utils.attendance_helpers import generate_attendance_table
 from subscription_app.models import UserSubscription
 from subscription_app.decorators import subscription_required
 
-
+from django.utils.safestring import mark_safe
 
 # ---------- Subscription helper (Date/DateTime দুই কেস) ----------
 def _has_active_subscription(user) -> bool:
@@ -224,7 +224,9 @@ def dashboard(request):
         'present': sum(1 for e in employee_data if e['in_time']),
         'absent': sum(1 for e in employee_data if not e['in_time']),
         'late': sum(1 for e in employee_data if e['late_time'].total_seconds() > 0),
-        'attendance_trend': attendance_trend,
+        'attendance_trend': attendance_trend,  # optional for debugging
+        # safe JSON string for template JS (dates already formatted as strings in your attendance_trend)
+        'attendance_trend_json': mark_safe(json.dumps(attendance_trend)),
         'can_view_salary': user.has_perm('payroll.view_salarysummary'),
     }
     return render(request, 'dashboard.html', context)

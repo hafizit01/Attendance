@@ -165,4 +165,127 @@ document.addEventListener("DOMContentLoaded", function() {
 </script>
 
 
+<!-- load Chart.js (ensure it's available before using) -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+  try {
+    // 1) Debug raw JSON (what template passed). Use escapejs to be safe.
+    console.log("DEBUG raw attendance_trend_json:", `{{ attendance_trend_json|escapejs }}`);
+
+    // 2) Parse JSON safely. If it's not present, fallback to [].
+    let attendanceTrend = [];
+    try {
+      const raw = '{{ attendance_trend_json|escapejs }}';
+      attendanceTrend = raw ? JSON.parse(raw) : [];
+    } catch (e) {
+      console.error("Failed to parse attendance_trend_json:", e);
+      attendanceTrend = [];
+    }
+    console.log("DEBUG parsed attendanceTrend:", attendanceTrend);
+
+    // 3) Prepare series (safe number conversion)
+    const labels = attendanceTrend.map(i => i.date);
+    const presentData = attendanceTrend.map(i => Number(i.present || 0));
+    const absentData = attendanceTrend.map(i => Number(i.absent || 0));
+    const lateData = attendanceTrend.map(i => Number(i.late || 0));
+
+    // LOG if empty (helps debug)
+    if (!labels.length) {
+      console.warn("attendanceTrend is empty — charts will render empty series.");
+    }
+
+    // 4) Trend chart element
+    const trendEl = document.getElementById('trendChart');
+    if (!trendEl) {
+      console.error("Canvas with id 'trendChart' NOT FOUND");
+    } else {
+      const trendCtx = trendEl.getContext('2d');
+      new Chart(trendCtx, {
+        type: 'line',
+        data: {
+          labels: labels,
+          datasets: [
+            {
+              label: 'Present',
+              data: presentData,
+              borderColor: '#22c55e',
+              backgroundColor: 'rgba(34,197,94,0.15)',
+              tension: 0.3,
+              fill: true,
+              pointRadius: 3
+            },
+            {
+              label: 'Absent',
+              data: absentData,
+              borderColor: '#ef4444',
+              backgroundColor: 'rgba(239,68,68,0.12)',
+              tension: 0.3,
+              fill: true,
+              pointRadius: 3
+            },
+            {
+              label: 'Late',
+              data: lateData,
+              borderColor: '#eab308',
+              backgroundColor: 'rgba(234,179,8,0.08)',
+              tension: 0.3,
+              borderDash: [4,4],
+              pointRadius: 3
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { position: 'bottom' },
+            title: { display: true, text: 'Last 30 Days Attendance' }
+          },
+          scales: {
+            x: { ticks: { maxRotation: 0, minRotation: 0 } },
+            y: { beginAtZero: true, title: { display: true, text: 'Count' } }
+          }
+        }
+      });
+    }
+
+    // 5) Summary pie (today)
+    const todaySummary = {
+      present: Number({{ present|default:0 }}),
+      absent: Number({{ absent|default:0 }}),
+      late:   Number({{ late|default:0 }})
+    };
+    console.log("DEBUG todaySummary:", todaySummary);
+
+    const summaryEl = document.getElementById('summaryChart');
+    if (!summaryEl) {
+      console.error("Canvas with id 'summaryChart' NOT FOUND");
+    } else {
+      const summaryCtx = summaryEl.getContext('2d');
+      new Chart(summaryCtx, {
+        type: 'pie',
+        data: {
+          labels: ['Present','Absent','Late'],
+          datasets: [{
+            data: [todaySummary.present, todaySummary.absent, todaySummary.late],
+            backgroundColor: ['#22c55e','#ef4444','#eab308'],
+            borderColor: '#fff',
+            borderWidth: 1
+          }]
+        },
+        options: {
+          responsive: true,
+          plugins: { legend: { position: 'bottom' } }
+        }
+      });
+    }
+
+  } catch (err) {
+    console.error("Unexpected chart error:", err);
+  }
+});
+</script>
+
 {% endblock %}
