@@ -18,10 +18,19 @@
         {% endif %}
       </form>
 
-      <a href="{% url 'attendance_app:department_add' %}"
-         class="bg-blue-600 hover:bg-blue-700 text-white px-3 sm:px-4 py-2 rounded text-sm sm:text-base transition">
-        ➕ Add Department
-      </a>
+      {% if request.user.is_superuser %}
+  <a href="{% url 'attendance_app:department_add' %}"
+     class="bg-blue-600 hover:bg-blue-700 text-white px-3 sm:px-4 py-2 rounded text-sm sm:text-base transition">
+    ➕ Add Department
+  </a>
+{% else %}
+  <button type="button"
+          class="bg-gray-400 text-white px-3 sm:px-4 py-2 rounded text-sm sm:text-base cursor-not-allowed"
+          disabled>
+    ➕ Add Department
+  </button>
+{% endif %}
+
     </div>
   </div>
 
@@ -70,36 +79,60 @@
           <td class="border border-gray-300 dark:border-gray-700 px-2 sm:px-4 py-2">
             {{ dept.get_weekly_off_day_display|default:dept.weekly_off_day }}
           </td>
-
           <td class="border border-gray-300 dark:border-gray-700 px-2 sm:px-4 py-2">
-            {% if dept.device_ip %}{{ dept.device_ip }}{% else %}—{% endif %}
-            {% if dept.device_port %}:{% if dept.device_port %}{{ dept.device_port }}{% endif %}{% endif %}
+            {% if request.user.is_superuser %}
+              {% if dept.device_ip %}{{ dept.device_ip }}{% else %}—{% endif %}
+              {% if dept.device_port %}:{% if dept.device_port %}{{ dept.device_port }}{% endif %}{% endif %}
+            {% else %}
+              {% if dept.device_ip %}*******{% else %}—{% endif %}
+              {% if dept.device_port %}:*******{% endif %}
+            {% endif %}
           </td>
 
-          <td class="border border-gray-300 dark:border-gray-700 px-2 sm:px-4 py-2">
-            {% if dept.in_time %}{{ dept.in_time|time:"H:i" }}{% else %}—{% endif %}
-            —
-            {% if dept.out_time %}{{ dept.out_time|time:"H:i" }}{% else %}—{% endif %}
-          </td>
+        <td class="border border-gray-300 dark:border-gray-700 px-2 sm:px-4 py-2">
+          {% if dept.in_time %}{{ dept.in_time|time:"H:i" }}{% else %}—{% endif %}
+          — 
+          {% if dept.out_time %}{{ dept.out_time|time:"H:i" }}{% else %}—{% endif %}
+        </td>
 
-          <td class="border border-gray-300 dark:border-gray-700 px-2 sm:px-4 py-2 text-center">
+        <td class="border border-gray-300 dark:border-gray-700 px-2 sm:px-4 py-2 text-center">
+          {% if request.user.is_superuser %}
             <a href="{% url 'attendance_app:department_edit' dept.id %}"
-               class="inline-flex items-center justify-center gap-1 text-blue-600 hover:underline">
+              class="inline-flex items-center justify-center gap-1 text-blue-600 hover:underline">
               ✏️ Edit
             </a>
-          </td>
+          {% else %}
+            <button class="inline-flex items-center justify-center gap-1 text-gray-400 cursor-not-allowed" disabled>
+              ✏️ Edit
+            </button>
+          {% endif %}
+        </td>
 
           {# নিরাপদ ডিলিট: POST + CSRF + confirm #}
           <td class="border border-gray-300 dark:border-gray-700 px-2 sm:px-4 py-2 text-center">
-            <form method="post" action="{% url 'attendance_app:department_delete' dept.id %}"
-                  onsubmit="return confirm('Delete {{ dept.name }}? This action cannot be undone.');">
-              {% csrf_token %}
-              <button type="submit"
-                      class="inline-flex items-center justify-center gap-1 text-red-600 hover:underline">
-                🗑️ Delete
-              </button>
-            </form>
+            {% if request.user.is_superuser %}
+              <form method="post" action="{% url 'attendance_app:department_delete' dept.id %}"
+                    onsubmit="return confirm('Delete {{ dept.name }}? This action cannot be undone.');">
+                {% csrf_token %}
+                <button type="submit"
+                        class="inline-flex items-center justify-center gap-1 text-red-600 hover:underline">
+                  🗑️ Delete
+                </button>
+              </form>
+            {% else %}
+              <div x-data="{ showToast: false }" class="inline-block relative">
+                <button 
+                  type="button"
+                  class="inline-flex items-center justify-center gap-1 text-gray-400 cursor-not-allowed"
+                  @mouseenter="showToast = true" 
+                  @mouseleave="showToast = false">
+                  🗑️ Delete
+                </button>
+
+              </div>
+            {% endif %}
           </td>
+
         </tr>
         {% empty %}
         <tr>

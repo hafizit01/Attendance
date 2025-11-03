@@ -147,6 +147,17 @@
     <span class="mr-2">📅</span> Public Holiday
   </a>
 
+
+  <div class="border-t border-gray-300 dark:border-gray-700 my-3"></div>
+
+  <a href="{% url 'attendance_app:department_list' %}" class="nav-link"
+     {% if current == 'department_list' %}data-active="true"{% endif %}>
+    <span class="mr-2">🏢</span> Department List
+  </a>
+
+
+
+
   <form action="{% url 'attendance_app:sync_attendance' %}" method="post" class="pt-1">
     {% csrf_token %}
     <button type="submit" class="nav-link">
