@@ -2303,3 +2303,8 @@ def holiday_delete(request, pk):
         return redirect('attendance_app:holiday_list')
 
     return render(request, 'holiday_confirm_delete.html', {'holiday': holiday})
+
+
+
+def custom_404_view(request,exception):
+    return render(request, '404.html', status=504)

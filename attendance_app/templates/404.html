@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>404 — Page Not Found</title>
+  <meta name="description" content="Responsive 404 page with friendly illustration and actions">
+  <style>
+    :root{
+      --bg:#0f1724;
+      --card:#0b1220;
+      --accent:#7c3aed; /* purple */
+      --muted:#94a3b8;
+      --glass: rgba(255,255,255,0.04);
+    }
+    /* Reset */
+    *{box-sizing:border-box;margin:0;padding:0}
+    html,body{height:100%}
+    body{
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+      background: linear-gradient(180deg,#071023 0%, var(--bg) 100%);
+      color:#e6eef8;
+      -webkit-font-smoothing:antialiased;
+      -moz-osx-font-smoothing:grayscale;
+      display:flex;align-items:center;justify-content:center;padding:32px;
+    }
+
+    .card{
+      width:100%;
+      max-width:1100px;
+      background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+      border-radius:18px;
+      box-shadow: 0 8px 30px rgba(2,6,23,0.6);
+      overflow:hidden;
+      display:grid;
+      grid-template-columns: 1fr 480px;
+      gap:30px;
+      padding:36px;
+      align-items:center;
+    }
+
+    /* Illustration column */
+    .art{
+      display:flex;align-items:center;justify-content:center;padding:18px;
+    }
+    .art svg{max-width:100%;height:auto;display:block}
+
+    /* Text column */
+    .content{padding:8px 4px}
+    .eyebrow{display:inline-block;background:var(--glass);padding:6px 10px;border-radius:999px;color:var(--muted);font-weight:600;font-size:13px;margin-bottom:14px}
+    h1{font-size:64px;line-height:1;color:#fff;margin-bottom:8px}
+    p.lead{font-size:18px;color:var(--muted);margin-bottom:20px}
+
+    .actions{display:flex;gap:12px;flex-wrap:wrap}
+    .btn{
+      display:inline-flex;align-items:center;gap:10px;padding:12px 16px;border-radius:12px;border:0;cursor:pointer;font-weight:600;text-decoration:none;
+      background:transparent;color:inherit;backdrop-filter: blur(6px);
+    }
+    .btn-primary{background:linear-gradient(90deg,var(--accent), #4f46e5);color:white;box-shadow:0 6px 18px rgba(79,70,229,0.18)}
+    .btn-secondary{background:transparent;border:1px solid rgba(255,255,255,0.06);color:var(--muted)}
+
+    .meta{margin-top:18px;color:var(--muted);font-size:13px}
+
+    /* Small screens */
+    @media (max-width:880px){
+      .card{grid-template-columns:1fr;max-width:760px;padding:28px}
+      h1{font-size:48px}
+      .art{order:-1}
+    }
+
+    @media (max-width:420px){
+      body{padding:18px}
+      .card{padding:18px;gap:18px;border-radius:14px}
+      h1{font-size:36px}
+      .eyebrow{font-size:12px}
+      p.lead{font-size:15px}
+    }
+
+    /* subtle floating animation */
+    .float {
+      animation: float 6s ease-in-out infinite;
+    }
+    @keyframes float{
+      0%{transform: translateY(0)}
+      50%{transform: translateY(-10px)}
+      100%{transform: translateY(0)}
+    }
+
+  </style>
+</head>
+<body>
+  <main class="card" role="main" aria-labelledby="page-title">
+
+    <section class="content">
+      <span class="eyebrow">404 • পেইজ পাওয়া যায়নি</span>
+      <h1 id="page-title">Page not found</h1>
+      <p class="lead">মাফ করবেন — আপনি যে পেজটা খুঁজছেন সেটা পাওয়া যায়নি। হয়তো লিংক-টি ভুল, বা পেজটি সরিয়ে ফেলা হয়েছে।</p>
+
+      <div class="actions" role="group" aria-label="Actions">
+        <a href="/" class="btn btn-primary" title="Go back home">
+          <!-- Home icon -->
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3 11.5L12 4l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1V11.5z" fill="currentColor"/></svg>
+          Go to homepage
+        </a>
+
+        <a href="/" onclick="history.back(); return false;" class="btn btn-secondary" title="Go back">
+          <!-- Back icon -->
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z" fill="currentColor"/></svg>
+          Go back
+        </a>
+
+        <form action="/search" method="get" style="display:inline-flex;">
+          <input name="q" type="search" placeholder="Search the site" aria-label="Search the site" style="padding:10px 12px;border-radius:10px;border:1px solid rgba(255,255,255,0.04);background:transparent;color:inherit;outline:none;margin-right:6px;min-width:160px">
+          <button class="btn btn-secondary" style="padding:10px 12px;border-radius:10px">Search</button>
+        </form>
+
+      </div>
+
+      <p class="meta">If you think this is an error, <a href="/contact" style="color:inherit;text-decoration:underline;">contact support</a>.</p>
+    </section>
+
+    <aside class="art" aria-hidden="true">
+      <!-- Friendly illustration (SVG) -->
+      <svg class="float" width="420" height="300" viewBox="0 0 840 600" xmlns="http://www.w3.org/2000/svg" role="img">
+        <defs>
+          <linearGradient id="g1" x1="0" x2="1">
+            <stop offset="0%" stop-color="#7c3aed" stop-opacity="1"/>
+            <stop offset="100%" stop-color="#4f46e5" stop-opacity="1"/>
+          </linearGradient>
+        </defs>
+
+        <rect x="0" y="0" width="840" height="600" rx="18" fill="url(#g1)" opacity="0.08" />
+
+        <g transform="translate(80,60)">
+          <circle cx="180" cy="120" r="110" fill="#0b1220" opacity="0.9" />
+
+          <!-- big 404 numbers -->
+          <text x="70" y="170" font-family="Inter, Arial" font-size="130" font-weight="700" fill="white">404</text>
+
+          <!-- small magnifier -->
+          <g transform="translate(380,40)">
+            <circle cx="40" cy="40" r="36" fill="#071229" stroke="white" stroke-opacity="0.08"/>
+            <path d="M54 54 L78 78" stroke="white" stroke-opacity="0.7" stroke-width="10" stroke-linecap="round"/>
+          </g>
+
+          <!-- paper / broken page -->
+          <path d="M280 70 h120 v160 h-240 v-120 q40 -40 120 -40 z" fill="#071229" opacity="0.9"/>
+
+        </g>
+      </svg>
+    </aside>
+
+  </main>
+</body>
+</html>
