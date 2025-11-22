@@ -95,6 +95,21 @@ BKASH_USE_BEARER = True  # আপনার ইন্টিগ্রেশন য
 
 
 
+# ------------------Email--------------------
+# settings.py
+
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = 'mail.easycodingbd.com'       # তোমার হোস্টিং SMTP সার্ভার
+EMAIL_PORT = 465                           # SSL পোর্ট
+EMAIL_USE_SSL = True                       # SSL সক্রিয়
+EMAIL_USE_TLS = False                      # TLS বন্ধ
+EMAIL_HOST_USER = 'info@easycodingbd.com'  # তোমার ইমেইল
+EMAIL_HOST_PASSWORD = 'Easy@#1122'  # ইমেইল অ্যাকাউন্টের আসল পাসওয়ার্ড
+DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
+
+
+
+
 LANGUAGE_CODE = 'en-us'
 TIME_ZONE = 'Asia/Dhaka'
 USE_I18N = True

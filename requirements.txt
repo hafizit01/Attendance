@@ -6,6 +6,9 @@ charset-normalizer==3.3.2
 cssselect2==0.7.0
 Django==4.2.11
 django-autoslug==1.9.9
+django-ckeditor==6.7.3
+django-decorator-include==3.3
+django-js-asset==3.1.2
 django-widget-tweaks==1.5.0
 et-xmlfile==1.1.0
 fonttools==4.57.0
@@ -29,7 +32,7 @@ six==1.16.0
 sqlparse==0.4.4
 tinycss2==1.4.0
 tzdata==2023.3
-urllib3==2.2.3
+urllib3==2.5.0
 weasyprint==53.3
 webencodings==0.5.1
 zopfli==0.2.3.post1

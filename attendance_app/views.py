@@ -2304,6 +2304,75 @@ def holiday_delete(request, pk):
 
     return render(request, 'holiday_confirm_delete.html', {'holiday': holiday})
 
+from django.core.mail import send_mail, BadHeaderError
+from django.conf import settings
+from django.shortcuts import render, redirect
+from django.http import JsonResponse, HttpResponseBadRequest
+from django.views.decorators.csrf import csrf_exempt
+from django.urls import reverse
+import random, string
+
+@csrf_exempt
+def support_page(request):
+    if request.method == 'POST':
+        name = request.POST.get('name')
+        email = request.POST.get('email')
+        subject = request.POST.get('subject')
+        message = request.POST.get('message')
+        priority = request.POST.get('priority')
+
+        ticket_id = 'TKT-' + ''.join(random.choices(string.ascii_uppercase + string.digits, k=7))
+
+        body = f"""
+📩 নতুন সাপোর্ট টিকিট পাওয়া গেছে!
+
+Ticket ID: {ticket_id}
+Name: {name}
+Email: {email}
+Priority: {priority}
+
+Message:
+{message}
+        """
+
+        try:
+            send_mail(
+                subject=f"[{ticket_id}] {subject}",
+                message=body,
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                recipient_list=['info@easycodingbd.com'],
+                fail_silently=False,
+            )
+
+            # যদি AJAX হলে JSON রিটার্ন করবো
+            is_ajax = request.headers.get('x-requested-with') == 'XMLHttpRequest'
+            if is_ajax:
+                return JsonResponse({
+                    'status': 'success',
+                    'ticket_id': ticket_id,
+                    'message': '✅ আপনার টিকিট সফলভাবে সাবমিট হয়েছে।'
+                })
+
+            # নরমাল POST হলে redirect করে success পেজে পাঠাও
+            return redirect(f"{reverse('attendance_app:support_success')}?ticket_id={ticket_id}")
+
+        except BadHeaderError:
+            return HttpResponseBadRequest("Invalid header found.")
+        except Exception as e:
+            # production-এ logger.exception(e) ব্যবহার করো
+            is_ajax = request.headers.get('x-requested-with') == 'XMLHttpRequest'
+            if is_ajax:
+                return JsonResponse({'status': 'error', 'message': f'ইমেইল পাঠাতে ব্যর্থ: {str(e)}'})
+            return render(request, 'support.html', {'error': 'ইমেইল পাঠাতে ব্যর্থ হয়েছে। অনুগ্রহ করে পরে চেষ্টা করুন।'})
+
+    # GET হলে ফর্ম দেখাবে
+    return render(request, 'support.html')
+
+
+def support_success(request):
+    ticket_id = request.GET.get('ticket_id', '')
+    message = "আপনার টিকিট সফলভাবে সাবমিট হয়েছে। আমাদের টিম দ্রুত যোগাযোগ করবে।"
+    return render(request, 'support_success.html', {'ticket_id': ticket_id, 'message': message})
 
 
 def custom_404_view(request,exception):

@@ -56,5 +56,6 @@ urlpatterns = [
     path('holidays/<int:pk>/edit/', holiday_edit, name='holiday_edit'),
     path('holidays/<int:pk>/delete/', holiday_delete, name='holiday_delete'),
 
-    
+    path('support/', support_page, name='support_page'),
+    path('support/success/', support_success, name='support_success'),
 ]
