@@ -72,18 +72,14 @@ DATABASES = {
 
 # DATABASES = {
 #     'default': {
-#         'ENGINE': 'django.db.backends.mysql',
-#         'NAME': 'your_database_name',
-#         'USER': 'your_mysql_user',
-#         'PASSWORD': 'your_mysql_password',
-#         'HOST': 'your_mysql_host',  # যেমন: 'localhost' বা '127.0.0.1' বা রিমোট IP
-#         'PORT': '3306',
-#         'OPTIONS': {
-#             'init_command': "SET sql_mode='STRICT_TRANS_TABLES'",
-#         },
+#         'ENGINE': 'django.db.backends.postgresql',
+#         'NAME': 'rssoftbd_baitul',       # আপনার ডাটাবেসের নাম
+#         'USER': 'rssoftbd_baitulbd',       # ডাটাবেসের ইউজারনেম (সাধারণত 'postgres')
+#         'PASSWORD': 'sJ&)5e[$u~S*', # আপনার ডাটাবেসের পাসওয়ার্ড
+#         'HOST': 'localhost',          # লোকাল পিসিতে থাকলে 'localhost', সার্ভারে থাকলে আইপি
+#         'PORT': '5432',               # ডিফল্ট পোর্ট ৫৪৩২
 #     }
 # }
-
 
 # bKash config
 BKASH_BASE_URL   = "https://tokenized.pay.bka.sh/v1.2.0-beta/"
@@ -128,7 +124,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 
 # For large form submissions (e.g., bulk delete in admin)
-DATA_UPLOAD_MAX_NUMBER_FIELDS = 15000
+DATA_UPLOAD_MAX_NUMBER_FIELDS = 20000
 USE_TZ = True  # ✅ এটা ঠিক আছে
 TIME_ZONE = 'Asia/Dhaka'  # ✅ Bangladesh time
 

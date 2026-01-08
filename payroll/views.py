@@ -21,13 +21,33 @@ from weasyprint import HTML
 from attendance_app.models import *
 from .models import EmployeeSalary
 from django.http import HttpResponseForbidden
+from io import BytesIO
+import os
+import re
+import tempfile
+from collections import defaultdict
+from calendar import month_name
+from datetime import datetime, timedelta, date, time
+from decimal import Decimal, InvalidOperation
+
+from django.contrib import messages
+from django.contrib.auth.decorators import login_required, user_passes_test
+from django.core.paginator import Paginator
+from django.db import transaction
+from django.db.models import Q, Prefetch
+from django.http import HttpResponse, HttpResponseBadRequest, HttpResponseForbidden
+from django.shortcuts import render, redirect
+from django.template.loader import get_template
+from django.utils import timezone
+from django.utils.timezone import is_naive, make_aware
+from weasyprint import HTML
+from attendance_app.models import *
+from .models import EmployeeSalary
 
 def is_not_attendance_group(user):
     return not user.groups.filter(name='attendance').exists()
 
-
 def get_salary_summary_data(request, month_str, department_id=None, employee_id=None):
-    
     user_company = getattr(getattr(request.user, "profile", None), "company", None)
     if not user_company:
         raise PermissionError("User has no company assigned")
@@ -36,12 +56,14 @@ def get_salary_summary_data(request, month_str, department_id=None, employee_id=
 
     # Dropdowns (company-scoped)
     departments = Department.objects.filter(company=user_company)
-    employees_qs = Employee.objects.filter(company=user_company).select_related('department', 'company')
+    
+    # ✅ Optimized Query: prefetch_related ব্যবহার করে একবারে ডাটা আনা
+    employees_qs = Employee.objects.filter(company=user_company).select_related('department', 'employeesalary', 'company')
 
     if department_id:
-        employees_qs = employees_qs.filter(department__id=department_id, department__company=user_company)
+        employees_qs = employees_qs.filter(department__id=department_id)
     if employee_id:
-        employees_qs = employees_qs.filter(id=employee_id, company=user_company)
+        employees_qs = employees_qs.filter(id=employee_id)
 
     total_base_salary = Decimal(0)
     total_final_salary = Decimal(0)
@@ -50,299 +72,214 @@ def get_salary_summary_data(request, month_str, department_id=None, employee_id=
     if month_str:
         year, month = map(int, month_str.split('-'))
         start_date = datetime(year, month, 1).date()
-        # মাসের শেষ দিন
-        end_date = (start_date.replace(day=28) + timedelta(days=4)).replace(day=1) - timedelta(days=1)
+        # মাসের শেষ দিন বের করা
+        next_month = start_date.replace(day=28) + timedelta(days=4)
+        end_date = next_month - timedelta(days=next_month.day)
 
-        # ---- helper: Department থেকে শিফট টাইম ----
-        from datetime import time as _time
-        DEFAULT_IN = _time(10, 30)
-        DEFAULT_OUT = _time(20, 30)
+        # ✅ Optimized Fetching: লুপের বাইরে ডাটা আনা
+        all_attendance = Attendance.objects.filter(
+            employee__in=employees_qs,
+            timestamp__date__range=(start_date, end_date)
+        ).order_by('timestamp')
 
-        def _dept_times_for(emp, anchor_date):
-            """
-            Department থেকে (expected_start_time: time, regular_work_time: timedelta) বের করে।
-            out_time < in_time হলে duration=0 ধরা হচ্ছে।
-            রাত-পেরোনো শিফট চাইলে নিচের TODO আনকমেন্ট করো।
-            """
-            dep = getattr(emp, 'department', None)
-            in_t = getattr(dep, 'in_time', None) if dep else None
-            out_t = getattr(dep, 'out_time', None) if dep else None
+        all_leaves = LeaveRequest.objects.filter(
+            company=user_company,
+            status='Approved',
+            start_date__lte=end_date,
+            end_date__gte=start_date
+        )
 
-            in_t = in_t or DEFAULT_IN
-            out_t = out_t or DEFAULT_OUT
+        # Mappings for O(1) access
+        att_map = defaultdict(list)
+        for att in all_attendance:
+            att_map[(att.employee_id, att.timestamp.date())].append(att)
 
-            dt_in = datetime.combine(anchor_date, in_t)
-            dt_out = datetime.combine(anchor_date, out_t)
-            duration = dt_out - dt_in
-            if duration.total_seconds() < 0:
-                # TODO (optional): রাত-পেরোনো শিফট সাপোর্ট
-                # duration += timedelta(days=1)
-                duration = timedelta(0)
-            return in_t, duration
-        # -------------------------------------------
+        leave_map = set()
+        for lv in all_leaves:
+            s = max(lv.start_date, start_date)
+            e = min(lv.end_date, end_date)
+            curr = s
+            while curr <= e:
+                leave_map.add((lv.employee_id, curr))
+                curr += timedelta(days=1)
 
-        # Company-scoped public holidays
+        # Holidays
         holidays = Holiday.objects.filter(
             company=user_company,
             start_date__lte=end_date,
             end_date__gte=start_date
         )
-        public_holiday_dates = set()
-        for holiday in holidays:
-            s = max(start_date, holiday.start_date)
-            e = min(end_date, holiday.end_date)
-            for i in range((e - s).days + 1):
-                public_holiday_dates.add(s + timedelta(days=i))
+        holiday_dates = set()
+        for h in holidays:
+            s = max(h.start_date, start_date)
+            e = min(h.end_date, end_date)
+            curr = s
+            while curr <= e:
+                holiday_dates.add(curr)
+                curr += timedelta(days=1)
+
+        # Helper: Shift Times
+        DEFAULT_IN = time(10, 30)
+        DEFAULT_OUT = time(20, 30)
 
         for emp in employees_qs:
-            # Salary fetch
-            try:
-                sal = emp.employeesalary
-                base_salary = sal.base_salary
-                bank_transfer = sal.bank_transfer_amount
-                cash = base_salary - bank_transfer
-            except EmployeeSalary.DoesNotExist:
+            # Salary Check
+            if not hasattr(emp, 'employeesalary'):
                 continue
+            
+            sal = emp.employeesalary
+            base_salary = sal.base_salary
+            bank_transfer = sal.bank_transfer_amount
+            cash = max(base_salary - bank_transfer, Decimal(0))
 
-            # Attendance & Leave
-            attendances = Attendance.objects.filter(
-                employee=emp,
-                timestamp__date__range=(start_date, end_date)
-            ).order_by('timestamp')
-
-            approved_leaves = LeaveRequest.objects.filter(
-                company=user_company,
-                employee=emp,
-                status='Approved',
-                start_date__lte=end_date,
-                end_date__gte=start_date
-            )
-
-            # Expand leave dates into a set
-            leave_dates = {
-                lv.start_date + timedelta(days=i)
-                for lv in approved_leaves
-                for i in range((min(lv.end_date, end_date) - max(lv.start_date, start_date)).days + 1)
-            }
-
-            daily = defaultdict(list)
-            for a in attendances:
-                daily[a.timestamp.date()].append(a)
-
-            off_day = emp.department.weekly_off_day if emp.department else None
-
-            # >>> এখানে ডিপার্টমেন্ট থেকে শিফট সেট হচ্ছে <<<
-            expected_start, regular = _dept_times_for(emp, start_date)
-
-            total_days = (end_date - start_date).days + 1
+            dep = emp.department
+            off_day = dep.weekly_off_day if dep else None
+            
+            # Shift Calculation
+            in_t = dep.in_time if dep and dep.in_time else DEFAULT_IN
+            out_t = dep.out_time if dep and dep.out_time else DEFAULT_OUT
+            
+            # ✅ Fix: Night Shift Logic
+            dt_in = datetime.combine(start_date, in_t)
+            dt_out = datetime.combine(start_date, out_t)
+            if out_t < in_t:
+                dt_out += timedelta(days=1) # শিফট পরের দিনে গেছে
+            
+            regular = dt_out - dt_in
+            
+            # Counters
             present_days = 0
             leave_days = 0
             weekly_off = 0
             pub_holiday = 0
+            absent_days = 0
+            
             total_work_time = timedelta()
             total_late_time = timedelta()
             total_over_time = timedelta()
 
-            # Working days = total - (weekly off + public holiday)
-            working_days = 0
-            for n in range(total_days):
-                d = start_date + timedelta(days=n)
-                if d in public_holiday_dates:
-                    continue
-                if off_day and d.strftime('%A') == off_day:
-                    continue
-                working_days += 1
+            total_days = (end_date - start_date).days + 1
+            working_days_count = 0
 
-                        # Per-day calc
             for n in range(total_days):
-                d = start_date + timedelta(days=n)
-                wd = d.strftime('%A')
+                curr = start_date + timedelta(days=n)
+                wd = curr.strftime('%A')
 
-                # Public holiday → exclude from expected & skip
-                if d in public_holiday_dates:
+                # Priority Checks
+                is_holiday = curr in holiday_dates
+                is_off = (off_day and wd == off_day)
+                is_leave = (emp.id, curr) in leave_map
+                recs = att_map.get((emp.id, curr), [])
+
+                if is_holiday:
                     pub_holiday += 1
                     continue
-
-                # Weekly off → exclude from expected & skip
-                if off_day and wd == off_day:
+                
+                if is_off:
                     weekly_off += 1
                     continue
+                
+                working_days_count += 1 # এটা ওয়ার্কিং ডে ছিল
 
-                recs = daily.get(d, [])
-                ins = [r.timestamp for r in recs if r.status == 'In']
-                outs = [r.timestamp for r in recs if r.status == 'Out']
-
-                # --- Leave day ---
-                if d in leave_dates:
+                if is_leave:
                     leave_days += 1
-
-                    # Default duration = 0, attendance থাকলে হিসাব করব
-                    duration = timedelta()
-
-                    if ins:
-                        in_time = min(ins)
-                        out_time = max(outs) if outs else None
-
-                        if is_naive(in_time):
-                            in_time = make_aware(in_time)
-
-                        if out_time:
-                            if is_naive(out_time):
-                                out_time = make_aware(out_time)
-                            adj_in = datetime.combine(in_time.date(), expected_start)
-                            if is_naive(adj_in):
-                                adj_in = make_aware(adj_in)
-                            real_in = max(in_time, adj_in)
-                            if out_time > real_in:
-                                duration = out_time - real_in
-
-                        # Late/OT হিসাব duration-এর উপরই
-                        exp_dt = datetime.combine(in_time.date(), expected_start)
-                        if is_naive(exp_dt):
-                            exp_dt = make_aware(exp_dt)
-                        if in_time > exp_dt:
-                            total_late_time += in_time - exp_dt
-                        if duration > regular:
-                            total_over_time += duration - regular
-
-                    # ✅ নতুন রুল: In বা Out যেকোনো একটা থাকলেই Present
-                    if ins or outs:
-                        present_days += 1
-
-                    # ✅ Leave দিনে ক্রেডিট: max(duration, dept shift hours)
-                    credited = max(duration, regular)
-                    total_work_time += credited
+                    total_work_time += regular # লিভের জন্য ফুল টাইম ক্রেডিট
                     continue
 
-                # --- Normal day (not leave) ---
-                # ✅ নতুন রুল: In বা Out যেকোনো একটা থাকলেই Present
-                if ins or outs:
+                if recs:
+                    # ✅ Logic: First In - Last Out
+                    timestamps = [r.timestamp for r in recs]
+                    first_in = min(timestamps)
+                    last_out = max(timestamps) if len(timestamps) > 1 else None
+                    
                     present_days += 1
+                    
+                    # Late Calc
+                    exp_in = datetime.combine(curr, in_t)
+                    if is_naive(exp_in): exp_in = make_aware(exp_in)
+                    if is_naive(first_in): first_in = make_aware(first_in)
+                    
+                    if first_in > exp_in:
+                        total_late_time += (first_in - exp_in)
 
-                if ins:
-                    in_time = min(ins)
-                    out_time = max(outs) if outs else None
+                    # Work Duration
+                    if last_out:
+                        if is_naive(last_out): last_out = make_aware(last_out)
+                        
+                        # Adjust start time (যদি লেটে আসে, তবুও শিফট শুরু থেকে ধরা হবে না, একচুয়াল ইন টাইম ধরা হবে)
+                        actual_start = max(first_in, exp_in) 
+                        if last_out > actual_start:
+                            duration = last_out - actual_start
+                            total_work_time += duration
+                            
+                            if duration > regular:
+                                total_over_time += (duration - regular)
+                else:
+                    absent_days += 1
 
-                    if is_naive(in_time):
-                        in_time = make_aware(in_time)
-
-                    dur = timedelta()
-                    if out_time:
-                        if is_naive(out_time):
-                            out_time = make_aware(out_time)
-                        adj_in = datetime.combine(in_time.date(), expected_start)
-                        if is_naive(adj_in):
-                            adj_in = make_aware(adj_in)
-                        real_in = max(in_time, adj_in)
-                        if out_time > real_in:
-                            dur = out_time - real_in
-
-                    total_work_time += dur
-
-                    exp_dt = datetime.combine(in_time.date(), expected_start)
-                    if is_naive(exp_dt):
-                        exp_dt = make_aware(exp_dt)
-                    if in_time > exp_dt:
-                        total_late_time += in_time - exp_dt
-                    if dur > regular:
-                        total_over_time += dur - regular
-
-
-            # Absent clamp (never negative)
-            absent_days = max(0, working_days - present_days - leave_days)
-
-            # Expected hours: weekly off + public holidays বাদ, leave বাদ নয়
-            hours_per_day = max(regular.total_seconds() / 3600, 0)  # float
-            expected_hours = working_days * hours_per_day  # hours
-
-            # Actual hours (float)
+            # --- Salary Calculation Logic ---
+            
+            # Expected Hours (ছুটি বাদে)
+            hours_per_day = regular.total_seconds() / 3600
+            expected_hours = working_days_count * hours_per_day
+            
             actual_hours = total_work_time.total_seconds() / 3600
-
+            
+            # ✅ Fix: Zero Division Error
             hourly_rate = (base_salary / Decimal(expected_hours)) if expected_hours > 0 else Decimal(0)
 
-            # Earned salary: up to expected at 1x, extra at 1.5x
+            # Earned Salary Logic (1.5x OT)
             if actual_hours <= expected_hours:
                 earned_salary = Decimal(actual_hours) * hourly_rate
             else:
                 extra = actual_hours - expected_hours
-                earned_salary = (
-                    Decimal(expected_hours) * hourly_rate
-                    + Decimal(extra) * hourly_rate * Decimal('1.5')
-                )
+                earned_salary = (Decimal(expected_hours) * hourly_rate) + (Decimal(extra) * hourly_rate * Decimal('1.5'))
 
-            # 🎁 BONUS: payout মাসে যোগ করো
-            bonus_amount = sal.bonus_for_month(year, month)  # Decimal
-
-            # Final salary = earned + bonus
+            # Bonus
+            bonus_amount = sal.bonus_for_month(year, month)
             final_salary = earned_salary + bonus_amount
+            payable_cash = max(final_salary - bank_transfer, Decimal(0))
 
-            # Payable cash = final - bank transfer
-            payable_cash = final_salary - bank_transfer
-
-            # Totals
+            # Accumulate Totals
             total_base_salary += base_salary
             total_final_salary += final_salary
             total_payable_cash += payable_cash
 
-            # Formatting HH:MM:SS
-            tot_sec = int(total_work_time.total_seconds())
-            hh = tot_sec // 3600
-            mm = (tot_sec % 3600) // 60
-            ss = tot_sec % 60
-            fmt_total_work = f"{hh:02d}:{mm:02d}:{ss:02d}"
-
-            diff_sec = int((total_work_time - timedelta(hours=expected_hours)).total_seconds())
-            dh = abs(diff_sec) // 3600
-            dm = (abs(diff_sec) % 3600) // 60
-            ds = abs(diff_sec) % 60
-            sign = "-" if diff_sec < 0 else "+"
-            fmt_diff = f"{sign}{dh:02d}:{dm:02d}:{ds:02d}"
-
-            late_sec = int(total_late_time.total_seconds())
-            lh = late_sec // 3600
-            lm = (late_sec % 3600) // 60
-            ls = int(late_sec % 60)
-            fmt_late = f"{lh:02d}:{lm:02d}:{ls:02d}"
+            # Format Durations
+            def fmt_td(td):
+                s = int(td.total_seconds())
+                return f"{s//3600:02d}:{(s%3600)//60:02d}:{s%60:02d}"
 
             summary_data.append({
                 'employee': emp,
                 'month': month_str,
-
                 'base_salary': base_salary,
-                'bank_transfer': round(bank_transfer, 2),
-                'cash_amount': round(cash, 2),
-
+                'bank_transfer': bank_transfer,
+                'cash_amount': cash,
                 'present_days': present_days,
                 'leave_days': leave_days,
                 'absent_days': absent_days,
                 'weekly_off_days': weekly_off,
                 'holiday_days': pub_holiday,
-
-                'total_work_hours': fmt_total_work,
-                'expected_work_hours': f"{expected_hours:.0f}:00:00",
-                'work_time_difference': fmt_diff,
-                'late_time': fmt_late,
-                'over_time': total_over_time,  # timedelta হিসেবেই রাখা
-
-                'earned_salary': round(earned_salary, 2),  # (info only)
-                'bonus_amount': round(bonus_amount, 2),     # 🎁 নতুন ফিল্ড
-                'final_salary': round(final_salary, 2),     # earned + bonus
+                'total_work_hours': fmt_td(total_work_time),
+                'expected_work_hours': f"{int(expected_hours):02d}:00:00",
+                'work_time_difference': fmt_td(total_work_time - timedelta(hours=expected_hours)),
+                'late_time': fmt_td(total_late_time),
+                'over_time': total_over_time,
+                'earned_salary': round(earned_salary, 2),
+                'bonus_amount': round(bonus_amount, 2),
+                'final_salary': round(final_salary, 2),
                 'payable_cash': round(payable_cash, 2),
             })
 
+    # Totals for Footer
     total_salary_difference = total_final_salary - total_base_salary
-    total_bank_transfer = Decimal(0)
-    total_cash_amount = Decimal(0)
+    total_bank_sum = sum(row['bank_transfer'] for row in summary_data)
+    total_cash_sum = sum(row['payable_cash'] for row in summary_data)
 
-    for row in summary_data:
-        total_bank_transfer += row.get('bank_transfer', Decimal(0))
-        total_cash_amount += row.get('cash_amount', Decimal(0))
-
-    employees_dropdown = (
-        Employee.objects.filter(company=user_company, department_id=department_id)
-        if department_id else
-        Employee.objects.filter(company=user_company)
-    )
+    employees_dropdown = Employee.objects.filter(company=user_company)
+    if department_id:
+        employees_dropdown = employees_dropdown.filter(department_id=department_id)
 
     return {
         'summaries': summary_data,
@@ -351,17 +288,12 @@ def get_salary_summary_data(request, month_str, department_id=None, employee_id=
         'selected_month': month_str,
         'selected_department': int(department_id) if department_id else None,
         'selected_employee': int(employee_id) if employee_id else None,
-        'selected_department_id': int(department_id) if department_id else '',
-        'selected_employee_id': int(employee_id) if employee_id else '',
-
         'total_base_salary': round(total_base_salary, 2),
-        'total_final_salary': round(total_final_salary, 2),            # 🎁 bonus সহ
-        'total_salary_difference': round(total_salary_difference, 2),  # (final - base)
-        'total_bank_transfer': round(total_bank_transfer, 2),
-        'total_cash_amount': round(total_cash_amount, 2),
-        'total_payable_cash': round(total_payable_cash, 2),            # 🎁 bonus সহ
+        'total_final_salary': round(total_final_salary, 2),
+        'total_salary_difference': round(total_salary_difference, 2),
+        'total_bank_transfer': round(total_bank_sum, 2),
+        'total_payable_cash': round(total_cash_sum, 2),
     }
-
 
 @login_required
 @user_passes_test(is_not_attendance_group)
@@ -369,28 +301,27 @@ def salary_summary_list(request):
     if request.user.groups.filter(name='attendance').exists():
         return redirect('dashboard')
 
-    user_company = getattr(getattr(request.user, "profile", None), "company", None)
-    if not user_company:
-        return HttpResponseForbidden("আপনার কোম্পানি সেট করা নেই।")
-
     month_str = request.GET.get('month')
     department_id = request.GET.get('department')
     employee_id = request.GET.get('employee')
 
-    context = get_salary_summary_data(request, month_str, department_id, employee_id)
+    try:
+        context = get_salary_summary_data(request, month_str, department_id, employee_id)
+    except PermissionError:
+        return HttpResponseForbidden("Company not set.")
+        
     return render(request, 'payroll/salary_summary_list.html', context)
-
 
 
 
 @user_passes_test(is_not_attendance_group)
 def export_salary_summary_pdf(request):
-    # month (YYYY-MM), default current month
+    # 1. Month Validation
     month_str = request.GET.get('month') or timezone.localdate().strftime('%Y-%m')
     if not re.fullmatch(r"\d{4}-(0[1-9]|1[0-2])", month_str):
         return HttpResponseBadRequest("Invalid month format. Use YYYY-MM.")
 
-    # optional ids
+    # 2. Department/Employee Validation
     dep_raw = request.GET.get('department')
     emp_raw = request.GET.get('employee')
     try:
@@ -399,24 +330,37 @@ def export_salary_summary_pdf(request):
     except (TypeError, ValueError):
         return HttpResponseBadRequest("Invalid department/employee id.")
 
-    # ✅ pass request into your helper
-    context = get_salary_summary_data(request, month_str, department_id, employee_id)
-    context["print_mode"] = True  # চাইলে টেমপ্লেটে এই ফ্ল্যাগ চেক করতে পারেন
+    # 3. Fetch Data (with Error Handling)
+    try:
+        context = get_salary_summary_data(request, month_str, department_id, employee_id)
+    except PermissionError:
+        return HttpResponseForbidden("আপনার কোম্পানি সেট করা নেই।")
+    except Exception as e:
+        return HttpResponseBadRequest(f"Data Generation Error: {str(e)}")
 
-    # render template
+    # 4. Context Enhancements for PDF
+    context["print_mode"] = True
+    # PDF-এ ছবি দেখানোর জন্য Absolute URI প্রয়োজন
+    context["logo_url"] = request.build_absolute_uri('/static/images/logo.png')
+    context["generated_at"] = timezone.now()
+
+    # 5. Render Template
     template = get_template('payroll/salary_summary_pdf.html')
     html_string = template.render(context)
 
-    # make PDF (no external CSS passed here)
+    # 6. Generate PDF
+    if 'HTML' not in globals():
+        return HttpResponse("WeasyPrint library is missing.", status=500)
+
     pdf_io = BytesIO()
+    # base_url is crucial for loading CSS/Images in PDF
     HTML(string=html_string, base_url=request.build_absolute_uri('/')).write_pdf(target=pdf_io)
     pdf_io.seek(0)
 
-    filename = f"salary_summary_{month_str}.pdf"
+    filename = f"Salary_Summary_{month_str}.pdf"
     resp = HttpResponse(pdf_io.read(), content_type='application/pdf')
     resp['Content-Disposition'] = f'inline; filename="{filename}"'
     return resp
-
 
 # def is_not_attendance_group(user): ...
 

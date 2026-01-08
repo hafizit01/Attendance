@@ -10,341 +10,316 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>{% block title %}Attendance Dashboard{% endblock %}</title>
 
-  <!-- Tailwind -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
-    tailwind.config = { darkMode: 'class' }
+    tailwind.config = { 
+        darkMode: 'class',
+        theme: {
+            extend: {
+                fontFamily: { sans: ['Inter', 'sans-serif'] },
+                colors: {
+                    primary: { 50: '#eff6ff', 100: '#dbeafe', 200: '#bfdbfe', 300: '#93c5fd', 400: '#60a5fa', 500: '#3b82f6', 600: '#2563eb', 700: '#1d4ed8', 800: '#1e40af', 900: '#1e3a8a' }
+                }
+            }
+        }
+    }
   </script>
 
-  <!-- Alpine.js -->
   <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
-  <style>[x-cloak]{display:none!important}</style>
+  
+  <style>
+    [x-cloak] { display: none !important; }
+    body { font-family: 'Inter', sans-serif; }
+    /* Custom Scrollbar */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+    .dark ::-webkit-scrollbar-thumb { background: #475569; }
+  </style>
 </head>
 
-<body class="bg-gray-100 dark:bg-gray-900 dark:text-gray-200 transition-colors duration-300">
+<body class="bg-gray-50 dark:bg-[#0f172a] text-gray-900 dark:text-slate-200 transition-colors duration-300">
 
-
-<!-- 🔝 Top Navbar -->
-<header class="bg-white dark:bg-gray-800 shadow px-4 sm:px-6 py-3 flex justify-between items-center sticky top-0 z-40">
-  <div class="flex items-center gap-2">
-    <!-- Mobile hamburger -->
-    <button class="md:hidden inline-flex items-center justify-center w-10 h-10 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700"
+<header class="bg-white/80 dark:bg-slate-800/80 backdrop-blur-md border-b border-gray-200 dark:border-slate-700 px-4 sm:px-6 py-2.5 flex justify-between items-center sticky top-0 z-40 transition-all">
+  <div class="flex items-center gap-3">
+    <button class="md:hidden p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-600 dark:text-slate-400"
             @click="sidebarOpen = true" aria-label="Open menu">
       <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
       </svg>
     </button>
-    <h1 class="text-base sm:text-lg font-bold">📊 Attendance Dashboard</h1>
+    <div class="flex items-center gap-2">
+        <div class="bg-primary-600 p-1.5 rounded-lg">
+            <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+        </div>
+        <h1 class="text-lg font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-primary-600 to-indigo-500 dark:from-primary-400 dark:to-indigo-300">SmartAttendance</h1>
+    </div>
   </div>
 
-  <!-- Dark Mode Switch -->
-  <div class="flex items-center gap-3">
-    <label class="flex items-center cursor-pointer select-none">
-      <input type="checkbox" x-model="darkMode" class="hidden">
-      <div class="w-12 h-6 flex items-center bg-gray-300 dark:bg-gray-600 rounded-full p-1 duration-300">
-        <div class="w-5 h-5 bg-white rounded-full shadow-md transform duration-300"
-             :class="darkMode ? 'translate-x-6' : ''"></div>
-      </div>
-      <span class="ml-2 text-sm hidden xs:inline" x-text="darkMode ? 'Dark' : 'Light'"></span>
-    </label>
+  <div class="flex items-center gap-4">
+    <button @click="darkMode = !darkMode" class="p-2 rounded-xl bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-amber-400 transition-all hover:ring-2 hover:ring-primary-500/20">
+        <template x-if="!darkMode">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" /></svg>
+        </template>
+        <template x-if="darkMode">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 9H3m3.343-5.657l-.707.707m12.728 12.728l-.707.707M6.343 17.657l-.707-.707M17.657 6.343l-.707-.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
+        </template>
+    </button>
   </div>
 </header>
 
-<!-- 📌 App Shell (GRID version) -->
 <div class="min-h-screen md:grid md:grid-cols-[16rem_1fr]">
-  <!-- Mobile overlay -->
-  <div class="fixed inset-0 bg-black/40 z-40 md:hidden"
+  <div class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-40 md:hidden"
        x-show="sidebarOpen" x-transition.opacity x-cloak
        @click="sidebarOpen=false"></div>
 
-  <!-- Sidebar -->
-<aside
-  class="
-    /* mobile (drawer) */
-    fixed inset-y-0 left-0 z-50 w-64
-    h-screen overflow-y-auto overscroll-contain
-    transform transition-transform duration-200
-    bg-white dark:bg-gray-800 shadow border-r border-gray-200 dark:border-gray-700
-    p-4 sm:p-6
-
-    /* desktop (sticky) */
-    md:static md:translate-x-0
-    md:sticky md:top-14
-    md:h-[calc(100vh-56px)] md:overflow-y-auto
-  "
+  <aside
+  class="fixed inset-y-0 left-0 z-50 w-64 h-screen transform transition-all duration-300 bg-white dark:bg-slate-800 shadow-2xl border-r border-gray-100 dark:border-slate-700 flex flex-col
+    md:static md:translate-x-0 md:sticky md:top-14 md:h-[calc(100vh-56px)]"
   :class="sidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'">
 
-  <!-- Header (mobile) -->
-  <div class="md:hidden mb-3 flex items-center justify-between">
-    <h2 class="text-base font-semibold tracking-tight">Menu</h2>
-    <button class="p-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700"
-            @click="sidebarOpen=false" aria-label="Close menu">
-      <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
-      </svg>
+  <div class="md:hidden p-4 border-b dark:border-slate-700 flex items-center justify-between">
+    <span class="font-bold text-primary-600">Main Navigation</span>
+    <button class="p-2 rounded-lg bg-gray-50 dark:bg-slate-700" @click="sidebarOpen=false">
+      <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
     </button>
   </div>
 
-  <!-- Title (desktop) -->
-  <h2 class="hidden md:block text-sm font-semibold text-gray-500 dark:text-gray-400 tracking-wider uppercase mb-3">Menu</h2>
-
-  <!-- Profile -->
-  {% if request.user.is_authenticated %}
-  <a href="{% url 'userapp:employee_profile_list' %}"
-     class="group mb-4 flex items-center gap-3 rounded-xl border border-gray-200 bg-white p-3 shadow-sm hover:border-gray-300 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800/60 dark:hover:bg-gray-800">
-    <span class="inline-flex h-10 w-10 items-center justify-center rounded-full bg-blue-600 text-white text-sm font-semibold">
-      {% if request.user.first_name %}
-        {{ request.user.first_name|slice:":1"|upper }}
-      {% else %}
-        {{ request.user.username|slice:":1"|upper }}
-      {% endif %}
-    </span>
-    <div class="min-w-0">
-      <div class="text-sm font-semibold truncate text-gray-900 dark:text-gray-100">
-        {{ request.user.get_full_name|default:request.user.username }}
-      </div>
-      <div class="text-xs text-gray-500 dark:text-gray-400 truncate">
-        {{ request.user.email }}
-      </div>
-      {% if request.user.groups.all %}
-      <div class="mt-0.5 text-[11px] text-gray-500 dark:text-gray-400 truncate">
-        {{ request.user.groups.all.0.name }}
+  <div class="flex-1 overflow-y-auto p-4 custom-scrollbar">
+      {% if request.user.is_authenticated %}
+      <div class="mb-6 p-4 rounded-2xl bg-gradient-to-br from-primary-600 to-indigo-700 text-white shadow-lg shadow-primary-500/20">
+        <div class="flex items-center gap-3">
+            <div class="h-10 w-10 flex-shrink-0 flex items-center justify-center rounded-xl bg-white/20 backdrop-blur-sm font-bold text-lg border border-white/30">
+                {{ request.user.username|slice:":1"|upper }}
+            </div>
+            <div class="min-w-0">
+                <p class="text-sm font-bold truncate">{{ request.user.get_full_name|default:request.user.username }}</p>
+                <p class="text-[10px] opacity-80 truncate">{{ request.user.email }}</p>
+            </div>
+        </div>
       </div>
       {% endif %}
-    </div>
-  </a>
-  {% endif %}
 
-  <!-- Nav -->
-  {% with current=request.resolver_match.url_name %}
-<nav class="flex flex-col gap-1">
-  <a href="{% url 'attendance_app:dashboard' %}" class="nav-link"
-     {% if current == 'dashboard' %}data-active="true"{% endif %}>
-    <span class="mr-2">📊</span> Dashboard
-  </a>
+      <nav class="space-y-6">
+          <div>
+            <h2 class="text-[10px] font-bold text-gray-400 dark:text-slate-500 uppercase tracking-widest px-3 mb-2">Main Menu</h2>
+            <div class="space-y-1">
+                {% with current=request.resolver_match.url_name %}
+                <a href="{% url 'attendance_app:dashboard' %}" class="nav-item" {% if current == 'dashboard' %}data-active="true"{% endif %}>
+                    <span class="icon-box">📊</span> Dashboard
+                </a>
+                <a href="{% url 'attendance_app:employee_list' %}" class="nav-item" {% if current == 'employee_list' %}data-active="true"{% endif %}>
+                    <span class="icon-box">👥</span> Employee List
+                </a>
+                <a href="{% url 'attendance_app:attendance_list' %}" class="nav-item" {% if current == 'attendance_list' %}data-active="true"{% endif %}>
+                    <span class="icon-box">🕒</span> Attendance Report
+                </a>
+                <button type="button" @click="showModal = true; sidebarOpen=false" class="nav-item w-full text-left">
+                    <span class="icon-box">📅</span> Monthly Work Time
+                </button>
+                <a href="{% url 'attendance_app:leave_list' %}" class="nav-item" {% if current == 'leave_list' %}data-active="true"{% endif %}>
+                    <span class="icon-box">🛏️</span> Leave Requests
+                </a>
+                <a href="{% url 'attendance_app:holiday_list' %}" class="nav-item" {% if current == 'holiday_list' %}data-active="true"{% endif %}>
+                    <span class="icon-box">📅</span> Public Holiday
+                </a>
+            </div>
+          </div>
 
-  <a href="{% url 'attendance_app:employee_list' %}" class="nav-link"
-     {% if current == 'employee_list' %}data-active="true"{% endif %}>
-    <span class="mr-2">👥</span> Employee List
-  </a>
+          <div>
+            <h2 class="text-[10px] font-bold text-gray-400 dark:text-slate-500 uppercase tracking-widest px-3 mb-2">Management</h2>
+            <div class="space-y-1">
+                <a href="{% url 'attendance_app:department_list' %}" class="nav-item" {% if current == 'department_list' %}data-active="true"{% endif %}>
+                    <span class="icon-box">🏢</span> Department List
+                </a>
+                <form action="{% url 'attendance_app:sync_attendance' %}" method="post">
+                    {% csrf_token %}
+                    <button type="submit" class="nav-item w-full text-left text-primary-600 dark:text-primary-400 font-semibold">
+                        <span class="icon-box bg-primary-100 dark:bg-primary-900/30">🔁</span> Sync Data
+                    </button>
+                </form>
+            </div>
+          </div>
 
-  <a href="{% url 'attendance_app:attendance_list' %}" class="nav-link"
-     {% if current == 'attendance_list' %}data-active="true"{% endif %}>
-    <span class="mr-2">🕒</span> Attendance Report
-  </a>
+          {% if not request.user.groups.all|length == 1 or request.user.groups.all.0.name != 'attendance' %}
+          <div>
+            <h2 class="text-[10px] font-bold text-gray-400 dark:text-slate-500 uppercase tracking-widest px-3 mb-2">Financials</h2>
+            <div class="space-y-1">
+                <a href="{% url 'payroll:salary_summary_list' %}" class="nav-item" {% if current == 'salary_summary_list' %}data-active="true"{% endif %}>
+                    <span class="icon-box">🧾</span> Salary Summary
+                </a>
+                <a href="{% url 'payroll:add_salary' %}" class="nav-item" {% if current == 'add_salary' %}data-active="true"{% endif %}>
+                    <span class="icon-box">💰</span> Add Salary
+                </a>
+            </div>
+          </div>
+          {% endif %}
 
-  <button type="button" @click="showModal = true; sidebarOpen=false" class="nav-link text-left">
-    <span class="mr-2">📅</span> Monthly Work Time
-  </button>
-
-  <a href="{% url 'attendance_app:leave_list' %}" class="nav-link"
-     {% if current == 'leave_list' %}data-active="true"{% endif %}>
-    <span class="mr-2">🛏️</span> Leave Requests
-  </a>
-
-  <a href="{% url 'attendance_app:holiday_list' %}" class="nav-link"
-     {% if current == 'holiday_list' %}data-active="true"{% endif %}>
-    <span class="mr-2">📅</span> Public Holiday
-  </a>
-
-
-  <div class="border-t border-gray-300 dark:border-gray-700 my-3"></div>
-
-  <a href="{% url 'attendance_app:department_list' %}" class="nav-link"
-     {% if current == 'department_list' %}data-active="true"{% endif %}>
-    <span class="mr-2">🏢</span> Department List
-  </a>
-
-
-
-
-  <form action="{% url 'attendance_app:sync_attendance' %}" method="post" class="pt-1">
-    {% csrf_token %}
-    <button type="submit" class="nav-link">
-      <span class="mr-2">🔁</span> Sync Attendance
-    </button>
-  </form>
-
-  {% if not request.user.groups.all|length == 1 or request.user.groups.all.0.name != 'attendance' %}
-    <div class="my-3 border-t border-gray-200 pt-3 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:border-gray-700 dark:text-gray-400">Payroll</div>
-
-    <a href="{% url 'payroll:salary_summary_list' %}" class="nav-link"
-       {% if current == 'salary_summary_list' %}data-active="true"{% endif %}>
-      <span class="mr-2">🧾</span> Salary Summary
-    </a>
-
-    <a href="{% url 'payroll:add_salary' %}" class="nav-link"
-       {% if current == 'add_salary' %}data-active="true"{% endif %}>
-      <span class="mr-2">💰</span> Add Employee Salary
-    </a>
-  {% endif %}
-
-  <div class="my-3 border-t border-gray-200 pt-3 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:border-gray-700 dark:text-gray-400">Subscription</div>
-
-  <a href="{% url 'subscription_app:my_plans' %}" class="nav-link"
-     {% if current == 'my_plans' %}data-active="true"{% endif %}>
-    <span class="mr-2">📃</span> My Plans
-  </a>
-
-  <a href="{% url 'subscription_app:view_plans' %}" class="nav-link"
-     {% if current == 'view_plans' %}data-active="true"{% endif %}>
-    <span class="mr-2">📦</span> View Plans
-  </a>
-
-  {% if request.user.is_superuser %}
-  <a href="{% url 'subscription_app:subscription_list' %}" class="nav-link"
-     {% if current == 'subscription_list' %}data-active="true"{% endif %}>
-    <span class="mr-2">📑</span> Subscription List
-  </a>
-  {% endif %}
-
-
-  <!-- 🔻 Settings (always at bottom) -->
-<div class="mt-auto pt-4 border-t border-gray-200 dark:border-gray-700" x-data="{open:true}">
-  <button @click="open=!open"
-          class="nav-link justify-between">
-    <span><span class="mr-2">⚙️</span> Settings</span>
-    <svg :class="{'rotate-90':open}" class="h-4 w-4 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-    </svg>
-  </button>
-
-  <div x-show="open" x-cloak class="mt-2 space-y-1 pl-3">
-    <a href="{% url 'userapp:employee_profile_list' %}" class="sub-link">👤 Profile</a>
-    <a href="{% url 'userapp:logout' %}" onclick="return confirm('আপনি কি সত্যিই লগআউট করতে চান?');" class="sub-link text-red-600 dark:text-red-400">🚪 Logout</a>
+          <div>
+            <h2 class="text-[10px] font-bold text-gray-400 dark:text-slate-500 uppercase tracking-widest px-3 mb-2">Subscription</h2>
+            <div class="space-y-1">
+                <a href="{% url 'subscription_app:my_plans' %}" class="nav-item" {% if current == 'my_plans' %}data-active="true"{% endif %}>
+                    <span class="icon-box">📃</span> My Plans
+                </a>
+                <a href="{% url 'subscription_app:view_plans' %}" class="nav-item" {% if current == 'view_plans' %}data-active="true"{% endif %}>
+                    <span class="icon-box">📦</span> View Plans
+                </a>
+                {% if request.user.is_superuser %}
+                <a href="{% url 'subscription_app:subscription_list' %}" class="nav-item" {% if current == 'subscription_list' %}data-active="true"{% endif %}>
+                    <span class="icon-box text-red-500 bg-red-50 dark:bg-red-900/10">📑</span> Admin List
+                </a>
+                {% endif %}
+            </div>
+          </div>
+          {% endwith %}
+      </nav>
   </div>
-</div>
 
-
-<div class="mt-auto pt-4 border-t border-gray-200 dark:border-gray-700" x-data="{openSupport:false}">
-  <button @click="openSupport=!openSupport"
-          class="nav-link justify-between">
-    <span><span class="mr-2">💬</span> Support</span>
-    <svg :class="{'rotate-90':openSupport}" class="h-4 w-4 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-    </svg>
-  </button>
-
-  <div x-show="openSupport" x-cloak class="mt-2 space-y-1 pl-3">
-    <a href="{% url 'attendance_app:support_page' %}" class="sub-link">🧾 Submit Ticket</a>
-    <a href="mailto:info@easycodingbd.com" class="sub-link">✉️ Email Support</a>
-    <a href="https://wa.me/8801822755994" target="_blank" class="sub-link">💬 WhatsApp</a>
-    <a href="#" onclick="alert('Hotline: 01822755994');" class="sub-link">📞 Call Hotline</a>
-    <a href="#" class="sub-link">❓ FAQ & Help</a>
+  <div class="p-4 border-t dark:border-slate-700 bg-gray-50/50 dark:bg-slate-800/50">
+      <div x-data="{open:false}" class="mb-2">
+          <button @click="open=!open" class="flex items-center justify-between w-full p-2.5 rounded-xl hover:bg-gray-100 dark:hover:bg-slate-700 text-sm font-medium transition-all">
+              <span class="flex items-center gap-2">⚙️ Settings</span>
+              <svg :class="{'rotate-180':open}" class="h-4 w-4 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+          </button>
+          <div x-show="open" x-cloak class="mt-1 space-y-1 pl-4">
+              <a href="{% url 'userapp:employee_profile_list' %}" class="sub-item">👤 Profile</a>
+              <a href="{% url 'userapp:logout' %}" onclick="return confirm('আপনি কি সত্যিই লগআউট করতে চান?');" class="sub-item text-red-500">🚪 Logout</a>
+          </div>
+      </div>
+      <div x-data="{openSupport:false}">
+          <button @click="openSupport=!openSupport" class="flex items-center justify-between w-full p-2.5 rounded-xl hover:bg-gray-100 dark:hover:bg-slate-700 text-sm font-medium transition-all">
+              <span class="flex items-center gap-2">💬 Support</span>
+              <svg :class="{'rotate-180':openSupport}" class="h-4 w-4 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+          </button>
+          <div x-show="openSupport" x-cloak class="mt-1 space-y-1 pl-4">
+              <a href="{% url 'attendance_app:support_page' %}" class="sub-item">🧾 Submit Ticket</a>
+              <a href="mailto:info@easycodingbd.com" class="sub-item">✉️ Email Support</a>
+              <a href="https://wa.me/8801822755994" target="_blank" class="sub-item">💬 WhatsApp</a>
+          </div>
+      </div>
   </div>
-</div>
 
-</nav>
-{% endwith %}
-
-
-  <!-- Inline utilities for link styles -->
   <style>
-    .nav-link{
-      /* item */
-      display:flex; align-items:center; gap:.5rem;
-      padding:.5rem .75rem; border-radius:.75rem;
-      font-size: .95rem; font-weight: 500;
-      color: rgb(55 65 81); /* gray-700 */
+    .nav-item {
+        display: flex; align-items: center; gap: 0.75rem;
+        padding: 0.625rem 0.75rem; border-radius: 0.875rem;
+        font-size: 0.875rem; font-weight: 500;
+        color: #4b5563; transition: all 0.2s;
     }
-    .nav-link:hover{ background: rgba(17,24,39,.06); } /* gray-900/6 */
-    .nav-link:focus{ outline:2px solid transparent; box-shadow: 0 0 0 2px rgba(59,130,246,.6); } /* ring blue */
-    .dark .nav-link{ color: rgb(229 231 235); } /* gray-200 */
-    .dark .nav-link:hover{ background: rgba(255,255,255,.06); }
-
-    /* active state via data-active="true" */
-    .nav-link[data-active="True"], .nav-link[data-active="true"]{
-      background: rgba(37,99,235,.12); color: rgb(29 78 216); /* blue-600/700 */
-      border-left: 3px solid rgb(59 130 246); padding-left: .625rem; /* visual cue */
+    .dark .nav-item { color: #94a3b8; }
+    .nav-item:hover { background: #f3f4f6; color: #111827; }
+    .dark .nav-item:hover { background: #1e293b; color: #f8fafc; }
+    
+    .nav-item[data-active="true"] {
+        background: #eff6ff; color: #2563eb; font-weight: 600;
+        box-shadow: inset 0 0 0 1px #dbeafe;
     }
-    .dark .nav-link[data-active="True"], .dark .nav-link[data-active="true"]{
-      background: rgba(37,99,235,.18); color: rgb(191 219 254); border-left-color: rgb(96 165 250);
+    .dark .nav-item[data-active="true"] {
+        background: #1e293b; color: #60a5fa; box-shadow: inset 0 0 0 1px #334155;
     }
 
-    .sub-link{
-      display:block; padding:.4rem .625rem; border-radius:.5rem;
-      font-size:.9rem; color: rgb(75 85 99);
+    .icon-box {
+        display: flex; align-items: center; justify-center;
+        width: 1.75rem; height: 1.75rem; border-radius: 0.5rem;
+        background: #f9fafb; font-size: 1rem;
     }
-    .sub-link:hover{ background: rgba(17,24,39,.06); }
-    .dark .sub-link{ color: rgb(209 213 219); }
-    .dark .sub-link:hover{ background: rgba(255,255,255,.06); }
+    .dark .icon-box { background: #0f172a; }
+
+    .sub-item {
+        display: block; padding: 0.5rem 0.75rem; border-radius: 0.5rem;
+        font-size: 0.8rem; color: #6b7280; transition: all 0.2s;
+    }
+    .sub-item:hover { background: #f9fafb; color: #111827; }
+    .dark .sub-item { color: #94a3b8; }
+    .dark .sub-item:hover { background: #1e293b; color: #f8fafc; }
   </style>
 </aside>
 
-
-  <!-- ✅ Main Content -->
-  <main class="min-w-0 w-full flex-1 pl-2 sm:pl-3 pr-4 md:pr-6 py-4 md:py-6 overflow-x-auto">
-
-    <!-- ⚠️ এখানে কোনও container/mx-auto/max-w-* রাখবেন না -->
+  <main class="min-w-0 w-full flex-1 p-4 md:p-6 overflow-x-hidden">
     {% if messages %}
-      <div class="w-full mt-4">
+      <div class="w-full space-y-3 mb-6">
         {% for message in messages %}
-          <div class="mb-4 px-4 py-3 rounded-lg shadow-md 
-                      {% if message.tags == 'success' %} bg-green-100 text-green-800 border border-green-300 
-                      {% elif message.tags == 'error' %} bg-red-100 text-red-800 border border-red-300 
-                      {% elif message.tags == 'warning' %} bg-yellow-100 text-yellow-800 border border-yellow-300 
-                      {% else %} bg-blue-100 text-blue-800 border border-blue-300 {% endif %}">
-            {{ message }}
+          <div class="flex items-center p-4 rounded-2xl border transition-all animate-in fade-in slide-in-from-top-4 duration-300
+            {% if message.tags == 'success' %} bg-emerald-50 dark:bg-emerald-900/20 text-emerald-800 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800/50
+            {% elif message.tags == 'error' %} bg-rose-50 dark:bg-rose-900/20 text-rose-800 dark:text-rose-400 border-rose-200 dark:border-rose-800/50
+            {% elif message.tags == 'warning' %} bg-amber-50 dark:bg-amber-900/20 text-amber-800 dark:text-amber-400 border-amber-200 dark:border-amber-800/50
+            {% else %} bg-blue-50 dark:bg-blue-900/20 text-blue-800 dark:text-blue-400 border-blue-200 dark:border-blue-800/50 {% endif %}">
+            <span class="mr-3 font-bold">
+                {% if message.tags == 'success' %}✓{% elif message.tags == 'error' %}✕{% else %}!{% endif %}
+            </span>
+            <span class="text-sm font-medium">{{ message }}</span>
           </div>
         {% endfor %}
       </div>
     {% endif %}
 
-    <!-- আপনার ড্যাশবোর্ড কনটেন্ট -->
-    <div class="w-full overflow-x-auto">
+    <div class="w-full">
       {% block content %}{% endblock %}
     </div>
   </main>
 </div>
 
-<!-- 📅 Modal -->
 <div x-show="showModal" x-cloak
-     class="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
-     @click.self="showModal=false" @keydown.escape.window="showModal=false">
-  <div class="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-md shadow-lg mx-4">
-    <div class="flex items-start justify-between">
-      <h2 class="text-lg sm:text-xl font-bold mb-2">📅 Monthly Work Time Report</h2>
-      <button class="p-1 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700"
-              @click="showModal=false" aria-label="Close modal">
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
-        </svg>
+     class="fixed inset-0 flex items-center justify-center z-[60] p-4"
+     x-transition:enter="transition ease-out duration-300"
+     x-transition:enter-start="opacity-0 scale-95"
+     x-transition:enter-end="opacity-100 scale-100"
+     x-transition:leave="transition ease-in duration-200"
+     x-transition:leave-start="opacity-100 scale-100"
+     x-transition:leave-end="opacity-0 scale-95">
+  
+  <div class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" @click="showModal = false"></div>
+  
+  <div class="relative bg-white dark:bg-slate-800 rounded-3xl shadow-2xl w-full max-w-md p-8 border border-gray-100 dark:border-slate-700">
+    <div class="flex items-center justify-between mb-6">
+      <div class="flex items-center gap-3">
+          <div class="bg-primary-100 dark:bg-primary-900/30 p-2 rounded-xl">
+              <span class="text-xl">📅</span>
+          </div>
+          <h2 class="text-xl font-bold text-gray-800 dark:text-white">Monthly Report</h2>
+      </div>
+      <button class="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-500" @click="showModal = false">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
       </button>
     </div>
-    <form action="{% url 'attendance_app:monthly_work_time_report' %}" method="get" class="space-y-4">
-      <div>
-        <label class="block text-sm font-medium">Start Date</label>
-        <input type="date" name="start_date" required
-               class="w-full border rounded px-3 py-2 dark:bg-gray-700 dark:text-gray-200">
+
+    <form action="{% url 'attendance_app:monthly_work_time_report' %}" method="get" class="space-y-5">
+      <div class="grid grid-cols-2 gap-4">
+          <div class="space-y-1.5">
+            <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider ml-1">Start Date</label>
+            <input type="date" name="start_date" required
+                   class="w-full bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-primary-500/50 transition-all">
+          </div>
+          <div class="space-y-1.5">
+            <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider ml-1">End Date</label>
+            <input type="date" name="end_date" required
+                   class="w-full bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-primary-500/50 transition-all">
+          </div>
       </div>
-      <div>
-        <label class="block text-sm font-medium">End Date</label>
-        <input type="date" name="end_date" required
-               class="w-full border rounded px-3 py-2 dark:bg-gray-700 dark:text-gray-200">
-      </div>
-      <div>
-        <label class="block text-sm font-medium">Department</label>
+      <div class="space-y-1.5">
+        <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider ml-1">Department</label>
         <select name="department"
-                class="w-full border rounded px-3 py-2 dark:bg-gray-700 dark:text-gray-200">
+                class="w-full bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-primary-500/50 appearance-none transition-all">
           <option value="">All Departments</option>
           {% for dept in departments %}
           <option value="{{ dept.id }}">{{ dept.name }}</option>
           {% endfor %}
         </select>
       </div>
-      <div class="flex justify-end gap-2 pt-2">
+      <div class="flex gap-3 pt-4">
         <button type="button" @click="showModal=false"
-                class="px-4 py-2 rounded bg-gray-400 text-white">Cancel</button>
+                class="flex-1 px-4 py-3 rounded-xl bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-slate-300 font-bold text-sm hover:bg-gray-200 transition-all">Cancel</button>
         <button type="submit"
-                class="px-4 py-2 rounded bg-blue-600 text-white hover:bg-blue-700">View Report</button>
+                class="flex-1 px-4 py-3 rounded-xl bg-primary-600 text-white font-bold text-sm shadow-lg shadow-primary-500/30 hover:bg-primary-700 transition-all">View Report</button>
       </div>
     </form>
   </div>
 </div>
 
 <script>
-  // Ensure correct dark class on first load
-  if (localStorage.theme === 'dark') {
+  if (localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
     document.documentElement.classList.add('dark');
   } else {
     document.documentElement.classList.remove('dark');

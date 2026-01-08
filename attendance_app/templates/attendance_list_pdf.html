@@ -4,83 +4,202 @@
   <meta charset="utf-8">
   <title>Attendance Report</title>
 
-  <!-- ✅ Google Fonts: Noto Sans Bengali + Inter -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=Noto+Sans+Bengali:wght@400;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+Bengali:wght@400;500;600;700&display=swap" rel="stylesheet">
 
   <style>
-    /* Print page */
-    @page { size: A4; margin: 14mm 12mm; }
-    thead { display: table-header-group; }
-    tfoot { display: table-footer-group; }
+  
+  @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap');
 
-    /* Typography */
-    body {
-      font-family: "Noto Sans Bengali", "Inter", system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
-      font-size: 11pt; color: #111;
+        @page {
+            size: A4 landscape;
+            margin: 15mm 10mm;
+        }
+
+        body {
+            /* 2. Font Family Update */
+            font-family: 'Roboto', sans-serif;
+            font-size: 11px;
+            margin: 0;
+            color: #333;
+            line-height: 1.3;
+        }
+        
+    /* Page Setup */
+    @page {
+        size: A4;
+        margin: 15mm 12mm;
+        @bottom-right {
+            content: "Page " counter(page) " of " counter(pages);
+            font-size: 9px; color: #666;
+        }
     }
-    h2 { margin: 0 0 6px; font-weight: 600; }
-    .muted { font-size: 10pt; color: #666; margin-bottom: 10px; }
 
-    /* Table */
-    table { width: 100%; border-collapse: collapse; }
-    th, td { border: 1px solid #e5e7eb; padding: 6px 8px; }
-    th { background: #f3f4f6; text-align: left; font-weight: 600; }
-    tr:nth-child(even) td { background: #fafafa; }
-    tfoot td { font-weight: 600; background: #f3f4f6; }
+    
 
-    /* Badges */
-    .badge { display:inline-block; padding:2px 6px; border-radius:6px; font-size:9pt; line-height: 1.1; }
-    .ok     { background:#e0f2fe; color:#075985; }  /* Present */
-    .late   { background:#fee2e2; color:#991b1b; }  /* Late */
-    .absent { background:#fef3c7; color:#92400e; }  /* Absent */
+    /* Header Section */
+    .header-container {
+      width: 100%;
+      border-bottom: 2px solid #2563eb;
+      padding-bottom: 15px;
+      margin-bottom: 20px;
+    }
+    .header-table { width: 100%; border: none; }
+    .header-table td { border: none; padding: 0; vertical-align: middle; }
+    
+    .company-title { font-size: 20px; font-weight: 700; color: #1e3a8a; margin: 0; }
+    .report-name { font-size: 14px; text-transform: uppercase; font-weight: 600; color: #555; letter-spacing: 1px; }
+    .meta-info { font-size: 10px; color: #666; margin-top: 5px; }
 
-    /* Helper */
-    .text-right { text-align: right; }
-    .center { text-align: center; }
+    /* Data Table */
+    .data-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+    }
+    .data-table th, .data-table td {
+      border: 1px solid #e2e8f0;
+      padding: 8px 10px;
+      text-align: left;
+    }
+    .data-table th {
+      background-color: #f1f5f9;
+      color: #334155;
+      font-weight: 600;
+      font-size: 9pt;
+      text-transform: uppercase;
+    }
+    .data-table tr:nth-child(even) { background-color: #f8fafc; }
+    
+    /* Typography Helpers */
+    .text-center { text-align: center !important; }
+    .text-right { text-align: right !important; }
+    .font-bold { font-weight: 600; }
+    .text-sm { font-size: 9pt; }
+
+    /* Status Badges */
+    .badge {
+      display: inline-block;
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-size: 8pt;
+      font-weight: 600;
+      text-transform: capitalize;
+    }
+    
+    /* Status Colors */
+    .status-present { background-color: #dcfce7; color: #15803d; border: 1px solid #bbf7d0; } /* Green */
+    .status-late    { background-color: #ffedd5; color: #c2410c; border: 1px solid #fed7aa; } /* Orange */
+    .status-absent  { background-color: #fee2e2; color: #b91c1c; border: 1px solid #fecaca; } /* Red */
+    .status-leave   { background-color: #dbeafe; color: #1d4ed8; border: 1px solid #bfdbfe; } /* Blue */
+    .status-holiday { background-color: #f3e8ff; color: #7e22ce; border: 1px solid #e9d5ff; } /* Purple */
+    .status-off     { background-color: #f1f5f9; color: #64748b; border: 1px solid #e2e8f0; } /* Gray */
+
+    /* Footer / Signature */
+    .footer-section { margin-top: 40px; width: 100%; }
+    .signature-box {
+      width: 200px;
+      border-top: 1px solid #999;
+      text-align: center;
+      padding-top: 5px;
+      font-size: 10px;
+      float: right;
+    }
   </style>
 </head>
 <body>
-  <h2>Attendance Report</h2>
-  <div class="muted">
-    তারিখ: {{ start_date }} – {{ end_date }}<br>
-    ইউজার: {{ user.get_full_name|default:user.username }}
+
+  <div class="header-container">
+    <table class="header-table">
+      <tr>
+        <td style="width: 60%;">
+          {% if company_name %}
+            <h1 class="company-title">{{ company_name }}</h1>
+          {% else %}
+            <h1 class="company-title">Company Name</h1>
+          {% endif %}
+          <div class="meta-info">Generated by: {{ user.get_full_name|default:user.username }}</div>
+        </td>
+        <td style="width: 40%; text-align: right;">
+          <div class="report-name">Attendance Report</div>
+          <div class="meta-info">
+            <strong>Date Range:</strong><br>
+            {{ start_date }} — {{ end_date }}
+          </div>
+        </td>
+      </tr>
+    </table>
   </div>
 
-  <table>
+  <table class="data-table">
     <thead>
       <tr>
-        <th>কর্মী</th>
-        <th>ডিপার্টমেন্ট</th>
-        <th>তারিখ</th>
-        <th>ইন</th>
-        <th>আউট</th>
-        <th>স্ট্যাটাস</th>
-        <th>ওয়ার্কড (ঘন্টা)</th>
+        <th style="width: 5%;">#</th>
+        <th style="width: 20%;">Employee Name</th>
+        <th style="width: 15%;">Department</th>
+        <th style="width: 15%;">Date</th>
+        <th style="width: 10%;" class="text-center">In Time</th>
+        <th style="width: 10%;" class="text-center">Out Time</th>
+        <th style="width: 15%;" class="text-center">Status</th>
+        <th style="width: 10%;" class="text-center">Worked</th>
       </tr>
     </thead>
     <tbody>
       {% for row in rows %}
       <tr>
-        <td>{{ row.employee_name }}</td>
-        <td>{{ row.department_name }}</td>
+        <td>{{ forloop.counter }}</td>
+        <td class="font-bold">{{ row.employee_name }}</td>
+        <td class="text-sm">{{ row.department_name }}</td>
         <td>{{ row.date }}</td>
-        <td>{{ row.check_in }}</td>
-        <td>{{ row.check_out }}</td>
-        <td>
-          {% if row.status == 'Present' %}<span class="badge ok">Present</span>
-          {% elif row.status == 'Late' %}<span class="badge late">Late</span>
-          {% elif row.status == 'Absent' %}<span class="badge absent">Absent</span>
-          {% else %}{{ row.status|default:"—" }}{% endif %}
+        
+        <td class="text-center">
+            {{ row.check_in|default:"-" }}
         </td>
-        <td class="center">{{ row.worked_hours }}</td>
+        <td class="text-center">
+            {{ row.check_out|default:"-" }}
+        </td>
+        
+        <td class="text-center">
+          {% if row.status == 'Present' %}
+            <span class="badge status-present">Present</span>
+          {% elif row.status == 'Late' %}
+            <span class="badge status-late">Late</span>
+          {% elif row.status == 'Absent' %}
+            <span class="badge status-absent">Absent</span>
+          {% elif row.status == 'Leave' %}
+            <span class="badge status-leave">On Leave</span>
+          {% elif row.status == 'Public Holiday' %}
+            <span class="badge status-holiday">Holiday</span>
+          {% elif row.status == 'Weekly Off' %}
+            <span class="badge status-off">Off Day</span>
+          {% else %}
+            <span class="badge status-off">{{ row.status|default:"-" }}</span>
+          {% endif %}
+        </td>
+        
+        <td class="text-center font-bold">
+            {{ row.worked_hours }}
+        </td>
       </tr>
       {% empty %}
-      <tr><td colspan="7" class="center" style="padding:16px;">কোনো ডাটা নেই</td></tr>
+      <tr>
+        <td colspan="8" class="text-center" style="padding: 20px; color: #666; font-style: italic;">
+          No attendance records found for this period.
+        </td>
+      </tr>
       {% endfor %}
     </tbody>
-    
   </table>
+
+  <div class="footer-section">
+    <div style="font-size: 10px; color: #666; float: left;">
+        * Report generated automatically by SmartAttendance System.
+    </div>
+    <div class="signature-box">
+        Authorized Signature
+    </div>
+  </div>
+
 </body>
 </html>

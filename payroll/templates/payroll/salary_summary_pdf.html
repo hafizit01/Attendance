@@ -1,152 +1,220 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
     {% load static %}
-    <meta charset="utf-8">
-    <title>Salary Summary Report</title>
+    {% load custom_filters %}
+    <meta charset="UTF-8">
+    <title>Salary Summary - {{ selected_month }}</title>
     <style>
-    @page { size: A4 landscape; margin: 0.3in; }
+        @page {
+            size: A4 landscape;
+            margin: 15mm 10mm;
+            @bottom-right {
+                content: "Page " counter(page) " of " counter(pages);
+                font-family: 'Helvetica', sans-serif;
+                font-size: 9px;
+                color: #666;
+            }
+        }
+        body {
+            font-family: 'Helvetica', 'Arial', sans-serif;
+            font-size: 10px;
+            color: #333;
+            line-height: 1.3;
+        }
+        .header-container {
+            border-bottom: 2px solid #2c3e50;
+            padding-bottom: 10px;
+            margin-bottom: 15px;
+            overflow: hidden;
+        }
+        .logo-section { float: left; width: 60px; }
+        .logo { width: 50px; height: 50px; border-radius: 50%; object-fit: cover; }
+        .company-info { float: left; margin-left: 15px; }
+        .company-name { font-size: 20px; font-weight: bold; color: #2c3e50; margin: 0; }
+        .report-meta { font-size: 11px; color: #555; margin-top: 4px; }
+        
+        .report-title-block { float: right; text-align: right; }
+        .report-title { font-size: 16px; font-weight: bold; text-transform: uppercase; color: #2c3e50; margin: 0; }
+        .gen-date { font-size: 10px; color: #777; margin-top: 4px; }
 
-    @font-face {
-        font-family: 'SourceSansPro';
-        src: url("{% static 'fonts/SourceSansPro-Regular.ttf' %}") format('truetype');
-    }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 5px;
+        }
+        th {
+            background-color: #f3f4f6;
+            color: #1f2937;
+            font-weight: bold;
+            text-transform: uppercase;
+            font-size: 9px;
+            padding: 6px 3px;
+            border: 1px solid #d1d5db;
+            text-align: center;
+        }
+        td {
+            border: 1px solid #d1d5db;
+            padding: 5px 3px;
+            text-align: center;
+            vertical-align: middle;
+        }
+        tr:nth-child(even) { background-color: #f9fafb; }
 
-    body { font-family: 'SourceSansPro', sans-serif; font-size: 12px; margin: 0; padding: 0; }
+        .text-left { text-align: left; padding-left: 5px; }
+        .text-right { text-align: right; padding-right: 5px; }
+        .font-mono { font-family: 'Courier New', monospace; letter-spacing: -0.5px; }
+        .font-bold { font-weight: bold; }
+        
+        /* Specific Column Colors */
+        .col-money { color: #1e3a8a; } /* Blue */
+        .col-final { color: #047857; font-weight: bold; background-color: #ecfdf5; } /* Green */
+        .col-payable { color: #be123c; font-weight: bold; background-color: #fff1f2; } /* Red */
 
-    .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; padding-bottom: 5px; gap: 10px; flex-wrap: nowrap; }
-    .header-left { display: flex; align-items: center; gap: 20px; max-width: fit-content; flex-shrink: 0; }
-    .logo { width: 45px; height: 45px; border-radius: 50%; object-fit: cover; display: block; flex-shrink: 0; }
-    .company-name { font-weight: bold; font-size: 18px; color: #003366; white-space: nowrap; }
-    .report-title { text-align: center; flex-grow: 1; font-size: 16px; margin: 0; }
-    .report-info { font-size: 13px; text-align: right; line-height: 1.4; white-space: nowrap; flex-shrink: 0; }
+        /* Footer Totals */
+        tfoot tr { background-color: #e5e7eb; font-weight: bold; border-top: 2px solid #374151; }
+        tfoot td { padding: 8px 3px; font-size: 10px; }
 
-    h2 { text-align: center; font-size: 16px; margin: 0; padding: 5px; }
-    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-    thead, tfoot { background-color: #f0f0f0; }
-    th, td { border: 1px solid #444; padding: 4px; text-align: center; }
-    th { background-color: #eee; font-weight: bold; }
-    tfoot th { font-weight: bold; background-color: #f9f9f9; }
-    .total-row { font-weight: 700; background-color: #e0eaff; color: #003366; font-size: 13px; border-top: 2px solid #003366; }
-    .diff-row { font-weight: 700; background-color: #fff3cd; color: #856404; font-size: 13px; border-top: 1px solid #856404; }
-    .empty-msg { text-align: center; font-style: italic; color: gray; }
+        .signature-section {
+            margin-top: 40px;
+            width: 100%;
+            border-collapse: collapse;
+        }
+        .sig-box {
+            width: 33%;
+            text-align: center;
+            vertical-align: top;
+            padding-top: 30px;
+        }
+        .sig-line {
+            border-top: 1px solid #333;
+            width: 80%;
+            margin: 0 auto 5px auto;
+        }
+        .sig-title { font-weight: bold; font-size: 11px; }
     </style>
 </head>
 <body>
 
-<div class="header">
-  <div class="header-left">
-    <img src="{% static 'images/logo.png' %}" alt="Logo" class="logo" />
-    <span class="company-name">Riya Jewellers</span>
-  </div>
+<div class="header-container">
+    <div class="logo-section">
+        {% if logo_url %}
+            <img src="{{ logo_url }}" alt="Logo" class="logo">
+        {% else %}
+            <div style="width:50px; height:50px; background:#eee; border-radius:50%; text-align:center; line-height:50px; color:#999; font-size:10px;">LOGO</div>
+        {% endif %}
+    </div>
+    
+    <div class="company-info">
+        <h1 class="company-name">Riya Jewellers</h1>
+        <div class="report-meta">
+            <strong>Month:</strong> {{ selected_month }} 
+            {% if selected_department %} | <strong>Dept:</strong> {{ selected_department }} {% endif %}
+        </div>
+    </div>
 
-  <h2 class="report-title">Salary Summary Report</h2>
-
-  <div class="report-info">
-    {% if selected_month %}<div><strong>Month:</strong> {{ selected_month }}</div>{% endif %}
-    {% if department_name %}<div><strong>Department:</strong> {{ department_name }}</div>{% endif %}
-  </div>
+    <div class="report-title-block">
+        <h2 class="report-title">Monthly Salary Summary</h2>
+        <div class="gen-date">Generated on: {% now "d M Y, h:i A" %}</div>
+    </div>
 </div>
 
 <table>
-  <thead>
-    <tr>
-      <th>#</th>
-      <th>Employee</th>
-      <th>Base Salary</th>
-      <th>Bank Transfer</th>
-      <th>Cash Amount</th>
-      <th>Present</th>
-      <th>Leave</th>
-      <th>Absent</th>
-      <th>Off Days</th>
-      <th>Holidays</th>
-      <th>Late Time</th>
-      <th>Over Time</th>
-      <th>Work Hours</th>
-      <th>Expected Hours</th>
-      <th>Difference</th>
-
-      <!-- ✅ Added -->
-      <th>Bonus</th>
-
-      <th>Final Salary</th>
-      <th>Payable Cash</th>
-    </tr>
-  </thead>
-  <tbody>
-    {% if summaries %}
-      {% for summary in summaries %}
+    <thead>
         <tr>
-          <td>{{ forloop.counter }}</td>
-          <td>{{ summary.employee.name }}</td>
-          <td>{{ summary.base_salary }}</td>
-          <td>{{ summary.bank_transfer }}</td>
-          <td>{{ summary.cash_amount }}</td>
-          <td>{{ summary.present_days }}</td>
-          <td>{{ summary.leave_days }}</td>
-          <td>{{ summary.absent_days }}</td>
-          <td>{{ summary.weekly_off_days }}</td>
-          <td>{{ summary.holiday_days }}</td>
-          <td>{{ summary.late_time }}</td>
-          <td>{{ summary.over_time }}</td>
-          <td>{{ summary.total_work_hours }}</td>
-          <td>{{ summary.expected_work_hours }}</td>
-          <td>{{ summary.work_time_difference }}</td>
-
-          <!-- ✅ Show per-row bonus -->
-          <td>{{ summary.bonus_amount }}</td>
-
-          <td>{{ summary.final_salary }}</td>
-          <td>{{ summary.payable_cash }}</td>
+            <th width="3%">#</th>
+            <th width="12%" class="text-left">Employee Name</th>
+            <th width="7%">Base Salary</th>
+            <th width="7%">Bank Trans.</th>
+            <th width="7%">Cash Amt</th>
+            
+            <th width="4%">Pres</th>
+            <th width="4%">Leave</th>
+            <th width="4%">Abs</th>
+            <th width="4%">Off</th>
+            <th width="4%">Hol</th>
+            
+            <th width="5%">Late</th>
+            <th width="5%">OT</th>
+            <th width="5%">Work Hr</th>
+            
+            <th width="5%">Earned</th>
+            <th width="5%">Bonus</th>
+            <th width="8%">Final Salary</th>
+            <th width="8%">Payable</th>
         </tr>
-      {% endfor %}
-
-      <tr class="total-row">
-        <td colspan="2" style="text-align: left;">Total Base Salary</td>
-        <td>Base: {{ total_base_salary }}</td>
-        <td>Bank: {{ total_bank_transfer }}</td>
-        <td>Cash: {{ total_cash_amount }}</td>
-
-        <!-- (optional) total bonus if provided in context -->
-        <td colspan="6" style="text-align: right;">
-          {% if total_bonus_amount|default:None != None %}
-            <strong>Total Bonus:</strong> {{ total_bonus_amount }}
-          {% endif %}
-        </td>
-
-        <td colspan="5" style="text-align: right;">Total Payable Final Salary</td>
-        <td>{{ total_final_salary }}</td>
-        <td>{{ total_payable_cash }}</td>
-      </tr>
-      <tr class="diff-row">
-        <td colspan="15" style="text-align: right;">Difference</td>
-        <td colspan="2">{{ total_salary_difference }}</td>
-      </tr>
-    {% else %}
-      <tr>
-        <td colspan="18" class="empty-msg">No salary summary data found.</td>
-      </tr>
+    </thead>
+    <tbody>
+        {% for s in summaries %}
+        <tr>
+            <td>{{ forloop.counter }}</td>
+            <td class="text-left font-bold">{{ s.employee.name }}</td>
+            <td class="text-right font-mono col-money">{{ s.base_salary|floatformat:0 }}</td>
+            <td class="text-right font-mono">{{ s.bank_transfer|floatformat:0 }}</td>
+            <td class="text-right font-mono">{{ s.cash_amount|floatformat:0 }}</td>
+            
+            <td>{{ s.present_days }}</td>
+            <td>{{ s.leave_days }}</td>
+            <td>{{ s.absent_days }}</td>
+            <td>{{ s.weekly_off_days }}</td>
+            <td>{{ s.holiday_days }}</td>
+            
+            <td class="font-mono" style="font-size:9px;">{{ s.late_time }}</td>
+            <td class="font-mono" style="font-size:9px;">{{ s.over_time|format_timedelta }}</td>
+            <td class="font-mono" style="font-size:9px;">{{ s.total_work_hours }}</td>
+            
+            <td class="text-right font-mono">{{ s.earned_salary|floatformat:0 }}</td>
+            <td class="text-right font-mono">{{ s.bonus_amount|floatformat:0 }}</td>
+            <td class="text-right font-mono col-final">{{ s.final_salary|floatformat:0 }}</td>
+            <td class="text-right font-mono col-payable">{{ s.payable_cash|floatformat:0 }}</td>
+        </tr>
+        {% empty %}
+        <tr>
+            <td colspan="17" style="padding: 20px; text-align: center; color: #666; font-style: italic;">
+                No salary records found for this period.
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+    
+    {% if summaries %}
+    <tfoot>
+        <tr>
+            <td colspan="2" class="text-right">GRAND TOTAL:</td>
+            <td class="text-right font-mono">{{ total_base_salary|floatformat:0 }}</td>
+            <td class="text-right font-mono">{{ total_bank_transfer|floatformat:0 }}</td>
+            <td class="text-right font-mono">{{ total_cash_amount|floatformat:0 }}</td>
+            
+            <td colspan="8" style="background-color:#e5e7eb; border:none;"></td> <td colspan="2" class="text-right">NET PAYABLE:</td>
+            <td class="text-right font-mono col-final" style="font-size: 11px;">{{ total_final_salary|floatformat:0 }}</td>
+            <td class="text-right font-mono col-payable" style="font-size: 11px;">{{ total_payable_cash|floatformat:0 }}</td>
+        </tr>
+        <tr>
+            <td colspan="15" class="text-right" style="color: #555;">Net Difference (Final - Base):</td>
+            <td colspan="2" class="text-right font-mono font-bold" 
+                style="color: {% if total_salary_difference < 0 %}#dc2626{% else %}#16a34a{% endif %};">
+                {{ total_salary_difference|floatformat:0 }}
+            </td>
+        </tr>
+    </tfoot>
     {% endif %}
-  </tbody>
 </table>
 
-<br><br><br>
-<table style="width:100%; margin-top: 40px; border: none;">
-  <tr>
-    <td style="text-align: center; border: none;">
-      ..............................................<br>
-      <strong>Accountant</strong>
-    </td>
-    <td style="text-align: center; border: none;">
-      ..............................................<br>
-      <strong>HR Manager</strong>
-    </td>
-    <td style="text-align: center; border: none;">
-      ..............................................<br>
-      <strong>Admin/Authorized Signatory</strong>
-    </td>
-  </tr>
+<table class="signature-section" style="border: none; margin-top: 50px;">
+    <tr>
+        <td class="sig-box" style="border: none;">
+            <div class="sig-line"></div>
+            <div class="sig-title">Prepared By (HR)</div>
+        </td>
+        <td class="sig-box" style="border: none;">
+            <div class="sig-line"></div>
+            <div class="sig-title">Checked By (Accounts)</div>
+        </td>
+        <td class="sig-box" style="border: none;">
+            <div class="sig-line"></div>
+            <div class="sig-title">Authorized Signature</div>
+        </td>
+    </tr>
 </table>
 
 </body>

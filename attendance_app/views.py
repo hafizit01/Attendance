@@ -108,91 +108,107 @@ def dashboard(request):
     emp_ids = list(employees.values_list('id', flat=True))
     total_employees = len(emp_ids)
 
-    # 3) আজকের অ্যাটেন্ডেন্স (one query for all employees)
-    # ---- (Q3) bring all rows for today, then group in Python
+    # 3) আজকের অ্যাটেন্ডেন্স (Optimized Query)
     today_att_qs = (Attendance.objects
                     .filter(employee_id__in=emp_ids, timestamp__date=today)
                     .only('employee_id', 'timestamp', 'status')
-                    .order_by('employee_id', 'timestamp'))
+                    .order_by('employee_id', 'timestamp')) # Time অনুযায়ী sort করা জরুরি
 
-    # group rows by employee_id
+    # Group rows by employee_id in Python
     rows_by_emp = defaultdict(list)
     for att in today_att_qs:
         rows_by_emp[att.employee_id].append(att)
 
     employee_by_id = {e.id: e for e in employees}
 
-    # per-employee compute (same logic as before, but in Python with grouped rows)
+    # Per-employee compute
     employee_data = []
-    regular_work_time = timedelta(hours=10)
+    regular_work_time = timedelta(hours=9) # স্ট্যান্ডার্ড ৯ ঘণ্টা ধরা হলো (চাইলে ১০ করতে পারেন)
 
-    for emp_id, recs in rows_by_emp.items():
+    # আমরা সব এমপ্লয়ি লুপ করব, যাতে যারা Absent তাদেরও লিস্টে পাওয়া যায়
+    for emp_id in emp_ids:
         emp = employee_by_id.get(emp_id)
         if not emp:
             continue
 
-        in_times  = [r.timestamp for r in recs if r.status == 'In']
-        out_times = [r.timestamp for r in recs if r.status == 'Out']
-
+        recs = rows_by_emp.get(emp_id, [])
+        
+        # ডিফল্ট ভ্যালু
+        first_in = None
+        last_out = None
         total_work_time = timedelta()
-        for i in range(min(len(in_times), len(out_times))):
-            t_in, t_out = in_times[i], out_times[i]
-            if is_naive(t_in):  t_in  = make_aware(t_in)
-            if is_naive(t_out): t_out = make_aware(t_out)
-            if t_out > t_in:
-                total_work_time += (t_out - t_in)
+        late_time = timedelta()
+        over_time = timedelta()
+        less_time = timedelta()
+        status_display = "Absent"
 
-        late_time = over_time = less_time = timedelta()
-        first_in = localtime(in_times[0]) if in_times else None
-        last_out = localtime(out_times[-1]) if out_times else None
+        # --- ✅ Logic: First In - Last Out ---
+        if recs:
+            # সব টাইমস্ট্যাম্প বের করি
+            timestamps = [r.timestamp for r in recs]
+            
+            # দিনের প্রথম পাঞ্চ = In Time
+            first_in = min(timestamps)
+            
+            # যদি একের বেশি পাঞ্চ থাকে, তবেই Out Time আছে
+            if len(timestamps) > 1:
+                last_out = max(timestamps)
+                
+                # Timezone awareness check
+                if is_naive(first_in): first_in = make_aware(first_in)
+                if is_naive(last_out): last_out = make_aware(last_out)
+                
+                total_work_time = last_out - first_in
+                status_display = "Present"
+            else:
+                # শুধু একবার পাঞ্চ করেছে (হয়তো মাত্র এসেছে, বা আউট দিতে ভুলে গেছে)
+                if is_naive(first_in): first_in = make_aware(first_in)
+                status_display = "Present (Active)"
 
+        # --- Late Calculation ---
         if first_in:
-            # department.in_time থাকলে সেটাই, না থাকলে 10:30
-            dept_start = getattr(getattr(emp, 'department', None), 'in_time', None)
-            base_start = dept_start or time(10, 30)
-            expected_start = first_in.replace(hour=base_start.hour, minute=base_start.minute, second=0, microsecond=0)
+            # ডিপার্টমেন্টের টাইম বা ডিফল্ট ১০:৩০
+            dept_in_time = getattr(getattr(emp, 'department', None), 'in_time', time(10, 30))
+            
+            # Compare logic
+            expected_start = first_in.replace(hour=dept_in_time.hour, minute=dept_in_time.minute, second=0, microsecond=0)
+            
             if first_in > expected_start:
                 late_time = first_in - expected_start
 
+        # --- Overtime / Less time ---
+        # ডিউটি আওয়ার্স পূর্ণ হয়েছে কিনা
         if total_work_time > regular_work_time:
             over_time = total_work_time - regular_work_time
-        elif total_work_time < regular_work_time:
+        elif total_work_time > timedelta(0): 
+            # কাজ করেছে কিন্তু সময়ের কম
             less_time = regular_work_time - total_work_time
 
+        # লিস্টে ডাটা যোগ করা
         employee_data.append({
             'employee': emp,
-            'in_time': first_in.time() if first_in else None,
-            'out_time': last_out.time() if last_out else None,
+            'in_time': localtime(first_in).time() if first_in else None,
+            'out_time': localtime(last_out).time() if last_out else None,
             'total_work_time': total_work_time,
             'late_time': late_time,
             'over_time': over_time,
             'less_time': less_time,
+            'status': status_display  # টেমপ্লেটে দেখানোর জন্য
         })
-
-    # যারা আজকে কোনো রেকর্ড নেই—তারাও টেবিলে চাইলে দেখাতে পারো:
-    for emp in employees:
-        if emp.id not in rows_by_emp:
-            employee_data.append({
-                'employee': emp,
-                'in_time': None,
-                'out_time': None,
-                'total_work_time': timedelta(),
-                'late_time': timedelta(),
-                'over_time': timedelta(),
-                'less_time': timedelta(),
-            })
 
     # 4) ৩০ দিনের ট্রেন্ড (one aggregate query)
     start_date = today - timedelta(days=29)
 
-    # ---- (Q4) Aggregate per day: present (distinct employee with 'In'), late (In after 10:30)
+    # ---- (Q4) Trend Calculation
     trend_agg = (
         Attendance.objects
         .filter(employee_id__in=emp_ids, timestamp__date__gte=start_date, timestamp__date__lte=today)
         .annotate(day=TruncDate('timestamp'))
         .values('day')
         .annotate(
-            present=Count('employee', filter=Q(status='In'), distinct=True),
+            # Distinct employee count for Present
+            present=Count('employee', distinct=True),
+            # Simple logic for late in trend (In record after 10:30)
             late=Count('id', filter=Q(status='In', timestamp__time__gt='10:30:00'))
         )
         .order_by('day')
@@ -207,7 +223,7 @@ def dashboard(request):
         d = start_date + timedelta(days=i)
         p = present_by_day.get(d, 0)
         l = late_by_day.get(d, 0)
-        a = total_employees - p
+        a = total_employees - p # Total - Present = Absent
         attendance_trend.append({
             'date': d.strftime('%Y-%m-%d'),
             'present': p,
@@ -221,16 +237,16 @@ def dashboard(request):
         'departments': departments,
         'selected_department': int(selected_dept) if selected_dept else None,
         'total_employees': total_employees,
+        # Summary counts based on calculated data
         'present': sum(1 for e in employee_data if e['in_time']),
         'absent': sum(1 for e in employee_data if not e['in_time']),
         'late': sum(1 for e in employee_data if e['late_time'].total_seconds() > 0),
         'attendance_trend': attendance_trend,  # optional for debugging
-        # safe JSON string for template JS (dates already formatted as strings in your attendance_trend)
+        # safe JSON string for template JS
         'attendance_trend_json': mark_safe(json.dumps(attendance_trend)),
         'can_view_salary': user.has_perm('payroll.view_salarysummary'),
     }
     return render(request, 'dashboard.html', context)
-
 
   # attendance_app/views.py
 
@@ -347,51 +363,80 @@ def sync_attendance_view(request):
 
 # ✅ 4. Attendance Table Helper
 
-def generate_attendance_table(employee_qs, start_date, end_date):
-    days = []
-    start = datetime.strptime(start_date, "%Y-%m-%d")
-    end = datetime.strptime(end_date, "%Y-%m-%d")
-    delta = timedelta(days=1)
+# -------------------------------------------------------------------------
+# ✅ ১. Optimized Attendance Table Helper
+# -------------------------------------------------------------------------
+def generate_attendance_table(employee_qs, start_date_str, end_date_str):
+    """
+    একবারে সব ডাটা ফেচ করে দ্রুত অ্যাটেন্ডেন্স টেবিল তৈরি করে।
+    """
+    start_date = datetime.strptime(start_date_str, "%Y-%m-%d").date()
+    end_date = datetime.strptime(end_date_str, "%Y-%m-%d").date()
+    
+    # একবারে সব ডাটা লোড করা (Optimization)
+    att_records = Attendance.objects.filter(
+        employee__in=employee_qs,
+        timestamp__date__range=(start_date, end_date)
+    ).values('employee_id', 'timestamp', 'status')
 
-    while start <= end:
+    # হলিডে লোড (Assuming same company for all in QS)
+    first_emp = employee_qs.first()
+    company = first_emp.company if first_emp else None
+    holidays = Holiday.objects.filter(
+        company=company, start_date__lte=end_date, end_date__gte=start_date
+    ).values('start_date', 'end_date')
+
+    # ম্যাপ তৈরি করা (O(1) Lookup এর জন্য)
+    att_map = defaultdict(list)
+    for r in att_records:
+        att_map[(r['employee_id'], r['timestamp'].date())].append(r['timestamp'])
+
+    holiday_set = set()
+    for h in holidays:
+        curr = max(h['start_date'], start_date)
+        while curr <= min(h['end_date'], end_date):
+            holiday_set.add(curr)
+            curr += timedelta(days=1)
+
+    days_list = []
+    curr_d = start_date
+    while curr_d <= end_date:
+        weekday = curr_d.strftime('%A')
         for emp in employee_qs:
-            day = start.date()
-            is_holiday = day.strftime('%A') == emp.department.weekly_off_day
-            attendance_qs = Attendance.objects.filter(employee=emp, timestamp__date=day)
-
-            if attendance_qs.exists():
-                in_time = attendance_qs.aggregate(Min('timestamp'))['timestamp__min']
-                out_time = attendance_qs.aggregate(Max('timestamp'))['timestamp__max']
+            punches = att_map.get((emp.id, curr_d), [])
+            is_off = (weekday == emp.department.weekly_off_day) if emp.department else False
+            
+            in_t = min(punches) if punches else None
+            out_t = max(punches) if len(punches) > 1 else None
+            
+            # Status Priority Logic
+            if punches:
                 status = "Present"
-            elif is_holiday:
-                in_time = out_time = None
+            elif curr_d in holiday_set:
                 status = "Holiday"
+            elif is_off:
+                status = "Weekly Off"
             else:
-                in_time = out_time = None
                 status = "Absent"
 
-            days.append({
+            days_list.append({
                 'employee': emp,
-                'date': day,
-                'in_time': in_time,
-                'out_time': out_time,
+                'date': curr_d,
+                'in_time': in_t,
+                'out_time': out_t,
                 'status': status
             })
-        start += delta
+        curr_d += timedelta(days=1)
+    return days_list
 
-    return days
-# ---------------Monthly Report (Company-scoped)---------------
-@login_required
-def monthly_work_time_report(request):
-    # --- Company scope ---
+
+def get_monthly_report_context(request):
+    """
+    একটি কমন ফাংশন যা HTML এবং PDF উভয় ভিউর জন্য ডাটা ক্যালকুলেট করবে।
+    """
     user = request.user
-    profile = getattr(user, "profile", None)
-    company = getattr(profile, "company", None)
-
-    if not company:
-        return HttpResponseForbidden("You don't have a company assigned. Please contact an administrator.")
-
-    # --- Date range ---
+    user_company = getattr(getattr(user, "profile", None), "company", None)
+    
     start_date_str = request.GET.get('start_date')
     end_date_str = request.GET.get('end_date')
 
@@ -403,418 +448,113 @@ def monthly_work_time_report(request):
         start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
         end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
 
-    # --- Filters (department/employee) but always within user's company ---
     selected_dept = request.GET.get('department')
     selected_emp = request.GET.get('employee')
 
-    employees = (
-        Employee.objects
-        .filter(company=company)
-        .select_related('department', 'company')  # perf
-    )
-
+    employees = Employee.objects.filter(company=user_company).select_related('department')
     if selected_dept:
-        employees = employees.filter(department__id=selected_dept, department__company=company)
-
+        employees = employees.filter(department__id=selected_dept)
     if selected_emp:
-        employees = employees.filter(id=selected_emp, company=company)
+        employees = employees.filter(id=selected_emp)
 
-    # --- Holidays & Leaves are company-scoped ---
-    holidays = Holiday.objects.filter(
-        company=company,
-        start_date__lte=end_date,
-        end_date__gte=start_date
-    )
-
-    holiday_dates = {
-        holiday.start_date + timedelta(days=i)
-        for holiday in holidays
-        for i in range((min(holiday.end_date, end_date) - max(holiday.start_date, start_date)).days + 1)
-    }
-
-    # ---- Helper: per-employee expected start & regular work time from Department ----
-    from datetime import time as _time
-    from django.utils.timezone import make_aware, is_naive  # ✅ ensure imported
-
-    DEFAULT_IN = _time(10, 30)
-    DEFAULT_OUT = _time(20, 30)
-
-    def _dept_times(emp):
-        """Return (expected_start_time: time, regular_work_time: timedelta) for an employee."""
-        dep = getattr(emp, 'department', None)
-        in_t = getattr(dep, 'in_time', None) if dep else None
-        out_t = getattr(dep, 'out_time', None) if dep else None
-
-        # Fallbacks
-        in_t = in_t or DEFAULT_IN
-        out_t = out_t or DEFAULT_OUT
-
-        # Compute daily duration safely
-        dt_in = datetime.combine(start_date, in_t)
-        dt_out = datetime.combine(start_date, out_t)
-        duration = dt_out - dt_in
-        if duration.total_seconds() < 0:
-            duration = timedelta(0)
-
-        return in_t, duration
+    holidays = Holiday.objects.filter(company=user_company, start_date__lte=end_date, end_date__gte=start_date)
+    holiday_dates = {d for h in holidays for d in [h.start_date + timedelta(days=i) for i in range((min(h.end_date, end_date) - max(h.start_date, start_date)).days + 1)]}
 
     report_data = []
+    REGULAR_WORK_TIME = timedelta(hours=10)
 
     for emp in employees:
-        expected_start_time, regular_work_time = _dept_times(emp)
+        dept = emp.department
+        expected_in = dept.in_time if dept else time(10, 30)
+        off_day = dept.weekly_off_day if dept else 'Friday'
 
-        attendances = (
-            Attendance.objects
-            .filter(
-                employee=emp,
-                employee__company=company,
-                timestamp__date__range=(start_date, end_date)
-            )
-            .order_by('timestamp')
-        )
+        atts = Attendance.objects.filter(employee=emp, timestamp__date__range=(start_date, end_date)).order_by('timestamp')
+        att_dict = defaultdict(list)
+        for a in atts: att_dict[a.timestamp.date()].append(a.timestamp)
 
-        approved_leaves = LeaveRequest.objects.filter(
-            company=company,
-            employee=emp,
-            status='Approved',
-            start_date__lte=end_date,
-            end_date__gte=start_date
-        )
+        leaves = LeaveRequest.objects.filter(employee=emp, status='Approved', start_date__lte=end_date, end_date__gte=start_date)
+        leave_dates = {d for lv in leaves for d in [lv.start_date + timedelta(days=i) for i in range((min(lv.end_date, end_date) - max(lv.start_date, start_date)).days + 1)]}
 
-        leave_dates = {
-            leave.start_date + timedelta(days=i)
-            for leave in approved_leaves
-            for i in range((min(leave.end_date, end_date) - max(leave.start_date, start_date)).days + 1)
-        }
+        present_days, absent_days, leave_count, holiday_count, off_count = 0, 0, 0, 0, 0
+        total_work, total_late, total_over = timedelta(), timedelta(), timedelta()
 
-        daily_attendance = defaultdict(list)
-        for att in attendances:
-            daily_attendance[att.timestamp.date()].append(att)
+        days_range = (end_date - start_date).days + 1
+        for i in range(days_range):
+            curr = start_date + timedelta(days=i)
+            wd = curr.strftime('%A')
+            punches = att_dict.get(curr, [])
 
-        total_work_time = timedelta()
-        total_late_time = timedelta()
-        total_over_time = timedelta()
-        present_days = 0
-        leave_days_count = 0
-        weekly_off_count = 0
-        holiday_count = 0
-
-        off_day = emp.department.weekly_off_day if emp.department else None
-        total_days = (end_date - start_date).days + 1
-
-        for n in range(total_days):
-            current_date = start_date + timedelta(days=n)
-            weekday = current_date.strftime('%A')
-
-            if current_date in holiday_dates:
-                holiday_count += 1
-                continue
-
-            if off_day == weekday:
-                weekly_off_count += 1
-                continue
-
-            if current_date in leave_dates:
-                leave_days_count += 1
-                # Leave day হলে সম্পূর্ণ শিফট সময় কৃতিত্ব (Department-ভিত্তিক)
-                total_work_time += regular_work_time
-                continue
-
-            records = daily_attendance.get(current_date, [])
-            in_times = [r.timestamp for r in records if r.status == 'In']
-            out_times = [r.timestamp for r in records if r.status == 'Out']
-
-            # ✅ নতুন রুল: In বা Out – যেকোনো একটা থাকলে Present
-            if in_times or out_times:
+            if punches:
                 present_days += 1
+                t_in, t_out = min(punches), max(punches) if len(punches) > 1 else None
+                exp_dt = make_aware(datetime.combine(curr, expected_in)) if is_naive(datetime.combine(curr, expected_in)) else datetime.combine(curr, expected_in)
+                t_in_aware = make_aware(t_in) if is_naive(t_in) else t_in
+                if t_in_aware > exp_dt: total_late += (t_in_aware - exp_dt)
+                if t_out:
+                    t_out_aware = make_aware(t_out) if is_naive(t_out) else t_out
+                    actual_start = max(t_in_aware, exp_dt)
+                    if t_out_aware > actual_start:
+                        dur = t_out_aware - actual_start
+                        total_work += dur
+                        if dur > REGULAR_WORK_TIME: total_over += (dur - REGULAR_WORK_TIME)
+            elif curr in leave_dates:
+                leave_count += 1
+                total_work += REGULAR_WORK_TIME
+            elif curr in holiday_dates: holiday_count += 1
+            elif wd == off_day: off_count += 1
+            else: absent_days += 1
 
-            if in_times:
-                in_time_val = min(in_times)
-            else:
-                in_time_val = None
-
-            out_time_val = max(out_times) if out_times else None
-
-            # Duration ক্যালকুলেশন কেবল তখনই যখন দুটোই আছে
-            if in_time_val and out_time_val:
-                if is_naive(in_time_val):
-                    in_time_val = make_aware(in_time_val)
-                if is_naive(out_time_val):
-                    out_time_val = make_aware(out_time_val)
-
-                adjusted_in_dt = datetime.combine(in_time_val.date(), expected_start_time)
-                if is_naive(adjusted_in_dt):
-                    adjusted_in_dt = make_aware(adjusted_in_dt)
-
-                actual_in_time = max(in_time_val, adjusted_in_dt)
-
-                if out_time_val > actual_in_time:
-                    duration = out_time_val - actual_in_time
-                    total_work_time += duration
-
-                    if in_time_val > adjusted_in_dt:
-                        total_late_time += (in_time_val - adjusted_in_dt)
-
-                    if duration > regular_work_time:
-                        total_over_time += (duration - regular_work_time)
-
-        expected_work_time = (present_days + leave_days_count) * regular_work_time
-        total_less_time = max(expected_work_time - total_work_time, timedelta())
-        early_leave_time = max(total_less_time - total_late_time, timedelta())
-
-        absent_days = total_days - present_days - weekly_off_count - leave_days_count - holiday_count
-        expected_work_time_excl_off = (total_days - weekly_off_count - holiday_count) * regular_work_time
-        work_time_difference = expected_work_time_excl_off - total_work_time
-
-        def format_timedelta(td):
-            total_seconds = int(td.total_seconds())
-            hours = total_seconds // 3600
-            minutes = (total_seconds % 3600) // 60
-            seconds = total_seconds % 60
-            return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+        expected_hours = (days_range - off_count - holiday_count) * REGULAR_WORK_TIME
+        
+        def fmt(td):
+            s = int(td.total_seconds()); return f"{s//3600:02d}:{(s%3600)//60:02d}:{s%60:02d}"
 
         report_data.append({
-            'employee': emp,
-            'total_work_hours': format_timedelta(total_work_time),
-            'late_time': format_timedelta(total_late_time),
-            'less_time': format_timedelta(total_less_time),
-            'early_leave_time': format_timedelta(early_leave_time),
-            'over_time': format_timedelta(total_over_time),
-            'final_work_time': format_timedelta(total_work_time),
-            'present_days': present_days,
-            'absent_days': absent_days,
-            'weekly_off_days': weekly_off_count,
-            'leave_days': leave_days_count,
-            'holiday_days': holiday_count,
-            'approved_leave_count': approved_leaves.count(),
-            'start_date': start_date,
-            'end_date': end_date,
-            'expected_work_time_excl_off': expected_work_time_excl_off,  # raw timedelta—টেমপ্লেটে কাস্টম ফিল্টার দিলে H:M:S দেখাবে
-            'work_time_difference': work_time_difference,                # raw timedelta—same
+            'employee': emp, 'present_days': present_days, 'absent_days': absent_days,
+            'weekly_off_days': off_count, 'leave_days': leave_count, 'holiday_days': holiday_count,
+            'total_work_hours': fmt(total_work), 'late_time': fmt(total_late),
+            'over_time': fmt(total_over), 'less_time': fmt(max(expected_hours - total_work, timedelta())),
+            'expected_work_time_excl_off': expected_hours, 'work_time_difference': expected_hours - total_work,
+            'start_date': start_date, 'end_date': end_date
         })
 
-    # Dropdown data: শুধুই নিজের কোম্পানির
-    departments = Department.objects.filter(company=company)
-    if selected_dept:
-        employees_all = Employee.objects.filter(company=company, department__id=selected_dept)
-    else:
-        employees_all = Employee.objects.filter(company=company)
-
-    context = {
+    return {
         'report_data': report_data,
-        'departments': departments,
-        'employees': employees_all,
-        'selected_department': int(selected_dept) if selected_dept else None,
-        'selected_employee': int(selected_emp) if selected_emp else None,
-        'start_date': start_date,
-        'end_date': end_date,
+        'start_date': start_date, 'end_date': end_date,
+        'selected_department': selected_dept, 'selected_employee': selected_emp,
+        'departments': Department.objects.filter(company=user_company),
+        'employees': Employee.objects.filter(company=user_company),
+        'company_name': user_company.name if user_company else "Company"
     }
-
-    return render(request, 'monthly_report.html', context)
-
-
-
-# --------------Monthly Work Time PDF (Leave বাদ না দিয়ে Expected ঠিক রাখা)---------------
 
 
 @login_required
-def monthly_work_time_pdf(request):
-    # --- Company scope ---
-    user_company = getattr(getattr(request.user, "profile", None), "company", None)
-    if not user_company:
-        return HttpResponseForbidden("আপনার কোম্পানি সেট করা নেই।")
-
-    # --- Date range (defaults: last 30 days) ---
-    start_date_str = request.GET.get('start_date')
-    end_date_str = request.GET.get('end_date')
-    today = timezone.localdate()
+def monthly_work_time_report(request):
     try:
-        start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date() if start_date_str else (today - timedelta(days=30))
-        end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date() if end_date_str else today
-    except ValueError:
-        return HttpResponse("Invalid date format. Use YYYY-MM-DD", status=400)
-    if end_date < start_date:
-        return HttpResponse("end_date must be on/after start_date", status=400)
+        context = get_monthly_report_context(request)
+        return render(request, 'monthly_report.html', context)
+    except Exception as e:
+        return HttpResponseForbidden(f"Error: {str(e)}")
 
-    # --- Filters (department/employee) within user's company ---
-    selected_dept = request.GET.get('department')
-    selected_emp = request.GET.get('employee')
+@login_required
+def monthly_work_time_pdf(request):
+    try:
+        # হেল্পার থেকে ডাটা নিয়ে আসা
+        context = get_monthly_report_context(request)
+        context['logo_url'] = request.build_absolute_uri('/static/images/logo.png')
 
-    employees = (
-        Employee.objects
-        .filter(company=user_company)
-        .select_related('department', 'company')
-    )
-    if selected_dept:
-        employees = employees.filter(department__id=selected_dept, department__company=user_company)
-    if selected_emp:
-        employees = employees.filter(id=selected_emp, company=user_company)
-
-    # --- Holidays (company-scoped, overlap with range) ---
-    holidays = Holiday.objects.filter(
-        company=user_company,
-        start_date__lte=end_date,
-        end_date__gte=start_date
-    )
-    holiday_dates = {
-        hol.start_date + timedelta(days=i)
-        for hol in holidays
-        for i in range((min(hol.end_date, end_date) - max(hol.start_date, start_date)).days + 1)
-    }
-
-    # --- Constants ---
-    regular_work_time = timedelta(hours=10)
-    expected_start_time = time(10, 30)
-
-    report_data = []
-
-    for emp in employees:
-        # Attendance
-        attendances = (
-            Attendance.objects
-            .filter(
-                employee=emp,
-                employee__company=user_company,
-                timestamp__date__range=(start_date, end_date)
-            )
-            .order_by('timestamp')
-        )
-
-        # Approved leaves
-        approved_leaves = LeaveRequest.objects.filter(
-            company=user_company,
-            employee=emp,
-            status='Approved',
-            start_date__lte=end_date,
-            end_date__gte=start_date
-        )
-
-        # Expand leave dates in range
-        leave_dates = set()
-        for leave in approved_leaves:
-            leave_start = max(leave.start_date, start_date)
-            leave_end = min(leave.end_date, end_date)
-            for n in range((leave_end - leave_start).days + 1):
-                leave_dates.add(leave_start + timedelta(days=n))
-
-        # Group attendance by day
-        daily_attendance = defaultdict(list)
-        for att in attendances:
-            daily_attendance[att.timestamp.date()].append(att)
-
-        # Aggregates
-        total_work_time = timedelta()
-        total_late_time = timedelta()
-        total_over_time = timedelta()
-        total_less_time = timedelta()
-        weekly_off_day = emp.department.weekly_off_day if emp.department else None
-
-        days_in_range = (end_date - start_date).days + 1
-        present_days = 0
-        weekly_off_count = 0
-        leave_day_count = 0
-        holiday_count = 0
-
-        for n in range(days_in_range):
-            current_date = start_date + timedelta(days=n)
-            weekday = current_date.strftime('%A')
-
-            # Holiday -> exclude from expected
-            if current_date in holiday_dates:
-                holiday_count += 1
-                continue
-
-            # Weekly off -> exclude from expected
-            if weekly_off_day and weekday == weekly_off_day:
-                weekly_off_count += 1
-                continue
-
-            # Leave -> count as leave + credit 10h
-            if current_date in leave_dates:
-                leave_day_count += 1
-                total_work_time += regular_work_time
-                continue
-
-            # Attendance
-            records = daily_attendance.get(current_date, [])
-            in_times = [r.timestamp for r in records if r.status == 'In']
-            out_times = [r.timestamp for r in records if r.status == 'Out']
-
-            if in_times:
-                present_days += 1
-                in_time = min(in_times)
-                out_time = max(out_times) if out_times else None
-
-                if is_naive(in_time):
-                    in_time = make_aware(in_time)
-                if out_time and is_naive(out_time):
-                    out_time = make_aware(out_time)
-
-                expected_start_dt = datetime.combine(current_date, expected_start_time)
-                if is_naive(expected_start_dt):
-                    expected_start_dt = make_aware(expected_start_dt)
-
-                actual_in_time = max(in_time, expected_start_dt)
-
-                if out_time and out_time > actual_in_time:
-                    duration = out_time - actual_in_time
-                    total_work_time += duration
-
-                    if in_time > expected_start_dt:
-                        total_late_time += in_time - expected_start_dt
-
-                    if duration > regular_work_time:
-                        total_over_time += duration - regular_work_time
-                    elif duration < regular_work_time:
-                        total_less_time += regular_work_time - duration
-
-        # ✅ Expected Work Time: Weekly Off + Holiday বাদ, কিন্তু Leave বাদ হবে না
-        expected_work_time = (days_in_range - weekly_off_count - holiday_count) * regular_work_time
-
-        absent_days = days_in_range - present_days - weekly_off_count - leave_day_count - holiday_count
-        work_time_difference = expected_work_time - total_work_time
-
-        report_data.append({
-            'employee': emp,
-            'present_days': present_days,
-            'absent_days': absent_days,
-            'weekly_off_days': weekly_off_count,
-            'leave_days': leave_day_count,
-            'holiday_days': holiday_count,
-            'total_work_hours': total_work_time,
-            'expected_work_hours': expected_work_time,
-            'difference_time': work_time_difference,
-            'late_hours': total_late_time,
-            'over_hours': total_over_time,
-            'less_hours': total_less_time,
-        })
-
-    # Department name (validated in company)
-    department_name = None
-    if selected_dept:
-        try:
-            department = Department.objects.get(id=selected_dept, company=user_company)
-            department_name = department.name
-        except Department.DoesNotExist:
-            department_name = None
-
-    logo_url = request.build_absolute_uri('/static/images/logo.png')
-
-    html_string = render_to_string('monthly_work_time_report_pdf.html', {
-        'report_data': report_data,
-        'start_date': start_date,
-        'end_date': end_date,
-        'department_name': department_name,
-        'logo_url': logo_url,
-        'company_name': user_company.name,
-    })
-
-    pdf = HTML(string=html_string, base_url=request.build_absolute_uri()).write_pdf()
-
-    response = HttpResponse(pdf, content_type='application/pdf')
-    response['Content-Disposition'] = f'inline; filename="monthly_work_time_{start_date}_to_{end_date}.pdf"'
-    return response
-
+        # PDF রেন্ডার করা
+        html_string = render_to_string('monthly_work_time_report_pdf.html', context)
+        
+        if HTML is None:
+            return HttpResponse("WeasyPrint is not installed. Cannot generate PDF.", status=500)
+            
+        pdf = HTML(string=html_string, base_url=request.build_absolute_uri()).write_pdf()
+        response = HttpResponse(pdf, content_type='application/pdf')
+        response['Content-Disposition'] = f'inline; filename="Monthly_Report_{context["start_date"]}.pdf"'
+        return response
+    except Exception as e:
+        return HttpResponseBadRequest(f"PDF Generation Error: {str(e)}")
 
 
 
@@ -1005,332 +745,255 @@ WEEKDAY_MAP = {
 # ----------------------------
 from collections import defaultdict
 
-
-def _daterange(d1, d2):
-    cur = d1
-    while cur <= d2:
-        yield cur
-        cur += timedelta(days=1)
-
-def _expand_date_range(start_d, end_d):
-    """Start/End (date) থেকে সব মধ্যবর্তী date এর set বানায়"""
-    return {d for d in _daterange(start_d, end_d)}
-
-def _align_tz(dt: datetime, ref: datetime) -> datetime:
+def generate_attendance_table(employee_qs, start_date_str, end_date_str):
     """
-    dt (naive) কে ref এর timezone-awareness এর সাথে মিলিয়ে দেয়।
-    ref যদি aware হয়, dt কে aware বানায় (current timezone দিয়ে)।
-    ref যদি naive হয়, dt naive-ই থাকে।
+    একবারে সব ডাটা লোড করে ফাস্ট অ্যাটেন্ডেন্স টেবিল জেনারেট করে।
+    Priority: Present > Holiday > Leave > Weekly Off > Absent
     """
-    if timezone.is_aware(ref) and timezone.is_naive(dt):
-        return timezone.make_aware(dt, timezone.get_current_timezone())
-    if timezone.is_naive(ref) and timezone.is_aware(dt):
-        return timezone.make_naive(dt, timezone.get_current_timezone())
-    return dt
+    # Date parsing (String to Date object)
+    if isinstance(start_date_str, str):
+        start_date = datetime.strptime(start_date_str, "%Y-%m-%d").date()
+    else:
+        start_date = start_date_str
 
-def generate_attendance_table(employees, start_date, end_date):
-    summary = []
+    if isinstance(end_date_str, str):
+        end_date = datetime.strptime(end_date_str, "%Y-%m-%d").date()
+    else:
+        end_date = end_date_str
 
-    # Parse dates
-    start = datetime.strptime(start_date, '%Y-%m-%d').date()
-    end = datetime.strptime(end_date, '%Y-%m-%d').date()
+    # 1. Bulk Fetch Data
+    # ------------------
+    all_attendance = Attendance.objects.filter(
+        employee__in=employee_qs,
+        timestamp__date__range=(start_date, end_date)
+    ).values('id', 'employee_id', 'timestamp')
 
-    # Preload holidays within range -> set of dates
-    holiday_qs = Holiday.objects.filter(start_date__lte=end, end_date__gte=start)
-    holiday_dates = set()
-    for h in holiday_qs:
-        s = max(h.start_date, start)
-        e = min(h.end_date, end)
-        holiday_dates |= _expand_date_range(s, e)
-
-    # Preload approved leaves within range -> per-employee set of dates
-    leaves_qs = LeaveRequest.objects.filter(
+    all_leaves = LeaveRequest.objects.filter(
+        employee__in=employee_qs,
         status='Approved',
-        start_date__lte=end,
-        end_date__gte=start
-    ).select_related('employee')
-    leaves_by_emp = defaultdict(set)
-    for lv in leaves_qs:
-        s = max(lv.start_date, start)
-        e = min(lv.end_date, end)
-        leaves_by_emp[lv.employee_id] |= _expand_date_range(s, e)
+        start_date__lte=end_date,
+        end_date__gte=start_date
+    ).values('employee_id', 'start_date', 'end_date')
 
-    # Weekly off map দরকার (তোমার কোডে WEEKDAY_MAP আছে ধরে নিলাম)
-    # default: Friday -> 4 (Python weekday: Mon=0 ... Sun=6)
-    for emp in employees.select_related('department'):
-        department = getattr(emp, 'department', None)
-        weekly_off_day_str = getattr(department, 'weekly_off_day', 'Friday')
-        weekly_off_day = WEEKDAY_MAP.get(weekly_off_day_str, 4)
+    # Holiday Fetch (Company specific)
+    first_emp = employee_qs.first()
+    company = first_emp.company if first_emp else None
+    all_holidays = Holiday.objects.filter(
+        company=company,
+        start_date__lte=end_date,
+        end_date__gte=start_date
+    ).values('start_date', 'end_date')
 
-        # Pull all attendance for this emp within range in one go
-        # NOTE: তোমার মডেল অনুযায়ী date ফিল্ড আলাদা না, timestamp__date দিয়ে ফিল্টার করছো
-        emp_att_qs = (
-            Attendance.objects
-            .filter(employee=emp, timestamp__date__range=(start, end))
-            .order_by('timestamp')
-        )
+    # 2. Data Mapping
+    # ---------------
+    att_map = defaultdict(list)
+    for att in all_attendance:
+        d = att['timestamp'].date()
+        att_map[(att['employee_id'], d)].append({
+            'timestamp': att['timestamp'],
+            'id': att['id']
+        })
 
-        # Group by date
-        daily_records = defaultdict(list)
-        for rec in emp_att_qs:
-            daily_records[rec.timestamp.date()].append(rec)
+    leave_map = set()
+    for lv in all_leaves:
+        curr = max(lv['start_date'], start_date)
+        lim = min(lv['end_date'], end_date)
+        while curr <= lim:
+            leave_map.add((lv['employee_id'], curr))
+            curr += timedelta(days=1)
 
-        # Standard in-time (10:30) — দিনে apply করতে হবে
-        standard_in_time = time(10, 30)
+    holiday_map = set()
+    for h in all_holidays:
+        curr = max(h['start_date'], start_date)
+        lim = min(h['end_date'], end_date)
+        while curr <= lim:
+            holiday_map.add(curr)
+            curr += timedelta(days=1)
 
-        for cur in _daterange(start, end):
-            records = daily_records.get(cur, [])
-            in_time = None
-            out_time = None
-            attendance_id = None
+    # 3. Generate List
+    # ----------------
+    summary = []
+    current_date = start_date
+    
+    while current_date <= end_date:
+        weekday = current_date.strftime('%A')
+        
+        for emp in employee_qs:
+            is_weekly_off = (weekday == emp.department.weekly_off_day) if emp.department else False
+            punches = att_map.get((emp.id, current_date), [])
+            
+            # Logic: First In - Last Out
+            timestamps = [p['timestamp'] for p in punches]
+            in_time = min(timestamps) if timestamps else None
+            out_time = max(timestamps) if len(timestamps) > 1 else None
+            attendance_id = punches[0]['id'] if punches else None
 
-            # Fast checks using precomputed sets
-            is_public_holiday = cur in holiday_dates
-            is_weekly_off = (cur.weekday() == weekly_off_day)
-            is_on_leave = cur in leaves_by_emp.get(emp.id, set())
-
-            if is_public_holiday:
-                status = 'Public Holiday'
+            # Status Priority
+            if timestamps:
+                status = "Present"
+            elif current_date in holiday_map:
+                status = "Holiday"
+            elif (emp.id, current_date) in leave_map:
+                status = "Leave"
             elif is_weekly_off:
-                status = 'Weekly Off'
-            elif is_on_leave:
-                status = 'Leave'
-            elif records:
-                ins = [r for r in records if r.status == 'In']
-                outs = [r for r in records if r.status == 'Out']
-
-                if ins:
-                    earliest_in = min(ins, key=lambda r: r.timestamp)
-                    attendance_id = earliest_in.id
-
-                    # standard_in_datetime কে earliest_in.timestamp এর awareness অনুযায়ী align করো
-                    std_in_dt = datetime.combine(cur, standard_in_time)
-                    std_in_dt = _align_tz(std_in_dt, earliest_in.timestamp)
-
-                    # লগিক: 10:30 এর আগে ইন করলে 10:30 ধরবো, নইলে actual
-                    in_time = max(earliest_in.timestamp, std_in_dt)
-
-                if outs:
-                    latest_out = max(outs, key=lambda r: r.timestamp)
-                    out_time = latest_out.timestamp
-
-                status = 'Present' if (in_time or out_time) else 'Absent'
+                status = "Weekly Off"
             else:
-                status = 'Absent'
+                status = "Absent"
 
-            # ইউনিফর্ম রো
-            row = {
+            summary.append({
                 'employee': emp,
-                'date': cur,
+                'date': current_date,
                 'in_time': in_time,
                 'out_time': out_time,
                 'status': status,
-                'attendance_id': attendance_id,   # ✅ মূল key
-                'id': attendance_id,              # ✅ backward-compat (যদি কোথাও 'id' রেফারেন্স থাকে)
-                'editable': bool(attendance_id),  # টেমপ্লেটে কাজে লাগাতে পারো
-            }
-            summary.append(row)
+                'attendance_id': attendance_id,
+                'editable': bool(attendance_id)
+            })
+            
+        current_date += timedelta(days=1)
 
     return summary
 
-
 @login_required
 def attendance_list(request):
-    # ----------------------------
-    # শুধু current user এর company এর employees দেখাবে
-    # ----------------------------
     user_company = getattr(request.user.profile, 'company', None)
+    
+    # 1. Company Check
     if not user_company:
-        employees = Employee.objects.none()  # কোন employee নেই
-    else:
-        employees = Employee.objects.filter(company=user_company).select_related('department')
-
-    # Filter input
-    start_date = request.GET.get('start_date')
-    end_date = request.GET.get('end_date')
-    employee_id = request.GET.get('employee')
-    department_id = request.GET.get('department')
-
-    # Default: today's attendance
-    if not start_date or not end_date:
-        today = date.today()
-        start_date = end_date = today.strftime('%Y-%m-%d')
-
-    # Apply filters
-    if employee_id:
-        employees = employees.filter(id=employee_id)
-    if department_id:
-        employees = employees.filter(department__id=department_id)
-
-    # Generate attendance summary
-    attendance_summary = generate_attendance_table(employees, start_date, end_date)
-
-    departments = Department.objects.filter(company=user_company) if user_company else Department.objects.none()
-
-    return render(request, 'attendance_list.html', {
-        'attendance_summary': attendance_summary,
-        'employees': employees,
-        'departments': departments,
-        'request': request,
-        'start_date': start_date,
-        'end_date': end_date,
-    })
-
-
-@login_required
-def attendance_list_pdf(request):
-    """
-    Attendance -> PDF (inline, no download).
-    ডিজাইন/ফন্ট/স্টাইল সব টেমপ্লেটে থাকবে।
-    """
-
-    # Company scope
-    user_company = getattr(request.user.profile, 'company', None)
-    if not user_company:
+        messages.error(request, "Company not found.")
         employees = Employee.objects.none()
     else:
         employees = Employee.objects.filter(company=user_company).select_related('department')
 
-    # Filters
-    start_date = request.GET.get('start_date')
-    end_date = request.GET.get('end_date')
+    # 2. Filter Inputs
+    start_date_str = request.GET.get('start_date') or date.today().strftime('%Y-%m-%d')
+    end_date_str = request.GET.get('end_date') or date.today().strftime('%Y-%m-%d')
+    
+    emp_id = request.GET.get('employee')
+    dept_id = request.GET.get('department')
+
+    # 3. Apply Filters
+    if emp_id:
+        employees = employees.filter(id=emp_id)
+    if dept_id:
+        employees = employees.filter(department_id=dept_id)
+
+    # 4. Generate Data (Using Optimized Helper)
+    attendance_summary = generate_attendance_table(employees, start_date_str, end_date_str)
+
+    # 5. Context Data
+    departments = Department.objects.filter(company=user_company) if user_company else []
+
+    return render(request, 'attendance_list.html', {
+        'attendance_summary': attendance_summary,
+        'employees': employees, # For filter persistence if needed (optional)
+        'all_employees': Employee.objects.filter(company=user_company), # For dropdown
+        'departments': departments,
+        'start_date': start_date_str,
+        'end_date': end_date_str,
+        'selected_employee': int(emp_id) if emp_id else None,
+        'selected_department': int(dept_id) if dept_id else None,
+    })
+
+
+# -------------------------------------------------------------------------
+# ✅ Optimized Attendance List PDF (Consistent with Report View)
+# -------------------------------------------------------------------------
+@login_required
+def attendance_list_pdf(request):
+    """
+    Attendance -> PDF (inline). 
+    Uses the optimized `generate_attendance_table` helper for consistency.
+    """
+    
+    # 1. Company Scope Check
+    user_company = getattr(request.user.profile, 'company', None)
+    if not user_company:
+        return HttpResponseForbidden("Company not set.")
+
+    # 2. Get Filters
+    start_date = request.GET.get('start_date') or date.today().strftime('%Y-%m-%d')
+    end_date = request.GET.get('end_date') or date.today().strftime('%Y-%m-%d')
+    
     employee_id = request.GET.get('employee')
     department_id = request.GET.get('department')
 
-    if not start_date or not end_date:
-        today = date.today()
-        start_date = end_date = today.strftime('%Y-%m-%d')
-
+    # 3. Filter Employees
+    employees = Employee.objects.filter(company=user_company).select_related('department')
     if employee_id:
         employees = employees.filter(id=employee_id)
     if department_id:
         employees = employees.filter(department__id=department_id)
 
-    # Raw data
+    # 4. Generate Data using the SAME helper as HTML view
+    # (This ensures "First In - Last Out" logic is applied uniformly)
     attendance_summary = generate_attendance_table(employees, start_date, end_date)
 
-    # Helpers
-    def _get(d, *keys):
-        if isinstance(d, dict):
-            for k in keys:
-                if k in d and d[k] not in (None, ''):
-                    return d[k]
-        for k in keys:
-            if hasattr(d, k):
-                v = getattr(d, k)
-                try:
-                    v = v() if callable(v) else v
-                except TypeError:
-                    pass
-                if v not in (None, ''):
-                    return v
-        return None
+    # 5. Format Data for PDF Template
+    rows = []
+    total_seconds = 0
 
-    def _fmt_time(t):
-        if not t: return ''
-        try:
-            if isinstance(t, (datetime, time)): return t.strftime('%H:%M')
-            return str(t)
-        except Exception:
-            return str(t)
-
-    def _parse_hours(v):
-        if v in (None, ''): return 0
-        if isinstance(v, timedelta): return int(v.total_seconds())
-        if isinstance(v, (int, float)): return int(float(v) * 3600)
-        s = str(v).strip()
-        if ':' in s:
-            try:
-                h, m = s.split(':', 1); return int(h)*3600 + int(m)*60
-            except Exception: pass
-        try:
-            return int(float(s) * 3600)
-        except Exception:
-            return 0
-
-    # Normalize rows + total
-    rows, total_seconds = [], 0
     for r in attendance_summary:
-        src = r if isinstance(r, dict) else getattr(r, '__dict__', {})
-
-        emp  = _get(src, 'employee', 'emp', 'user', 'staff')
-        dept = _get(src, 'department') or (getattr(emp, 'department', None) if emp else None)
-
-        employee_name = (
-            _get(src, 'employee_name', 'emp_name')
-            or (_get(emp, 'get_full_name') if emp else None)
-            or _get(emp, 'full_name', 'name', 'username')
-            or (f"{getattr(getattr(emp, 'user', None), 'first_name', '')} {getattr(getattr(emp, 'user', None), 'last_name', '')}".strip() if hasattr(emp, 'user') else None)
-            or (getattr(getattr(emp, 'user', None), 'username', None) if hasattr(emp, 'user') else None)
-            or (str(emp) if emp else '')
-        )
-
-        department_name = (
-            _get(src, 'department_name') or
-            _get(dept, 'name') or
-            _get(src, 'dept_name') or
-            ''
-        )
-
-        check_in  = _get(src, 'check_in', 'in_time', 'check_in_time', 'clock_in')
-        check_out = _get(src, 'check_out', 'out_time', 'check_out_time', 'clock_out')
-        worked    = _get(src, 'worked_hours', 'work_hours', 'total_hours', 'duration')
-        status    = _get(src, 'status', 'attendance_status', 'state')
-        adate     = _get(src, 'date', 'attendance_date', 'day')
-
-        worked_seconds = _parse_hours(worked)
-        if worked_seconds == 0 and check_in and check_out:
-            try:
-                if isinstance(check_in, datetime) and isinstance(check_out, datetime):
-                    worked_seconds = int((check_out - check_in).total_seconds())
-                elif isinstance(check_in, time) and isinstance(check_out, time):
-                    from datetime import datetime as dt
-                    dt0 = dt.combine(date.today(), check_in)
-                    dt1 = dt.combine(date.today(), check_out)
-                    worked_seconds = int((dt1 - dt0).total_seconds())
-                else:
-                    worked_seconds = _parse_hours(_fmt_time(check_out)) - _parse_hours(_fmt_time(check_in))
-                    if worked_seconds < 0:
-                        worked_seconds += 24*3600
-            except Exception:
-                worked_seconds = 0
-
-        total_seconds += max(0, worked_seconds)
-        wh = worked_seconds
-        worked_hhmm = f"{wh // 3600:02d}:{(wh % 3600)//60:02d}" if wh > 0 else (_fmt_time(worked) or '—')
+        emp = r['employee']
+        in_time = r['in_time']
+        out_time = r['out_time']
+        
+        # Formatting Times
+        in_str = localtime(in_time).strftime('%H:%M') if in_time else "-"
+        out_str = localtime(out_time).strftime('%H:%M') if out_time else "-"
+        
+        # Calculate Duration
+        duration_str = "-"
+        if in_time and out_time:
+            # Naive to Aware check handled in helper, but double check for subtraction
+            if is_naive(in_time): in_time = make_aware(in_time)
+            if is_naive(out_time): out_time = make_aware(out_time)
+            
+            diff = (out_time - in_time).total_seconds()
+            if diff > 0:
+                total_seconds += diff
+                h, rem = divmod(diff, 3600)
+                m, _ = divmod(rem, 60)
+                duration_str = f"{int(h):02}:{int(m):02}"
 
         rows.append({
-            'employee_name': (employee_name or '—'),
-            'department_name': (department_name or '—'),
-            'date': adate or '—',
-            'check_in': _fmt_time(check_in) or '—',
-            'check_out': _fmt_time(check_out) or '—',
-            'worked_hours': worked_hhmm,
-            'status': status or '—',
+            'employee_name': emp.name,
+            'department_name': emp.department.name if emp.department else "-",
+            'date': r['date'],
+            'check_in': in_str,
+            'check_out': out_str,
+            'worked_hours': duration_str,
+            'status': r['status']
         })
 
-    total_h = total_seconds // 3600
-    total_m = (total_seconds % 3600) // 60
-    total_worked = f"{total_h:02d}:{total_m:02d}"
+    # Total Worked Hours Calculation
+    th, tr = divmod(total_seconds, 3600)
+    tm, _ = divmod(tr, 60)
+    total_worked = f"{int(th):02}:{int(tm):02}"
 
-    # Render HTML (সব ডিজাইন টেমপ্লেটে)
-    html_string = render_to_string('attendance_list_pdf.html', {
+    # 6. Render PDF
+    context = {
         'rows': rows,
         'start_date': start_date,
         'end_date': end_date,
         'user': request.user,
         'total_worked': total_worked,
-    })
+        'company_name': user_company.name,
+        'logo_url': request.build_absolute_uri('/static/images/logo.png'),
+    }
 
-    # Build PDF (টেমপ্লেটের CSS/Google Fonts-ই ইউজ হবে)
+    html_string = render_to_string('attendance_list_pdf.html', context)
+
+    if HTML is None:
+        return HttpResponse("WeasyPrint library not installed.", status=500)
+
     pdf_io = BytesIO()
     HTML(string=html_string, base_url=request.build_absolute_uri('/')).write_pdf(target=pdf_io)
     pdf_io.seek(0)
 
-    # Inline view
-    resp = FileResponse(pdf_io, content_type='application/pdf', as_attachment=False)
-    resp['Content-Disposition'] = f'inline; filename="attendance_{start_date}_to_{end_date}.pdf"'
-    return resp
+    response = FileResponse(pdf_io, content_type='application/pdf', as_attachment=False)
+    response['Content-Disposition'] = f'inline; filename="attendance_{start_date}_to_{end_date}.pdf"'
+    return response
 
 
 
@@ -1479,212 +1142,178 @@ def attendance_delete(request, pk):
 
     return render(request, 'attendance_confirm_delete.html', {'attendance': anchor})
 
+from dateutil import parser  # নিশ্চিত করুন এটি ইমপোর্ট করা আছে
+from collections import OrderedDict, defaultdict
+from datetime import datetime, timedelta, date, time as _time
+import calendar
+from django.utils.timezone import make_aware, is_naive, localtime
+
 @login_required
 def employee_attendance_detail(request, employee_id):
-    # Employee নাও
+    # ১. ফাস্ট ডাটা ফেচিং (Select Related)
     employee = get_object_or_404(Employee.objects.select_related('department'), id=employee_id)
+    user_company = getattr(request.user.profile, 'company', None)
 
-    start_date = request.GET.get('start_date')
-    end_date = request.GET.get('end_date')
+    # ২. ফ্লেক্সিবল ডেট পার্সিং (Date Parsing Fix)
+    start_date_str = request.GET.get('start_date')
+    end_date_str = request.GET.get('end_date')
+    today = date.today()
 
-    # Default: current month's 1st day to today
-    if not (start_date and end_date):
-        today = datetime.today().date()
+    try:
+        if start_date_str and end_date_str:
+            # এটি যেকোনো ফরম্যাট (Dec 1, 2025 বা 2025-12-01) হ্যান্ডেল করবে
+            start_date = parser.parse(start_date_str).date()
+            end_date = parser.parse(end_date_str).date()
+        else:
+            start_date = today.replace(day=1)
+            end_date = today
+    except (ValueError, TypeError, parser.ParserError):
+        # এরর হলে সেইফ ডিফল্ট
         start_date = today.replace(day=1)
         end_date = today
 
-    # Convert to date if received as string
-    if isinstance(start_date, str):
-        start_date = datetime.strptime(start_date, "%Y-%m-%d").date()
-    if isinstance(end_date, str):
-        end_date = datetime.strptime(end_date, "%Y-%m-%d").date()
-
-    weekly_off_day = employee.department.weekly_off_day
-
-    # Prepare date range summary with default values
+    # ৩. বেস সামারি তৈরি (লুপের গতি বাড়ানো হয়েছে)
     summary = OrderedDict()
-    day_count = (end_date - start_date).days + 1
-    for i in range(day_count):
-        current_date = start_date + timedelta(days=i)
-        weekday_name = calendar.day_name[current_date.weekday()]
-        summary[current_date] = {
-            'in_time': None,
+    weekly_off_day = employee.department.weekly_off_day if employee.department else "Friday"
+    
+    # একবারে সব দিনের স্ট্রাকচার তৈরি
+    curr = start_date
+    while curr <= end_date:
+        summary[curr] = {
+            'in_time': None, 
             'out_time': None,
-            'status': 'Holiday' if weekday_name == weekly_off_day else 'Absent'
+            'status': 'Holiday' if curr.strftime('%A') == weekly_off_day else 'Absent'
         }
+        curr += timedelta(days=1)
 
-    # ------------------------------
-    # Public Holidays: Current User Company Only
-    # ------------------------------
-    user_company = getattr(request.user.profile, 'company', None)
-    public_holidays = Holiday.objects.filter(
-        end_date__gte=start_date,
-        start_date__lte=end_date,
+    # ৪. পাবলিক হলিডে লোড (Bulk Load & Map) [Performance Fix]
+    holidays = Holiday.objects.filter(
+        company=user_company, 
+        start_date__lte=end_date, 
+        end_date__gte=start_date
     )
-    if user_company:
-        public_holidays = public_holidays.filter(company=user_company)
-    else:
-        public_holidays = Holiday.objects.none()
+    for h in holidays:
+        # রেঞ্জ ক্ল্যাম্পিং (যাতে লুপ কম চলে)
+        h_start = max(h.start_date, start_date)
+        h_end = min(h.end_date, end_date)
+        curr = h_start
+        while curr <= h_end:
+            if curr in summary:
+                summary[curr]['status'] = 'Public Holiday'
+            curr += timedelta(days=1)
 
-    public_holiday_dates = set()
-    for holiday in public_holidays:
-        holiday_start = max(holiday.start_date, start_date)
-        holiday_end = min(holiday.end_date, end_date)
-        for i in range((holiday_end - holiday_start).days + 1):
-            public_holiday_dates.add(holiday_start + timedelta(days=i))
-
-    for ph_date in public_holiday_dates:
-        if ph_date in summary and summary[ph_date]['status'] == 'Absent':
-            summary[ph_date]['status'] = 'Public Holiday'
-
-    # ------------------------------
-    # Attendance Records
-    # ------------------------------
+    # ৫. অ্যাটেন্ডেন্স প্রসেসিং (Fast Mapping)
     attendances = Attendance.objects.filter(
         employee=employee,
         timestamp__date__range=(start_date, end_date)
-    ).order_by('timestamp')
+    ).values('timestamp')  # শুধু timestamp আনলে কোয়েরি ফাস্ট হবে
 
-    daily_attendance = defaultdict(list)
+    daily_punches = defaultdict(list)
     for att in attendances:
-        att_date = att.timestamp.date()
-        if att_date in summary:
-            daily_attendance[att_date].append(att.timestamp)
+        ts = att['timestamp']
+        daily_punches[ts.date()].append(ts)
 
-    from datetime import time as _time
-    threshold_time = _time(14, 0)  # 14:00 cutoff
+    cutoff_time = _time(14, 0) # দুপুর ২টা
 
-    for att_date, timestamps in daily_attendance.items():
-        if not timestamps:
-            continue
-
-        timestamps.sort()
-
-        # 14:00-এর আগে/পরে ভাগ করো
-        before_14 = [ts for ts in timestamps if ts.time() < threshold_time]
-        after_14 = [ts for ts in timestamps if ts.time() >= threshold_time]
+    for d, punches in daily_punches.items():
+        if d not in summary: continue
+        
+        # পাঞ্চ থাকলে স্ট্যাটাস প্রেজেন্ট (ওভাররাইড)
+        summary[d]['status'] = 'Present'
+        
+        # টাইমজোন ফিক্স করে সর্ট করা
+        punches = sorted([localtime(p) for p in punches])
+        
+        # ফাস্ট ফিল্টারিং
+        before_14 = [p for p in punches if p.time() < cutoff_time]
+        after_14 = [p for p in punches if p.time() >= cutoff_time]
 
         in_time = None
         out_time = None
 
         if before_14:
-            # আগে পাঞ্চ থাকলে earliest = in_time
             in_time = before_14[0]
-            # out_time: preference after_14 last > before_14 last (if multiple)
             if after_14:
                 out_time = after_14[-1]
             elif len(before_14) > 1:
                 out_time = before_14[-1]
         else:
-            # আগে কোনো পাঞ্চ নেই (সব 14:00-এর পরে)
+            # সব পাঞ্চ ২টার পরে হলে
             if len(after_14) == 1:
-                # একটাই পাঞ্চ: শুধু out_time হবে
-                out_time = after_14[0]
-            else:
-                # একাধিক পাঞ্চ: প্রথমটা in_time, শেষটা out_time
+                out_time = after_14[0] # শুধু একটা পাঞ্চ বিকেলে হলে সেটা আউট
+            elif len(after_14) > 1:
                 in_time = after_14[0]
                 out_time = after_14[-1]
 
-        summary[att_date]['in_time'] = in_time
-        summary[att_date]['out_time'] = out_time
+        summary[d]['in_time'] = in_time
+        summary[d]['out_time'] = out_time
 
-        # ✅ in_time বা out_time যেকোনো একটা থাকলেই Present
-        if in_time or out_time:
-            summary[att_date]['status'] = 'Present'
-
-    # ------------------------------
-    # Approved Leaves
-    # ------------------------------
-    approved_leaves = LeaveRequest.objects.filter(
-        employee=employee,
-        status='Approved',
-        start_date__lte=end_date,
-        end_date__gte=start_date,
+    # ৬. লিভ প্রসেসিং (Punch এর পরে চেক, যাতে প্রেজেন্ট ওভাররাইড না হয়)
+    leaves = LeaveRequest.objects.filter(
+        employee=employee, 
+        status='Approved', 
+        start_date__lte=end_date, 
+        end_date__gte=start_date
     )
+    for lv in leaves:
+        l_start = max(lv.start_date, start_date)
+        l_end = min(lv.end_date, end_date)
+        curr = l_start
+        while curr <= l_end:
+            # যদি প্রেজেন্ট না থাকে তবেই লিভ বসবে
+            if curr in summary and summary[curr]['status'] != 'Present':
+                summary[curr]['status'] = 'Leave'
+            curr += timedelta(days=1)
 
-    leave_dates = set()
-    for leave in approved_leaves:
-        current = max(leave.start_date, start_date)
-        last = min(leave.end_date, end_date)
-        for i in range((last - current).days + 1):
-            leave_dates.add(current + timedelta(days=i))
-
-    for leave_date in leave_dates:
-        if leave_date in summary:
-            summary[leave_date]['status'] = 'Leave'
-            summary[leave_date]['in_time'] = None
-            summary[leave_date]['out_time'] = None
-
-    # ------------------------------
-    # Count Stats
-    # ------------------------------
-    approved_leave_count = len([d for d in summary if summary[d]['status'] == 'Leave'])
-    absent_days = len([d for d in summary if summary[d]['status'] == 'Absent'])
-    public_holiday_count = len([d for d in summary if summary[d]['status'] == 'Public Holiday'])
-    weekly_holiday_count = len([d for d in summary if summary[d]['status'] == 'Holiday'])
-    total_leave_requests = LeaveRequest.objects.filter(
-        employee=employee,
-        start_date__lte=end_date,
-        end_date__gte=start_date,
-    ).count()
-
-    # ------------------------------
-    # Calculate Work Duration
-    # ------------------------------
+    # ৭. ক্যালকুলেশন ও স্ট্যাটস
     total_work_duration = timedelta()
+    dept = employee.department
+    
+    # শিফট ডিউরেশন এবং টাইম
+    exp_in = dept.in_time if dept and dept.in_time else _time(10, 30)
+    exp_out = dept.out_time if dept and dept.out_time else _time(20, 30)
+    
+    # শিফট ডিউরেশন ক্যালকুলেশন (একবারই করা ভালো)
+    dummy_date = date.min
+    shift_dur = datetime.combine(dummy_date, exp_out) - datetime.combine(dummy_date, exp_in)
+    if shift_dur.total_seconds() < 0: shift_dur = timedelta(0)
 
-    # Department-based shift
-    DEFAULT_IN = _time(10, 30)
-    DEFAULT_OUT = _time(20, 30)
-    dept = getattr(employee, "department", None)
-
-    dept_in = getattr(dept, "in_time", None) or DEFAULT_IN
-    dept_out = getattr(dept, "out_time", None) or DEFAULT_OUT
-
-    shift_start_dt = datetime.combine(start_date, dept_in)
-    shift_end_dt = datetime.combine(start_date, dept_out)
-    shift_duration = shift_end_dt - shift_start_dt
-    if shift_duration.total_seconds() < 0:
-        shift_duration = timedelta(0)
-
-    expected_start_time = dept_in
-
-    for date_key, data in summary.items():
+    # কাউন্টার (লুপের ভেতরে না চালিয়ে জেনারেটর এক্সপ্রেশন ব্যবহার - ফাস্ট)
+    status_values = [d['status'] for d in summary.values()]
+    
+    for d, data in summary.items():
         if data['status'] == 'Present' and data['in_time'] and data['out_time']:
-            in_time = data['in_time']
-            out_time = data['out_time']
-
-            if is_naive(in_time):
-                in_time = make_aware(in_time)
-            if is_naive(out_time):
-                out_time = make_aware(out_time)
-
-            adjusted_in_time = datetime.combine(in_time.date(), expected_start_time)
-            if is_naive(adjusted_in_time):
-                adjusted_in_time = make_aware(adjusted_in_time)
-
-            if in_time < adjusted_in_time:
-                in_time = adjusted_in_time
-
-            if out_time > in_time:
-                duration = out_time - in_time
-                total_work_duration += duration
-
+            t_in = data['in_time']
+            t_out = data['out_time']
+            
+            # Aware/Naive ফিক্স
+            if is_naive(t_in): t_in = make_aware(t_in)
+            if is_naive(t_out): t_out = make_aware(t_out)
+            
+            # লেট এডজাস্টমেন্ট
+            exp_in_dt = make_aware(datetime.combine(d, exp_in)) if is_naive(datetime.combine(d, exp_in)) else datetime.combine(d, exp_in)
+            
+            actual_start = max(t_in, exp_in_dt)
+            if t_out > actual_start:
+                total_work_duration += (t_out - actual_start)
+        
         elif data['status'] == 'Leave':
-            # Leave দিনে শিফটের সময় ক্রেডিট হবে
-            total_work_duration += shift_duration
+            total_work_duration += shift_dur
 
+    # ৮. কনটেক্সট রিটার্ন
     context = {
         'employee': employee,
         'attendance_summary': summary.items(),
-        'start_date': start_date.strftime("%Y-%m-%d"),
+        'start_date': start_date.strftime("%Y-%m-%d"), # স্ট্রিং হিসেবে পাঠানো হচ্ছে যাতে ফর্মে ভ্যালু থাকে
         'end_date': end_date.strftime("%Y-%m-%d"),
         'total_work_duration': total_work_duration,
-        'approved_leave_count': approved_leave_count,
-        'absent_days': absent_days,
-        'public_holiday_count': public_holiday_count,
-        'weekly_holiday_count': weekly_holiday_count,
-        'total_leave_requests': total_leave_requests,
+        
+        'approved_leave_count': status_values.count('Leave'),
+        'absent_days': status_values.count('Absent'),
+        'public_holiday_count': status_values.count('Public Holiday'),
+        'weekly_holiday_count': status_values.count('Holiday'),
+        
+        'total_leave_requests': leaves.count(),
     }
 
     return render(request, 'employee_attendance_detail.html', context)
@@ -1693,254 +1322,556 @@ def employee_attendance_detail(request, employee_id):
 
 # ----------------------attendance details pdf-------------
 
-from datetime import timedelta
+from dateutil import parser
+from collections import defaultdict, OrderedDict
+from datetime import datetime, timedelta, date, time as _time
+from django.utils.timezone import make_aware, localtime, is_naive
+from django.shortcuts import get_object_or_404
+from django.template.loader import render_to_string
+from django.http import HttpResponse
+from django.contrib.auth.decorators import login_required
+from weasyprint import HTML
 
+# হেল্পার ফাংশন: টাইমডেল্টা ফরম্যাটিং
 def format_timedelta(td):
-    if not isinstance(td, timedelta):
-        return td
+    if not isinstance(td, timedelta): return "00:00:00"
     total_seconds = int(td.total_seconds())
-    hours, remainder = divmod(total_seconds, 3600)
-    minutes, seconds = divmod(remainder, 60)
-    return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+    sign = "-" if total_seconds < 0 else ""
+    total_seconds = abs(total_seconds)
+    h, r = divmod(total_seconds, 3600)
+    m, s = divmod(r, 60)
+    return f"{sign}{h:02d}:{m:02d}:{s:02d}"
 
 @login_required
 def employee_attendance_pdf(request, employee_id):
-    emp = get_object_or_404(Employee, id=employee_id)
+    # ১. ডাটা ফেচিং
+    emp = get_object_or_404(Employee.objects.select_related('department'), id=employee_id)
+    user_company = getattr(request.user.profile, 'company', None)
 
+    # ২. ডেট রেঞ্জ (Flexible Parsing Fix)
     start_date_str = request.GET.get('start_date')
     end_date_str = request.GET.get('end_date')
+    today = date.today()
 
-    today = datetime.today().date()
-    start_date = datetime.strptime(start_date_str, "%Y-%m-%d").date() if start_date_str else today - timedelta(days=30)
-    end_date = datetime.strptime(end_date_str, "%Y-%m-%d").date() if end_date_str else today
-
-    attendance_qs = Attendance.objects.filter(
-        employee=emp,
-        timestamp__date__range=(start_date, end_date)
-    ).order_by('timestamp')
-
-    daily_logs = defaultdict(list)
-    for att in attendance_qs:
-        daily_logs[att.timestamp.date()].append(att)
-
-    off_day = emp.department.weekly_off_day if emp.department else None
-
-    attendance_summary = {}
-    total_work_duration = timedelta()
-    total_over_time = timedelta()
-    total_less_time = timedelta()
-    holiday_count = 0
-    absent_count = 0
-    standard_work_duration = timedelta(hours=10)
-    expected_start_time = time(10, 30)
-
-    for day in (start_date + timedelta(days=n) for n in range((end_date - start_date).days + 1)):
-        weekday_name = day.strftime('%A')
-        logs = daily_logs.get(day, [])
-        in_times = [log.timestamp for log in logs if log.status == 'In']
-        out_times = [log.timestamp for log in logs if log.status == 'Out']
-
-        if off_day and weekday_name == off_day:
-            status = "Off Day"
-            holiday_count += 1
-            in_time = None
-            out_time = None
-            daily_work_time = timedelta()
-            over_time = timedelta()
-            less_time = timedelta()
-        elif in_times:
-            in_time = localtime(min(in_times))
-            out_time = localtime(max(out_times)) if out_times else None
-
-            adjusted_start_time = make_aware(datetime.combine(day, expected_start_time))
-            actual_in_time = max(in_time, adjusted_start_time)
-
-            if out_time and out_time > actual_in_time:
-                daily_work_time = out_time - actual_in_time
-            else:
-                daily_work_time = timedelta()
-
-            total_work_duration += daily_work_time
-            status = "Present"
-
-            # Compare with standard_work_duration
-            if daily_work_time > standard_work_duration:
-                over_time = daily_work_time - standard_work_duration
-                less_time = timedelta()
-            else:
-                less_time = standard_work_duration - daily_work_time
-                over_time = timedelta()
-
-            total_over_time += over_time
-            total_less_time += less_time
+    try:
+        if start_date_str and end_date_str:
+            start_date = parser.parse(start_date_str).date()
+            end_date = parser.parse(end_date_str).date()
         else:
-            in_time = None
-            out_time = None
-            daily_work_time = timedelta()
-            over_time = timedelta()
-            less_time = timedelta()
+            start_date = today.replace(day=1)
+            end_date = today
+    except (ValueError, TypeError, parser.ParserError):
+        start_date = today.replace(day=1)
+        end_date = today
+
+    # ৩. শিফট টাইম সেটআপ
+    dept = emp.department
+    exp_in = dept.in_time if dept and dept.in_time else _time(10, 30)
+    exp_out = dept.out_time if dept and dept.out_time else _time(20, 30)
+    
+    # শিফট ডিউরেশন
+    dummy = date.min
+    shift_dur = datetime.combine(dummy, exp_out) - datetime.combine(dummy, exp_in)
+    if shift_dur.total_seconds() < 0: shift_dur = timedelta(0)
+
+    # ৪. ডাটা লোডিং (Bulk)
+    # -- Attendance --
+    attendance_qs = Attendance.objects.filter(
+        employee=emp, timestamp__date__range=(start_date, end_date)
+    ).values('timestamp') # Values ব্যবহার করলে ফাস্ট হবে
+    
+    daily_punches = defaultdict(list)
+    for att in attendance_qs:
+        daily_punches[att['timestamp'].date()].append(att['timestamp'])
+
+    # -- Holidays --
+    holidays = Holiday.objects.filter(company=user_company, start_date__lte=end_date, end_date__gte=start_date)
+    holiday_dates = set()
+    for h in holidays:
+        curr = max(h.start_date, start_date)
+        lim = min(h.end_date, end_date)
+        while curr <= lim:
+            holiday_dates.add(curr)
+            curr += timedelta(days=1)
+
+    # -- Leaves --
+    leaves = LeaveRequest.objects.filter(employee=emp, status='Approved', start_date__lte=end_date, end_date__gte=start_date)
+    leave_dates = set()
+    for l in leaves:
+        curr = max(l.start_date, start_date)
+        lim = min(l.end_date, end_date)
+        while curr <= lim:
+            leave_dates.add(curr)
+            curr += timedelta(days=1)
+
+    # ৫. লুপ এবং ক্যালকুলেশন
+    summary_list = []
+    total_work = timedelta()
+    total_over = timedelta()
+    total_less = timedelta()
+    
+    counts = {'Present': 0, 'Absent': 0, 'Leave': 0, 'Holiday': 0, 'Weekly Off': 0}
+    off_day = dept.weekly_off_day if dept else None
+    cutoff_time = _time(14, 0)
+
+    curr_date = start_date
+    while curr_date <= end_date:
+        weekday = curr_date.strftime('%A')
+        punches = daily_punches.get(curr_date, [])
+        
+        status = "Absent"
+        in_time_val = None
+        out_time_val = None
+        daily_w = timedelta()
+        daily_o = timedelta()
+        daily_l = timedelta()
+
+        # Priority Logic: Present > Leave > Holiday > Off > Absent
+        if punches:
+            status = "Present"
+            counts['Present'] += 1
+            
+            # Sort & Timezone Localize
+            punches = sorted([localtime(p) for p in punches])
+            
+            # Logic: Before 14:00 is IN, After is OUT
+            before_14 = [p for p in punches if p.time() < cutoff_time]
+            after_14 = [p for p in punches if p.time() >= cutoff_time]
+
+            if before_14:
+                in_time_val = before_14[0]
+                out_time_val = after_14[-1] if after_14 else (before_14[-1] if len(before_14) > 1 else None)
+            else:
+                if len(after_14) > 1:
+                    in_time_val = after_14[0]
+                    out_time_val = after_14[-1]
+                else:
+                    out_time_val = after_14[0]
+
+            # Work Calculation
+            if in_time_val and out_time_val:
+                exp_in_dt = make_aware(datetime.combine(curr_date, exp_in)) if is_naive(datetime.combine(curr_date, exp_in)) else datetime.combine(curr_date, exp_in)
+                actual_start = max(in_time_val, exp_in_dt)
+                
+                if out_time_val > actual_start:
+                    daily_w = out_time_val - actual_start
+            
+            # OT / Less Logic
+            if daily_w > shift_dur:
+                daily_o = daily_w - shift_dur
+            else:
+                daily_l = shift_dur - daily_w
+
+        elif curr_date in leave_dates:
+            status = "Leave" # or "On Leave"
+            counts['Leave'] += 1
+            daily_w = shift_dur # Full credit
+
+        elif curr_date in holiday_dates:
+            status = "Public Holiday"
+            counts['Holiday'] += 1
+        
+        elif off_day and weekday == off_day:
+            status = "Weekly Off"
+            counts['Weekly Off'] += 1
+        
+        else:
             status = "Absent"
-            absent_count += 1
+            counts['Absent'] += 1
+            daily_l = shift_dur # Full penalty
 
-        attendance_summary[day] = {
-            'in_time': actual_in_time if in_times else None,
-            'out_time': out_time,
+        # Totals
+        total_work += daily_w
+        total_over += daily_o
+        total_less += daily_l
+
+        summary_list.append({
+            'date': curr_date,
+            'weekday': weekday,
             'status': status,
-            'weekday': weekday_name,
-            'daily_work_time': daily_work_time,
-            'over_time': over_time,
-            'less_time': less_time
-        }
+            'in_time': in_time_val.strftime('%I:%M %p') if in_time_val else "-",
+            'out_time': out_time_val.strftime('%I:%M %p') if out_time_val else "-",
+            'work_time': format_timedelta(daily_w),
+            'over_time': format_timedelta(daily_o),
+            'less_time': format_timedelta(daily_l),
+        })
+        
+        curr_date += timedelta(days=1)
 
-    # Approved Leaves
-    approved_leaves = LeaveRequest.objects.filter(
-        employee=emp,
-        status='Approved',
-        start_date__lte=end_date,
-        end_date__gte=start_date
-    )
-
-    approved_leave_days = set()
-    for leave in approved_leaves:
-        current = max(leave.start_date, start_date)
-        last = min(leave.end_date, end_date)
-        while current <= last:
-            approved_leave_days.add(current)
-            current += timedelta(days=1)
-
-    for leave_day in approved_leave_days:
-        if leave_day in attendance_summary:
-            current_status = attendance_summary[leave_day]['status']
-            if current_status != 'Present':
-                attendance_summary[leave_day]['status'] = 'On Leave'
-                attendance_summary[leave_day]['in_time'] = None
-                attendance_summary[leave_day]['out_time'] = None
-                attendance_summary[leave_day]['daily_work_time'] = standard_work_duration
-                attendance_summary[leave_day]['over_time'] = timedelta()
-                attendance_summary[leave_day]['less_time'] = timedelta()
-                if current_status == 'Absent':
-                    absent_count -= 1
-                if current_status == 'Off Day':
-                    holiday_count -= 1
-
-    approved_leave_count = len(approved_leave_days)
-    total_leave_requests = LeaveRequest.objects.filter(
-        employee=emp,
-        start_date__lte=end_date,
-        end_date__gte=start_date
-    ).count()
-
-    # Format times for display
-    formatted_attendance_summary = []
-    for date, data in attendance_summary.items():
-        formatted_attendance_summary.append((date, {
-            'weekday': data['weekday'],
-            'status': data['status'],
-            'in_time': data['in_time'].strftime('%I:%M %p') if data['in_time'] else None,
-            'out_time': data['out_time'].strftime('%I:%M %p') if data['out_time'] else None,
-            'daily_work_time': str(data['daily_work_time']),
-            'over_time': str(data['over_time']),
-            'less_time': str(data['less_time'])
-        }))
-
+    # ৬. পিডিএফ রেন্ডার
     context = {
         'employee': emp,
         'start_date': start_date,
         'end_date': end_date,
-        'attendance_summary': formatted_attendance_summary,
-        'approved_leave_count': approved_leave_count,
-        'holiday_count': holiday_count,
-        'absent_count': absent_count,
-        'total_leave_requests': total_leave_requests,
-        'total_work_duration': total_work_duration,
-        'total_over_time': total_over_time,
-        'total_less_time': total_less_time,
+        'summary': summary_list,
+        'stats': {
+            'present': counts['Present'],
+            'absent': counts['Absent'],
+            'leave': counts['Leave'],
+            'holiday': counts['Holiday'] + counts['Weekly Off'], # Holidays = Public + Weekly
+            'total_work': format_timedelta(total_work),
+            'total_over': format_timedelta(total_over),
+            'total_less': format_timedelta(total_less),
+        },
+        'company_name': user_company.name if user_company else "Attendance System"
     }
 
     html_string = render_to_string('details_pdf_template.html', context)
+    
+    # Base URL for static files (images/css)
     pdf = HTML(string=html_string, base_url=request.build_absolute_uri()).write_pdf()
+    
     response = HttpResponse(pdf, content_type='application/pdf')
-    response['Content-Disposition'] = f'inline; filename="attendance_{emp.name}_{start_date}_to_{end_date}.pdf"'
+    response['Content-Disposition'] = f'inline; filename="Attendance_{emp.name}_{start_date}.pdf"'
     return response
 
 
-
 # ----------attendance_pdf_report-------------
+from django.shortcuts import get_object_or_404
+from django.http import HttpResponse
+from django.template.loader import render_to_string
+from django.contrib.auth.decorators import login_required
+from django.utils.timezone import make_aware, localtime, is_naive
+from datetime import datetime, timedelta, date, time as _time
+from collections import defaultdict
+from dateutil import parser  # pip install python-dateutil
+from weasyprint import HTML
+from .models import Attendance, Employee, Holiday, LeaveRequest
+
+# হেল্পার: টাইম ফরম্যাটিং
+def format_timedelta(td):
+    if not isinstance(td, timedelta): return "00:00:00"
+    total_seconds = int(td.total_seconds())
+    sign = "-" if total_seconds < 0 else ""
+    total_seconds = abs(total_seconds)
+    h, r = divmod(total_seconds, 3600)
+    m, s = divmod(r, 60)
+    return f"{sign}{h:02d}:{m:02d}:{s:02d}"
 
 @login_required
 def attendance_pdf_report(request, employee_id):
-    from .models import Attendance, Employee  # তোমার মডেল অনুযায়ী adjust করো
+    # ১. ফাস্ট ডাটা ফেচিং
+    emp = get_object_or_404(Employee.objects.select_related('department'), id=employee_id)
+    user_company = getattr(request.user.profile, 'company', None)
 
-    employee = Employee.objects.get(pk=employee_id)
+    # ২. ফ্লেক্সিবল ডেট পার্সিং (Date Fix)
+    start_date_str = request.GET.get('start_date')
+    end_date_str = request.GET.get('end_date')
+    today = date.today()
 
-    start_date = request.GET.get('start_date')
-    end_date = request.GET.get('end_date')
+    try:
+        if start_date_str and end_date_str:
+            start_date = parser.parse(start_date_str).date()
+            end_date = parser.parse(end_date_str).date()
+        else:
+            start_date = today.replace(day=1)
+            end_date = today
+    except (ValueError, TypeError, parser.ParserError):
+        start_date = today.replace(day=1)
+        end_date = today
 
-    attendance_qs = Attendance.objects.filter(employee=employee)
-    if start_date:
-        attendance_qs = attendance_qs.filter(timestamp__date__gte=start_date)
-    if end_date:
-        attendance_qs = attendance_qs.filter(timestamp__date__lte=end_date)
-    attendance_qs = attendance_qs.order_by('timestamp')
+    # ৩. শিফট ও লজিক সেটআপ
+    dept = emp.department
+    exp_in = dept.in_time if dept and dept.in_time else _time(10, 30)
+    exp_out = dept.out_time if dept and dept.out_time else _time(20, 30)
+    
+    dummy = date.min
+    shift_dur = datetime.combine(dummy, exp_out) - datetime.combine(dummy, exp_in)
+    if shift_dur.total_seconds() < 0: shift_dur = timedelta(0)
 
-    # Prepare response
-    response = HttpResponse(content_type='application/pdf')
-    response['Content-Disposition'] = f'attachment; filename="attendance_{employee.name}.pdf"'
-
-    p = canvas.Canvas(response, pagesize=letter)
-    width, height = letter
-
-    p.setFont("Helvetica-Bold", 14)
-    p.drawString(50, height - 50, f"Attendance Report for {employee.name}")
-
-    p.setFont("Helvetica", 12)
-    y = height - 80
-    p.drawString(50, y, "Date")
-    p.drawString(150, y, "In Time")
-    p.drawString(250, y, "Out Time")
-    p.drawString(350, y, "Status")
-
-    y -= 20
-
-    # Group attendance by date and summarize In and Out times (same logic as your summary)
-    attendance_by_date = {}
+    # ৪. বাল্ক ডাটা লোডিং (Performance Boost 🚀)
+    # -- Attendance --
+    attendance_qs = Attendance.objects.filter(
+        employee=emp, timestamp__date__range=(start_date, end_date)
+    ).values('timestamp') # values() ব্যবহার করলে মেমোরি কম লাগে
+    
+    daily_punches = defaultdict(list)
     for att in attendance_qs:
-        date_key = att.timestamp.date()
-        if date_key not in attendance_by_date:
-            attendance_by_date[date_key] = {'in_time': None, 'out_time': None, 'status': 'Absent'}
-        # You may adjust logic to set in_time and out_time properly:
-        if att.status.lower() == 'in':
-            if attendance_by_date[date_key]['in_time'] is None or att.timestamp < attendance_by_date[date_key]['in_time']:
-                attendance_by_date[date_key]['in_time'] = att.timestamp
-        elif att.status.lower() == 'out':
-            if attendance_by_date[date_key]['out_time'] is None or att.timestamp > attendance_by_date[date_key]['out_time']:
-                attendance_by_date[date_key]['out_time'] = att.timestamp
-        attendance_by_date[date_key]['status'] = 'Present'
+        daily_punches[att['timestamp'].date()].append(att['timestamp'])
 
-    for date, data in sorted(attendance_by_date.items()):
-        if y < 50:
-            p.showPage()
-            y = height - 50
-        p.drawString(50, y, date.strftime("%Y-%m-%d"))
-        in_time_str = data['in_time'].astimezone().strftime("%I:%M %p") if data['in_time'] else "-"
-        out_time_str = data['out_time'].astimezone().strftime("%I:%M %p") if data['out_time'] else "-"
-        p.drawString(150, y, in_time_str)
-        p.drawString(250, y, out_time_str)
-        p.drawString(350, y, data['status'])
-        y -= 20
+    # -- Holidays --
+    holidays = Holiday.objects.filter(company=user_company, start_date__lte=end_date, end_date__gte=start_date)
+    holiday_dates = set()
+    for h in holidays:
+        curr = max(h.start_date, start_date)
+        lim = min(h.end_date, end_date)
+        while curr <= lim:
+            holiday_dates.add(curr)
+            curr += timedelta(days=1)
 
-    p.showPage()
-    p.save()
+    # -- Leaves --
+    leaves = LeaveRequest.objects.filter(employee=emp, status='Approved', start_date__lte=end_date, end_date__gte=start_date)
+    leave_dates = set()
+    for l in leaves:
+        curr = max(l.start_date, start_date)
+        lim = min(l.end_date, end_date)
+        while curr <= lim:
+            leave_dates.add(curr)
+            curr += timedelta(days=1)
+
+    # ৫. মেইন প্রসেসিং লুপ
+    summary_list = []
+    total_work = timedelta()
+    total_over = timedelta()
+    total_less = timedelta()
+    
+    counts = {'Present': 0, 'Absent': 0, 'Leave': 0, 'Holiday': 0}
+    off_day = dept.weekly_off_day if dept else None
+    cutoff_time = _time(14, 0)
+
+    curr_date = start_date
+    while curr_date <= end_date:
+        weekday = curr_date.strftime('%A')
+        punches = daily_punches.get(curr_date, [])
+        
+        status = "Absent"
+        in_time_val = None
+        out_time_val = None
+        daily_w = timedelta()
+        daily_o = timedelta()
+        daily_l = timedelta()
+
+        # Priority: Present > Leave > Holiday > Off > Absent
+        if punches:
+            status = "Present"
+            counts['Present'] += 1
+            punches = sorted([localtime(p) for p in punches])
+            
+            # Logic: Before 14:00 -> IN, After 14:00 -> OUT
+            before_14 = [p for p in punches if p.time() < cutoff_time]
+            after_14 = [p for p in punches if p.time() >= cutoff_time]
+
+            if before_14:
+                in_time_val = before_14[0]
+                out_time_val = after_14[-1] if after_14 else (before_14[-1] if len(before_14) > 1 else None)
+            else:
+                if len(after_14) > 1:
+                    in_time_val = after_14[0]
+                    out_time_val = after_14[-1]
+                else:
+                    out_time_val = after_14[0]
+
+            # Work Calculation
+            if in_time_val and out_time_val:
+                exp_in_dt = make_aware(datetime.combine(curr_date, exp_in)) if is_naive(datetime.combine(curr_date, exp_in)) else datetime.combine(curr_date, exp_in)
+                actual_start = max(in_time_val, exp_in_dt)
+                
+                if out_time_val > actual_start:
+                    daily_w = out_time_val - actual_start
+            
+            # Overtime / Less time calculation
+            if daily_w > shift_dur:
+                daily_o = daily_w - shift_dur
+            else:
+                daily_l = shift_dur - daily_w
+
+        elif curr_date in leave_dates:
+            status = "On Leave"
+            counts['Leave'] += 1
+            daily_w = shift_dur # Full Credit
+
+        elif curr_date in holiday_dates:
+            status = "Holiday"
+            counts['Holiday'] += 1
+        
+        elif off_day and weekday == off_day:
+            status = "Weekly Off"
+            counts['Holiday'] += 1
+        
+        else:
+            status = "Absent"
+            counts['Absent'] += 1
+            daily_l = shift_dur # Full Penalty
+
+        total_work += daily_w
+        total_over += daily_o
+        total_less += daily_l
+
+        summary_list.append({
+            'date': curr_date,
+            'weekday': weekday,
+            'status': status,
+            'in_time': in_time_val.strftime('%I:%M %p') if in_time_val else "-",
+            'out_time': out_time_val.strftime('%I:%M %p') if out_time_val else "-",
+            'work_time': format_timedelta(daily_w),
+            'over_time': format_timedelta(daily_o),
+            'less_time': format_timedelta(daily_l),
+        })
+        curr_date += timedelta(days=1)
+
+    # ৬. PDF রেন্ডারিং (WeasyPrint)
+    context = {
+        'employee': emp,
+        'start_date': start_date,
+        'end_date': end_date,
+        'summary': summary_list,
+        'stats': {
+            'present': counts['Present'],
+            'absent': counts['Absent'],
+            'leave': counts['Leave'],
+            'holiday': counts['Holiday'],
+            'total_work': format_timedelta(total_work),
+            'total_over': format_timedelta(total_over),
+            'total_less': format_timedelta(total_less),
+        },
+        'company_name': user_company.name if user_company else "Attendance System",
+        # লোগোর জন্য ফুল পাথ জরুরি
+        'logo_url': request.build_absolute_uri('/static/images/logo.png'), 
+    }
+
+    # Template Reuse: আগের টেমপ্লেটটিই ব্যবহার করছি
+    html_string = render_to_string('details_pdf_template.html', context)
+    
+    # PDF তৈরি
+    pdf = HTML(string=html_string, base_url=request.build_absolute_uri()).write_pdf()
+    
+    response = HttpResponse(pdf, content_type='application/pdf')
+    response['Content-Disposition'] = f'inline; filename="Attendance_{emp.name}_{start_date}.pdf"'
     return response
 
 
 
 # --------------Leave Request--------
 
+from django.shortcuts import render, redirect, get_object_or_404
+from django.contrib.auth.decorators import login_required
+from django.http import HttpResponse, HttpResponseForbidden
+from django.db.models import Q
+from django.template.loader import render_to_string
+from django.contrib import messages
+from collections import defaultdict
+from datetime import datetime, date
+from dateutil import parser  # pip install python-dateutil
+
+# আপনার অ্যাপের মডেল ইম্পোর্ট
+from .models import LeaveRequest, Department, Employee
+from .forms import LeaveRequestForm
+
+# WeasyPrint সেটআপ
+try:
+    from weasyprint import HTML
+except ImportError:
+    HTML = None
+
+# ---------------------------------------------------------
+# 1. Helper Functions (Business Logic)
+# ---------------------------------------------------------
+
+def _clip_days(start, end, d_from, d_to):
+    """
+    Overlap window ধরে inclusive দিন গণনা।
+    """
+    if d_from:
+        start = max(start, d_from)
+    if d_to:
+        end = min(end, d_to)
+    
+    if end < start:
+        return 0
+    return (end - start).days + 1
+
+def get_leave_summary_data(user, get_params):
+    """
+    HTML এবং PDF উভয়ের জন্য কমন ডাটা প্রসেসিং ফাংশন।
+    রিটার্ন করে: context dictionary
+    """
+    user_company = getattr(user.profile, 'company', None)
+    if not user_company:
+        return {'error': 'User has no company assigned.'}
+
+    # Filters
+    q = (get_params.get('q') or '').strip()
+    status = (get_params.get('status') or '').strip()
+    dept_id = (get_params.get('department') or '').strip()
+    
+    # Date Parsing (Robust)
+    d_from_str = get_params.get('date_from')
+    d_to_str = get_params.get('date_to')
+    d_from, d_to = None, None
+
+    try:
+        if d_from_str: d_from = parser.parse(d_from_str).date()
+        if d_to_str: d_to = parser.parse(d_to_str).date()
+    except (ValueError, TypeError):
+        pass
+
+    # Base Queryset (Company Scoped)
+    qs = LeaveRequest.objects.filter(company=user_company).select_related(
+        'employee', 'employee__department'
+    ).only(
+        'employee__id', 'employee__name', 'employee__department__name',
+        'start_date', 'end_date', 'status', 'leave_type', 'remarks'
+    ).order_by('-start_date', '-id')
+
+    # Apply Filters
+    if q:
+        qs = qs.filter(Q(employee__name__icontains=q) | Q(remarks__icontains=q))
+    if status:
+        qs = qs.filter(status=status)
+    if dept_id:
+        qs = qs.filter(employee__department_id=dept_id)
+    
+    # Overlap Filter (Database level optimize)
+    if d_from:
+        qs = qs.filter(end_date__gte=d_from)
+    if d_to:
+        qs = qs.filter(start_date__lte=d_to)
+
+    # Aggregation Logic
+    bucket = {}
+    # .values() for performance
+    rows = qs.values('employee_id', 'employee__name', 'start_date', 'end_date', 'leave_type')
+
+    for r in rows:
+        emp_id = r['employee_id']
+        if emp_id not in bucket:
+            bucket[emp_id] = {
+                'employee': r['employee__name'],
+                'total_days': 0,
+                'requests': 0,
+                'type_days': defaultdict(int),
+            }
+        
+        days = _clip_days(r['start_date'], r['end_date'], d_from, d_to)
+        if days <= 0:
+            continue
+            
+        bucket[emp_id]['total_days'] += days
+        bucket[emp_id]['requests'] += 1
+        
+        l_type = r['leave_type'] or 'Unspecified'
+        bucket[emp_id]['type_days'][l_type] += days
+
+    # List Formatting
+    summary = []
+    for it in bucket.values():
+        summary.append({
+            'employee': it['employee'],
+            'total_days': it['total_days'],
+            'requests': it['requests'],
+            'type_breakdown': ', '.join(f"{k}: {v}" for k, v in sorted(it['type_days'].items())),
+        })
+    
+    summary.sort(key=lambda x: (x['employee'] or '').lower())
+
+    return {
+        'summary': summary,
+        'q': q, 'status': status, 'department': dept_id,
+        'date_from': d_from, 'date_to': d_to,
+        'departments': Department.objects.filter(company=user_company).only('id', 'name').order_by('name'),
+        'generated_on': date.today(),
+        'company_name': user_company.name
+    }
+
+# ---------------------------------------------------------
+# 2. Views
+# ---------------------------------------------------------
 
 @login_required
 def leave_list(request):
-    leaves = LeaveRequest.objects.select_related('employee')
+    user_company = getattr(request.user.profile, 'company', None)
+    # Company filter added
+    leaves = LeaveRequest.objects.filter(company=user_company).select_related('employee')
 
     query = request.GET.get('q', '')
     if query:
@@ -1951,299 +1882,89 @@ def leave_list(request):
         'query': query
     }
 
-    # যদি HTMX request হয়, শুধুমাত্র table অংশ রেন্ডার করো
     if request.headers.get('HX-Request') == 'true':
         return render(request, 'partials/leave_table.html', context)
 
     return render(request, 'leave_list.html', context)
 
 
-
-
-# views.py
-
-
-# Optional PDF library (WeasyPrint). না থাকলে HTML fallback হবে।
-try:
-    from weasyprint import HTML
-except ImportError:
-    HTML = None
-
-
-def _clip_days(start, end, d_from, d_to):
-    """
-    Overlap window ধরে inclusive দিন গণনা:
-    - যদি filter date_from/date_to দেয়া থাকে, leave span ক্লিপ করি
-    - ক্লিপড start > end হলে 0 দিন
-    """
-    if d_from:
-        start = max(start, d_from)
-    if d_to:
-        end = min(end, d_to)
-    if end < start:
-        return 0
-    return (end - start).days + 1
-
-
 @login_required
 def leave_summary(request):
-    """
-    UI view: ফিল্টারসহ per-employee leave দিন দেখাবে (start/end overlap ধরে)
-    Filters:
-      - q: employee name / remarks
-      - status: Approved/Pending/Rejected
-      - department: department id
-      - date_from, date_to: overlap window
-    """
-    # --- Filters ---
-    q        = (request.GET.get('q') or '').strip()
-    status   = (request.GET.get('status') or '').strip()
-    dept_id  = (request.GET.get('department') or '').strip()
-    d_from   = parse_date(request.GET.get('date_from') or '')
-    d_to     = parse_date(request.GET.get('date_to') or '')
-
-    # --- Base queryset ---
-    qs = (LeaveRequest.objects
-          .select_related('employee', 'employee__department')
-          .only('employee__id', 'employee__name', 'employee__department__name',
-                'start_date', 'end_date', 'status', 'leave_type', 'remarks')
-          .order_by('-start_date', '-id'))
-
-    # --- Apply filters ---
-    if q:
-        qs = qs.filter(Q(employee__name__icontains=q) | Q(remarks__icontains=q))
-    if status:
-        qs = qs.filter(status=status)
-    if dept_id:
-        qs = qs.filter(employee__department_id=dept_id)
-    # overlap window filter
-    if d_from:
-        qs = qs.filter(end_date__gte=d_from)
-    if d_to:
-        qs = qs.filter(start_date__lte=d_to)
-
-    # --- Aggregate per employee (by days, not requests) ---
-    bucket = {}  # emp_id -> dict
-    rows = qs.values('employee_id', 'employee__name', 'start_date', 'end_date', 'leave_type')
-
-    for r in rows:
-        emp_id = r['employee_id']
-        if emp_id not in bucket:
-            bucket[emp_id] = {
-                'employee': r['employee__name'],
-                'total_days': 0,          # মোট leave days (overlap ধরে)
-                'requests': 0,            # কতগুলো request মিলেছে (info purpose)
-                'type_days': defaultdict(int),  # টাইপ অনুযায়ী দিনের যোগফল
-            }
-        days = _clip_days(r['start_date'], r['end_date'], d_from, d_to)
-        if days <= 0:
-            continue
-        bucket[emp_id]['total_days'] += days
-        bucket[emp_id]['requests'] += 1
-        if r['leave_type']:
-            bucket[emp_id]['type_days'][r['leave_type']] += days
-
-    # --- List + sort ---
-    summary = []
-    for it in bucket.values():
-        summary.append({
-            'employee': it['employee'],
-            'total_days': it['total_days'],
-            'requests': it['requests'],
-            'type_breakdown': ', '.join(f"{k}:{v}" for k, v in sorted(it['type_days'].items())),
-        })
-    summary.sort(key=lambda x: (x['employee'] or '').lower())
-
-    context = {
-        'summary': summary,
-        'q': q, 'status': status, 'department': dept_id,
-        'date_from': d_from, 'date_to': d_to,
-        'departments': Department.objects.only('id', 'name').order_by('name'),
-    }
+    """ UI View: Uses helper function """
+    context = get_leave_summary_data(request.user, request.GET)
+    if 'error' in context:
+        return HttpResponseForbidden(context['error'])
+        
     return render(request, 'leave_summary.html', context)
 
 
 @login_required
 def leave_summary_pdf(request):
-    """
-    PDF view: UI-র মতই একই ফিল্টার + একই দিনের হিসাব।
-    WeasyPrint থাকলে PDF, না থাকলে HTML fallback (ডিবাগে সুবিধা হবে)।
-    """
-    # --- Same filters as leave_summary ---
-    q        = (request.GET.get('q') or '').strip()
-    status   = (request.GET.get('status') or '').strip()
-    dept_id  = (request.GET.get('department') or '').strip()
-    d_from   = parse_date(request.GET.get('date_from') or '')
-    d_to     = parse_date(request.GET.get('date_to') or '')
+    """ PDF View: Uses same helper function """
+    context = get_leave_summary_data(request.user, request.GET)
+    
+    if 'error' in context:
+        return HttpResponseForbidden(context['error'])
 
-    qs = (LeaveRequest.objects
-          .select_related('employee', 'employee__department')
-          .only('employee__id', 'employee__name', 'employee__department__name',
-                'start_date', 'end_date', 'status', 'leave_type', 'remarks')
-          .order_by('-start_date', '-id'))
-
-    if q:
-        qs = qs.filter(Q(employee__name__icontains=q) | Q(remarks__icontains=q))
-    if status:
-        qs = qs.filter(status=status)
-    if dept_id:
-        qs = qs.filter(employee__department_id=dept_id)
-    if d_from:
-        qs = qs.filter(end_date__gte=d_from)
-    if d_to:
-        qs = qs.filter(start_date__lte=d_to)
-
-    # --- Same aggregation ---
-    bucket = {}
-    rows = qs.values('employee_id', 'employee__name', 'start_date', 'end_date', 'leave_type')
-
-    for r in rows:
-        emp_id = r['employee_id']
-        if emp_id not in bucket:
-            bucket[emp_id] = {
-                'employee': r['employee__name'],
-                'total_days': 0,
-                'requests': 0,
-                'type_days': defaultdict(int),
-            }
-        days = _clip_days(r['start_date'], r['end_date'], d_from, d_to)
-        if days <= 0:
-            continue
-        bucket[emp_id]['total_days'] += days
-        bucket[emp_id]['requests'] += 1
-        if r['leave_type']:
-            bucket[emp_id]['type_days'][r['leave_type']] += days
-
-    summary_data = []
-    for it in bucket.values():
-        summary_data.append({
-            'employee': it['employee'],
-            'total_days': it['total_days'],
-            'requests': it['requests'],
-            'type_breakdown': ', '.join(f"{k}:{v}" for k, v in sorted(it['type_days'].items())),
-        })
-    summary_data.sort(key=lambda x: (x['employee'] or '').lower())
-
-    context = {
-        'summary': summary_data,             # ⬅️ PDF টেমপ্লেটে 'summary' ব্যবহার করুন
-        'generated_on': date.today(),
-        'q': q, 'status': status, 'department': dept_id,
-        'date_from': d_from, 'date_to': d_to,
-    }
-
-    html_string = render_to_string('leave_summary_pdf.html', context)
-
-    # WeasyPrint না থাকলে HTML fallback
-    if HTML is None:
-        return HttpResponse(html_string)
-
-    pdf = HTML(string=html_string, base_url=request.build_absolute_uri('/')).write_pdf()
-    resp = HttpResponse(pdf, content_type='application/pdf')
-    resp['Content-Disposition'] = 'inline; filename="leave_summary.pdf"'
-    return resp
-
-
-
-@login_required
-def leave_summary_pdf(request):
-    # --- Same filters as leave_summary ---
-    q        = (request.GET.get('q') or '').strip()
-    status   = (request.GET.get('status') or '').strip()
-    dept_id  = (request.GET.get('department') or '').strip()
-    d_from   = parse_date(request.GET.get('date_from') or '')
-    d_to     = parse_date(request.GET.get('date_to') or '')
-
-    qs = (LeaveRequest.objects
-          .select_related('employee', 'employee__department')
-          .only('employee__id', 'employee__name', 'employee__department__name',
-                'start_date', 'end_date', 'status', 'leave_type', 'remarks')
-          .order_by('-start_date', '-id'))
-
-    if q:
-        qs = qs.filter(Q(employee__name__icontains=q) | Q(remarks__icontains=q))
-    if status:
-        qs = qs.filter(status=status)
-    if dept_id:
-        qs = qs.filter(employee__department_id=dept_id)
-    if d_from:
-        qs = qs.filter(end_date__gte=d_from)
-    if d_to:
-        qs = qs.filter(start_date__lte=d_to)
-
-    # --- Aggregate days by employee ---
-    bucket = {}
-    rows = qs.values('employee_id', 'employee__name', 'start_date', 'end_date', 'leave_type')
-
-    for r in rows:
-        emp_id = r['employee_id']
-        if emp_id not in bucket:
-            bucket[emp_id] = {
-                'employee': r['employee__name'],
-                'total_days': 0,
-                'requests': 0,
-                'type_days': defaultdict(int),
-            }
-        days = _clip_days(r['start_date'], r['end_date'], d_from, d_to)
-        if days <= 0:
-            continue
-        bucket[emp_id]['total_days'] += days
-        bucket[emp_id]['requests'] += 1
-        if r['leave_type']:
-            bucket[emp_id]['type_days'][r['leave_type']] += days
-
-    summary_data = []
-    for it in bucket.values():
-        summary_data.append({
-            'employee': it['employee'],
-            'total_days': it['total_days'],
-            'requests': it['requests'],
-            'type_breakdown': ', '.join(f"{k}:{v}" for k, v in sorted(it['type_days'].items())),
-        })
-    summary_data.sort(key=lambda x: (x['employee'] or '').lower())
-
-    context = {
-        'summary': summary_data,
-        'generated_on': date.today(),
-        'q': q, 'status': status, 'department': dept_id,
-        'date_from': d_from, 'date_to': d_to,
-    }
+    # Add absolute URI for images in PDF
+    context['logo_url'] = request.build_absolute_uri('/static/images/logo.png')
 
     html_string = render_to_string('leave_summary_pdf.html', context)
 
     if HTML is None:
-        return HttpResponse(html_string)
+        return HttpResponse("WeasyPrint not installed. Showing HTML version.<br>" + html_string)
 
     pdf = HTML(string=html_string, base_url=request.build_absolute_uri('/')).write_pdf()
-    resp = HttpResponse(pdf, content_type='application/pdf')
-    resp['Content-Disposition'] = 'inline; filename="leave_summary.pdf"'
-    return resp
+    
+    filename = f"Leave_Summary_{date.today()}.pdf"
+    response = HttpResponse(pdf, content_type='application/pdf')
+    response['Content-Disposition'] = f'inline; filename="{filename}"'
+    return response
 
 
 @login_required
 def leave_create(request):
-    form = LeaveRequestForm(request.POST or None, user=request.user)  # user পাস করছি form এ
+    user_company = getattr(request.user.profile, 'company', None)
+    
+    # Form এ user/company পাস করা হচ্ছে (যদি ফর্ম কাস্টমাইজড থাকে)
+    form = LeaveRequestForm(request.POST or None, user=request.user) 
+    
     if form.is_valid():
         leave = form.save(commit=False)
         leave.approved_by = request.user
+        leave.company = user_company  # ✅ Ensure Company is set
         leave.save()
+        messages.success(request, "Leave request created successfully.")
         return redirect('attendance_app:leave_list')
+        
     return render(request, 'leave_form.html', {'form': form, 'title': 'Create Leave'})
 
 
 @login_required
 def leave_update(request, pk):
-    leave = get_object_or_404(LeaveRequest, pk=pk)
+    user_company = getattr(request.user.profile, 'company', None)
+    # ✅ Security: Only own company's data
+    leave = get_object_or_404(LeaveRequest, pk=pk, company=user_company)
+    
     form = LeaveRequestForm(request.POST or None, instance=leave, user=request.user)
     if form.is_valid():
         form.save()
+        messages.success(request, "Leave updated successfully.")
         return redirect('attendance_app:leave_list')
+        
     return render(request, 'leave_form.html', {'form': form, 'title': 'Update Leave'})
 
 
 @login_required
 def leave_delete(request, pk):
-    leave = get_object_or_404(LeaveRequest, pk=pk)
-    leave.delete()
+    user_company = getattr(request.user.profile, 'company', None)
+    # ✅ Security: Only own company's data
+    leave = get_object_or_404(LeaveRequest, pk=pk, company=user_company)
+    
+    if request.method == 'POST':
+        leave.delete()
+        messages.warning(request, "Leave request deleted.")
+        
     return redirect('attendance_app:leave_list')
 
 

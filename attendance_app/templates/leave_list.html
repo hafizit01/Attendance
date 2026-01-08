@@ -1,93 +1,162 @@
 {% extends "base.html" %}
+{% block title %}Leave Requests{% endblock %}
 {% block content %}
-<div class="container mx-auto p-4">
-  <h2 class="text-2xl font-bold mb-6 text-gray-800 dark:text-gray-100">📅 Leave Requests</h2>
 
-  <div class="flex flex-col md:flex-row md:justify-between mb-4 gap-2">
-    <div class="flex gap-2">
-      <a href="{% url 'attendance_app:leave_create' %}" 
-         class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded shadow">
-        ➕ Add New Leave
-      </a>
-      <a href="{% url 'attendance_app:leave_summary' %}" 
-         class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded shadow">
-        🧾 Show Leave Summary
-      </a>
-      <a href="{% url 'attendance_app:leave_summary_pdf' %}" target="_blank" 
-         class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded shadow">
-        📄 Download PDF
-      </a>
+<div class="w-full px-2 sm:px-4 py-6 space-y-6 animate-in fade-in duration-500">
+
+  <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+    <div>
+        <h1 class="text-2xl font-bold text-gray-800 dark:text-white flex items-center gap-2">
+            <span class="p-2 bg-purple-100 dark:bg-purple-900 rounded-lg text-purple-600">📅</span>
+            Leave Management
+        </h1>
+        <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">Track and manage employee leave requests.</p>
     </div>
 
-    <!-- Search Input -->
-    <div class="mt-2 md:mt-0">
-      <input type="text" id="searchInput" placeholder="🔍 Search by name, ID, or Device ID"
-             class="border border-gray-300 dark:border-gray-600 
-                    bg-white dark:bg-gray-800 
-                    text-gray-900 dark:text-gray-200 
-                    px-3 py-2 rounded focus:outline-none 
-                    focus:ring-2 focus:ring-blue-500 w-full md:w-64 
-                    transition-colors duration-300">
+    <div class="flex flex-wrap items-center gap-3 w-full md:w-auto">
+        <div class="relative w-full md:w-64">
+            <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+            </span>
+            <input type="text" id="searchInput" placeholder="Search leaves..."
+                   class="w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-200 py-2.5 pl-10 pr-4 rounded-xl shadow-sm focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none transition-all">
+        </div>
+
+        <a href="{% url 'attendance_app:leave_create' %}"
+           class="flex items-center justify-center gap-2 bg-purple-600 hover:bg-purple-700 text-white font-semibold py-2.5 px-5 rounded-xl shadow-lg shadow-purple-200 dark:shadow-none transition-all hover:-translate-y-0.5 w-full md:w-auto">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd" /></svg>
+            New Request
+        </a>
     </div>
   </div>
 
-  <div class="overflow-x-auto bg-white dark:bg-gray-900 rounded shadow transition-colors duration-300">
-    <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700" id="leaveTable">
-      <thead class="bg-gray-100 dark:bg-gray-800">
-        <tr>
-          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">#</th>
-          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Employee</th>
-          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Type</th>
-          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Dates</th>
-          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Status</th>
-          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Actions</th>
-        </tr>
-      </thead>
-      <tbody class="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
-        {% for leave in leaves %}
-        <tr class="hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors duration-200">
-          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{{ leave.id }}</td>
-          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{{ leave.employee.name }}</td>
-          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{{ leave.leave_type }}</td>
-          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{{ leave.start_date }} → {{ leave.end_date }}</td>
-          <td class="px-6 py-4 whitespace-nowrap text-sm font-semibold 
-                     {% if leave.status == 'Approved' %}text-green-600{% elif leave.status == 'Pending' %}text-yellow-600{% else %}text-red-600{% endif %}">
-            {{ leave.status }}
-          </td>
-          <td class="px-6 py-4 whitespace-nowrap text-sm">
-            <a href="{% url 'attendance_app:leave_update' leave.pk %}" class="text-blue-600 hover:underline">Edit</a> |
-            <a href="{% url 'attendance_app:leave_delete' leave.pk %}" class="text-red-600 hover:underline" onclick="return confirm('Delete this leave?');">Delete</a>
-          </td>
-        </tr>
-        {% empty %}
-        <tr>
-          <td colspan="6" class="px-6 py-4 text-center text-gray-500 dark:text-gray-400">No leaves found.</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+  <div class="flex gap-2">
+      <a href="{% url 'attendance_app:leave_summary' %}" class="text-sm font-medium text-purple-600 bg-purple-50 hover:bg-purple-100 dark:bg-purple-900/20 dark:text-purple-300 px-4 py-2 rounded-lg transition-colors border border-purple-100 dark:border-purple-800">
+          📊 View Summary
+      </a>
+      <a href="{% url 'attendance_app:leave_summary_pdf' %}" target="_blank" class="text-sm font-medium text-gray-600 bg-gray-50 hover:bg-gray-100 dark:bg-gray-700 dark:text-gray-300 px-4 py-2 rounded-lg transition-colors border border-gray-200 dark:border-gray-600">
+          📄 Download PDF
+      </a>
+  </div>
+
+  <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-xl border border-gray-100 dark:border-gray-700 overflow-hidden">
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm text-left" id="leaveTable">
+        <thead class="bg-gray-50 dark:bg-gray-700/50 text-gray-500 dark:text-gray-400 uppercase text-xs font-bold tracking-wider border-b border-gray-100 dark:border-gray-700">
+          <tr>
+            <th class="px-6 py-4 w-12 text-center">#</th>
+            <th class="px-6 py-4">Employee</th>
+            <th class="px-6 py-4">Leave Type</th>
+            <th class="px-6 py-4">Duration</th>
+            <th class="px-6 py-4 text-center">Status</th>
+            <th class="px-6 py-4 text-right">Actions</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
+          {% for leave in leaves %}
+          <tr class="group hover:bg-purple-50/30 dark:hover:bg-purple-900/10 transition-colors duration-200">
+            <td class="px-6 py-4 text-center text-gray-400 text-xs">{{ forloop.counter }}</td>
+            
+            <td class="px-6 py-4">
+                <div class="flex items-center gap-3">
+                    <div class="h-9 w-9 rounded-full bg-gradient-to-tr from-purple-500 to-indigo-500 flex items-center justify-center text-white font-bold text-xs shadow-md shadow-purple-500/20">
+                        {{ leave.employee.name|slice:":1" }}
+                    </div>
+                    <div>
+                        <div class="font-semibold text-gray-900 dark:text-gray-100">{{ leave.employee.name }}</div>
+                        <div class="text-[10px] text-gray-400">{{ leave.employee.department.name|default:"General" }}</div>
+                    </div>
+                </div>
+            </td>
+
+            <td class="px-6 py-4 font-medium text-gray-600 dark:text-gray-300">
+                {{ leave.leave_type|default:"General Leave" }}
+            </td>
+
+            <td class="px-6 py-4">
+                <div class="text-xs font-mono text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700/50 px-2 py-1 rounded inline-block">
+                    {{ leave.start_date|date:"M d" }} ➝ {{ leave.end_date|date:"M d, Y" }}
+                </div>
+            </td>
+
+            <td class="px-6 py-4 text-center">
+                {% if leave.status == 'Approved' %}
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800">
+                        Approved
+                    </span>
+                {% elif leave.status == 'Pending' %}
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400 border border-amber-200 dark:border-amber-800">
+                        Pending
+                    </span>
+                {% else %}
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-400 border border-rose-200 dark:border-rose-800">
+                        Rejected
+                    </span>
+                {% endif %}
+            </td>
+
+            <td class="px-6 py-4 text-right">
+                <div class="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <a href="{% url 'attendance_app:leave_update' leave.pk %}" 
+                       class="p-2 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors" title="Edit">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536M9 11l6 6M4 20h4l10-10a2.828 2.828 0 00-4-4L4 16v4z" /></svg>
+                    </a>
+                    <a href="{% url 'attendance_app:leave_delete' leave.pk %}" 
+                       onclick="return confirm('Are you sure you want to delete this leave request?');"
+                       class="p-2 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/20 rounded-lg transition-colors" title="Delete">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                    </a>
+                </div>
+            </td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="6" class="px-6 py-24 text-center">
+                <div class="flex flex-col items-center justify-center">
+                    <div class="p-4 bg-gray-50 dark:bg-gray-700 rounded-full mb-3">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                    </div>
+                    <h3 class="text-lg font-medium text-gray-900 dark:text-gray-100">No Leave Requests</h3>
+                    <p class="text-sm text-gray-500 mt-1">There are no leave requests to display right now.</p>
+                </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
   </div>
 </div>
 
-<!-- Live Search JS -->
 <script>
-  const searchInput = document.getElementById('searchInput');
-  const table = document.getElementById('leaveTable');
-  const rows = table.getElementsByTagName('tbody')[0].getElementsByTagName('tr');
+  document.addEventListener('DOMContentLoaded', function() {
+    const searchInput = document.getElementById('searchInput');
+    const table = document.getElementById('leaveTable');
+    const rows = table.getElementsByTagName('tbody')[0].getElementsByTagName('tr');
 
-  searchInput.addEventListener('input', function() {
-    const filter = this.value.toLowerCase();
-    for (let i = 0; i < rows.length; i++) {
-      const cells = rows[i].getElementsByTagName('td');
-      let match = false;
-      for (let j = 0; j < cells.length - 1; j++) { // ignore actions column
-        if (cells[j].innerText.toLowerCase().includes(filter)) {
-          match = true;
-          break;
+    searchInput.addEventListener('keyup', function() {
+      const filter = this.value.toLowerCase();
+      for (let i = 0; i < rows.length; i++) {
+        // Skip empty state row if it exists
+        if (rows[i].getElementsByTagName('td').length < 2) continue;
+        
+        // Search in Employee Name (col 1) and Type (col 2)
+        const nameCol = rows[i].getElementsByTagName('td')[1];
+        const typeCol = rows[i].getElementsByTagName('td')[2];
+        
+        if (nameCol && typeCol) {
+            const nameText = nameCol.textContent || nameCol.innerText;
+            const typeText = typeCol.textContent || typeCol.innerText;
+            
+            if (nameText.toLowerCase().indexOf(filter) > -1 || typeText.toLowerCase().indexOf(filter) > -1) {
+              rows[i].style.display = "";
+            } else {
+              rows[i].style.display = "none";
+            }
         }
       }
-      rows[i].style.display = match ? '' : 'none';
-    }
+    });
   });
 </script>
-{% endblock %}
+
+{% endblock content %}

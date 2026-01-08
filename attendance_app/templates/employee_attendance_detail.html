@@ -1,127 +1,150 @@
 {% extends "base.html" %}
 {% load tz %}
 {% load time_filters %}
+{% block title %}Report: {{ employee.name }}{% endblock %}
 
 {% block content %}
-<div class="p-4 sm:p-6 bg-white dark:bg-gray-800 rounded shadow-md transition-colors duration-300">
-  <!-- Header + Filter Form -->
-  <div class="flex flex-col md:flex-row justify-between items-end md:items-center mb-6 gap-4">
-    <h1 class="text-xl sm:text-2xl md:text-3xl font-bold text-gray-900 dark:text-gray-100 border-b md:border-0 pb-2 md:pb-0">
-      🧾 Attendance Report: <span class="text-green-700 dark:text-green-400">{{ employee.name }}</span>
-    </h1>
+<div class="w-full px-2 sm:px-4 py-6 space-y-6 animate-in fade-in duration-500">
 
-    <form method="get" class="flex flex-wrap md:flex-nowrap gap-3 items-end">
-      <div class="flex flex-col">
-        <label for="start_date" class="text-sm text-gray-600 dark:text-gray-300 mb-1">Start Date</label>
-        <input type="date" name="start_date" value="{{ start_date }}"
-               class="border border-gray-300 dark:border-gray-600 px-3 py-2 rounded w-full bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100" />
-      </div>
-      <div class="flex flex-col">
-        <label for="end_date" class="text-sm text-gray-600 dark:text-gray-300 mb-1">End Date</label>
-        <input type="date" name="end_date" value="{{ end_date }}"
-               class="border border-gray-300 dark:border-gray-600 px-3 py-2 rounded w-full bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100" />
-      </div>
-      <div class="flex gap-2 mt-2 md:mt-6">
-        <button type="submit"
-                class="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-4 py-2 rounded shadow">
-          🔍 Filter
-        </button>
-        <a href="{% url 'attendance_app:employee_list' %}"
-           class="text-gray-600 dark:text-gray-300 hover:underline text-sm mt-2">
-          ⬅ Back
+  <div class="flex flex-col md:flex-row justify-between items-start gap-4">
+    <div class="flex items-center gap-4">
+        <div class="h-12 w-12 rounded-full bg-gradient-to-tr from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold text-lg shadow-lg shadow-blue-500/30">
+            {{ employee.name|slice:":1" }}
+        </div>
+        <div>
+            <h1 class="text-2xl font-bold text-gray-800 dark:text-white">{{ employee.name }}</h1>
+            <p class="text-xs text-gray-500 dark:text-gray-400 font-mono">ID: {{ employee.device_user_id }} | Dept: {{ employee.department.name }}</p>
+        </div>
+    </div>
+
+    <div class="flex gap-2 w-full md:w-auto">
+        <a href="{% url 'attendance_app:attendance_pdf' employee.id %}?start_date={{ start_date }}&end_date={{ end_date }}"
+           target="_blank"
+           class="flex-1 md:flex-none flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-xl shadow-lg shadow-emerald-200 dark:shadow-none transition-all hover:-translate-y-0.5 active:scale-95 text-sm font-semibold">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+            Download PDF
         </a>
+        <a href="{% url 'attendance_app:employee_list' %}"
+           class="px-4 py-2.5 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-300 rounded-xl transition-all font-semibold text-sm">
+            Back
+        </a>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div class="bg-white dark:bg-gray-800 p-4 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col items-center justify-center gap-1">
+          <span class="text-2xl font-bold text-emerald-600 dark:text-emerald-400">{{ present_days|default:0 }}</span> <span class="text-xs uppercase tracking-wider text-gray-400 font-bold">Present</span>
       </div>
+      <div class="bg-white dark:bg-gray-800 p-4 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col items-center justify-center gap-1">
+          <span class="text-2xl font-bold text-rose-600 dark:text-rose-400">{{ absent_days }}</span>
+          <span class="text-xs uppercase tracking-wider text-gray-400 font-bold">Absent</span>
+      </div>
+      <div class="bg-white dark:bg-gray-800 p-4 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col items-center justify-center gap-1">
+          <span class="text-2xl font-bold text-blue-600 dark:text-blue-400">{{ approved_leave_count }}</span>
+          <span class="text-xs uppercase tracking-wider text-gray-400 font-bold">Leave</span>
+      </div>
+      <div class="bg-white dark:bg-gray-800 p-4 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col items-center justify-center gap-1">
+          <span class="text-2xl font-bold text-purple-600 dark:text-purple-400">{{ public_holiday_count|add:weekly_holiday_count }}</span>
+          <span class="text-xs uppercase tracking-wider text-gray-400 font-bold">Holiday/Off</span>
+      </div>
+  </div>
+
+  <div class="bg-white dark:bg-gray-800 p-5 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
+    <form method="get" class="flex flex-col sm:flex-row gap-4 items-end">
+        <div class="w-full sm:flex-1">
+            <label class="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1.5">Start Date</label>
+            <input type="date" name="start_date" value="{{ start_date }}"
+                   class="w-full bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 text-gray-800 dark:text-gray-200 text-sm px-3 py-2.5 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all">
+        </div>
+        <div class="w-full sm:flex-1">
+            <label class="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1.5">End Date</label>
+            <input type="date" name="end_date" value="{{ end_date }}"
+                   class="w-full bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 text-gray-800 dark:text-gray-200 text-sm px-3 py-2.5 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all">
+        </div>
+        <button type="submit" class="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm px-6 py-2.5 rounded-xl shadow-md transition-all">
+            Apply Filter
+        </button>
     </form>
   </div>
 
-  <!-- PDF Download Button -->
-  <div class="mb-4">
-    <a href="{% url 'attendance_app:attendance_pdf' employee.id %}?start_date={{ start_date }}&end_date={{ end_date }}"
-      class="inline-flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white font-semibold px-5 py-2 rounded shadow-md transition duration-200"
-      target="_blank">
-      ⬇ Attendance Report (PDF)
-    </a>
-  </div>
+  <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-xl border border-gray-100 dark:border-gray-700 overflow-hidden">
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm text-left">
+        <thead class="bg-gray-50 dark:bg-gray-700/50 text-gray-500 dark:text-gray-400 uppercase text-xs font-bold tracking-wider border-b border-gray-100 dark:border-gray-700">
+          <tr>
+            <th class="px-6 py-4">Date</th>
+            <th class="px-6 py-4 text-center">In Time</th>
+            <th class="px-6 py-4 text-center">Out Time</th>
+            <th class="px-6 py-4 text-center">Status</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
+          {% for date, data in attendance_summary %}
+          <tr class="group hover:bg-gray-50/50 dark:hover:bg-gray-900/20 transition-colors">
+            <td class="px-6 py-4 font-medium text-gray-700 dark:text-gray-300">
+                {{ date|date:"M d, Y" }} <span class="text-xs text-gray-400 ml-1">({{ date|date:"D" }})</span>
+            </td>
 
-  <!-- Attendance Table -->
-  <div class="overflow-x-auto">
-    <table class="min-w-full border border-gray-300 dark:border-gray-700 text-xs sm:text-sm">
-      <thead class="bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-100 text-left">
-        <tr>
-          <th class="border px-2 sm:px-4 py-2 border-gray-300 dark:border-gray-700">👤 Name</th>
-          <th class="border px-2 sm:px-4 py-2 border-gray-300 dark:border-gray-700">📅 Date</th>
-          <th class="border px-2 sm:px-4 py-2 border-gray-300 dark:border-gray-700">🕒 In Time</th>
-          <th class="border px-2 sm:px-4 py-2 border-gray-300 dark:border-gray-700">🕔 Out Time</th>
-          <th class="border px-2 sm:px-4 py-2 border-gray-300 dark:border-gray-700">📌 Status</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for date, data in attendance_summary %}
-        <tr class="transition
-          {% if data.status == 'Absent' %} bg-red-100 dark:bg-red-900/40
-          {% elif data.status == 'Holiday' %} bg-yellow-100 dark:bg-yellow-900/40
-          {% elif data.status == 'Public Holiday' %} bg-indigo-100 dark:bg-indigo-900/40
-          {% elif data.status == 'Leave' %} bg-blue-100 dark:bg-blue-900/40
-          {% elif data.status == 'Present' %} bg-green-100 dark:bg-green-900/40
-          {% endif %}">
-          <td class="border px-2 sm:px-4 py-2 border-gray-300 dark:border-gray-700">{{ employee.name }}</td>
-          <td class="border px-2 sm:px-4 py-2 border-gray-300 dark:border-gray-700">{{ date }}</td>
+            <td class="px-6 py-4 text-center font-mono text-gray-600 dark:text-gray-400">
+                {% if data.in_time %}
+                    <span class="bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 px-2 py-1 rounded text-xs font-bold">
+                        {{ data.in_time|localtime|time:"h:i A" }}
+                    </span>
+                {% else %}
+                    <span class="text-gray-300">-</span>
+                {% endif %}
+            </td>
 
-          <!-- In Time -->
-          <td class="border px-2 sm:px-4 py-2 border-gray-300 dark:border-gray-700">
-            {% if data.in_time %}
-              {{ data.in_time|localtime|time:"h:i A" }}
-            {% else %}
-              -
-            {% endif %}
-          </td>
+            <td class="px-6 py-4 text-center font-mono text-gray-600 dark:text-gray-400">
+                {% if data.out_time %}
+                    <span class="bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 px-2 py-1 rounded text-xs font-bold">
+                        {{ data.out_time|localtime|time:"h:i A" }}
+                    </span>
+                {% else %}
+                    <span class="text-gray-300">-</span>
+                {% endif %}
+            </td>
 
-          <!-- Out Time -->
-          <td class="border px-2 sm:px-4 py-2 border-gray-300 dark:border-gray-700">
-            {% if data.out_time %}
-              {{ data.out_time|localtime|time:"h:i A" }}
-            {% elif data.in_time %}
-              <span class="text-gray-500 dark:text-gray-400" title="Out time missing">- ⏰</span>
-            {% else %}
-              -
-            {% endif %}
-          </td>
-
-          <!-- Status -->
-          <td class="border px-2 sm:px-4 py-2 font-semibold border-gray-300 dark:border-gray-700
-            {% if data.status == 'Absent' %} text-red-600 dark:text-red-400
-            {% elif data.status == 'Holiday' %} text-yellow-700 dark:text-yellow-400
-            {% elif data.status == 'Public Holiday' %} text-indigo-700 dark:text-indigo-400
-            {% elif data.status == 'Leave' %} text-blue-600 dark:text-blue-400
-            {% elif data.status == 'Present' %} text-green-700 dark:text-green-400
-            {% endif %}">
-            {{ data.status }}
-          </td>
-        </tr>
-        {% empty %}
-        <tr>
-          <td colspan="5" class="text-center py-4 text-gray-500 dark:text-gray-400">
-            ⚠️ No attendance records found for this employee.
-          </td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
-
-  <!-- Summary Section -->
-  <div class="mt-6 flex flex-wrap justify-between gap-3 text-xs sm:text-sm">
-    <div class="text-green-700 dark:text-green-400">✅ Approved Leave Days: <strong>{{ approved_leave_count }}</strong></div>
-    <div class="text-red-700 dark:text-red-400">🚫 Absent Days: <strong>{{ absent_days }}</strong></div>
-    <div class="text-yellow-700 dark:text-yellow-400">🗓️ Weekly Holidays: <strong>{{ weekly_holiday_count }}</strong></div>
-    <div class="text-indigo-700 dark:text-indigo-400">🏛️ Public Holidays: <strong>{{ public_holiday_count }}</strong></div>
-    <div class="text-gray-700 dark:text-gray-300">📄 Total Leave Requests: <strong>{{ total_leave_requests }}</strong></div>
-
-    {% if total_work_duration.total_seconds > 0 %}
-    <div class="text-blue-700 dark:text-blue-400 font-semibold">
-      🕓 Total Work Time: {{ total_work_duration|format_timedelta }}
+            <td class="px-6 py-4 text-center">
+                {% if data.status == 'Present' %}
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400">
+                        Present
+                    </span>
+                {% elif data.status == 'Absent' %}
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-400">
+                        Absent
+                    </span>
+                {% elif data.status == 'Leave' %}
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400">
+                        Leave
+                    </span>
+                {% elif 'Holiday' in data.status %}
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400">
+                        {{ data.status }}
+                    </span>
+                {% else %}
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300">
+                        {{ data.status }}
+                    </span>
+                {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+        
+        {% if total_work_duration.total_seconds > 0 %}
+        <tfoot class="bg-gray-50 dark:bg-gray-700/30 border-t border-gray-200 dark:border-gray-600">
+            <tr>
+                <td colspan="4" class="px-6 py-4 text-right">
+                    <span class="text-sm font-bold text-gray-500 uppercase tracking-wide mr-2">Total Worked Hours:</span>
+                    <span class="text-lg font-mono font-bold text-blue-600 dark:text-blue-400">{{ total_work_duration|format_timedelta }}</span>
+                </td>
+            </tr>
+        </tfoot>
+        {% endif %}
+      </table>
     </div>
-    {% endif %}
   </div>
+
 </div>
 {% endblock %}

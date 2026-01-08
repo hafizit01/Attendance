@@ -1,47 +1,146 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Leave Summary PDF</title>
+  <title>Leave Summary Report</title>
   <style>
-  @import url('https://fonts.googleapis.com/css2?family=Source+Sans+Pro&display=swap');
+  
+  @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap');
 
-body {
-    font-family: 'Source Sans Pro', sans-serif;
-}
+        @page {
+            size: A4 landscape;
+            margin: 15mm 10mm;
+        }
 
+        body {
+            /* 2. Font Family Update */
+            font-family: 'Roboto', sans-serif;
+            font-size: 11px;
+            margin: 0;
+            color: #333;
+            line-height: 1.3;
+        }
+    @page {
+        size: A4;
+        margin: 15mm 15mm;
+        @bottom-right {
+            content: "Page " counter(page) " of " counter(pages);
+            font-size: 9px; color: #777;
+        }
+    }
 
-    table { width:100%; border-collapse:collapse; margin-top:20px; }
-    th,td { border:1px solid #000; padding:6px 8px; text-align:left; }
-    th { background:#f0f0f0; }
+     
+
+    /* Header Layout using Table for stability in PDF */
+    .header-table { width: 100%; border-bottom: 2px solid #2563eb; padding-bottom: 10px; margin-bottom: 20px; }
+    .header-table td { vertical-align: middle; }
+    
+    .company-name { font-size: 20px; font-weight: bold; color: #1e3a8a; margin: 0; }
+    .report-title { font-size: 14px; text-transform: uppercase; font-weight: bold; color: #555; text-align: right; }
+    .meta-info { font-size: 10px; color: #666; text-align: right; margin-top: 5px; }
+
+    /* Logo Styling */
+    .logo { height: 45px; width: auto; }
+
+    /* Data Table */
+    .data-table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+    .data-table th {
+        background-color: #f1f5f9;
+        color: #334155;
+        font-weight: bold;
+        font-size: 9pt;
+        text-transform: uppercase;
+        padding: 8px;
+        border: 1px solid #cbd5e1;
+        text-align: left;
+    }
+    .data-table td {
+        padding: 8px;
+        border: 1px solid #cbd5e1;
+        font-size: 10pt;
+        vertical-align: top;
+    }
+    
+    /* Zebra Striping */
+    .data-table tr:nth-child(even) { background-color: #f8fafc; }
+
+    /* Column Specifics */
+    .text-center { text-align: center; }
+    .text-right { text-align: right; }
+    .font-bold { font-weight: bold; }
+    .type-breakdown { font-size: 9pt; color: #555; font-style: italic; }
+
+    /* Footer / Signature */
+    .footer-section { margin-top: 50px; width: 100%; }
+    .signature-box {
+        width: 200px;
+        border-top: 1px solid #999;
+        text-align: center;
+        padding-top: 5px;
+        font-size: 10px;
+        font-weight: bold;
+        float: right;
+    }
   </style>
 </head>
 <body>
-  <h2>Leave Summary Report (Bashundhara)</h2>
 
-  <table>
+  <table class="header-table">
+    <tr>
+      <td width="60%">
+        {% if logo_url %}
+            <img src="{{ logo_url }}" class="logo" alt="Logo">
+        {% endif %}
+        <div class="company-name">{{ company_name|default:"Company Name" }}</div>
+      </td>
+      <td width="40%">
+        <div class="report-title">Leave Summary Report</div>
+        <div class="meta-info">
+            Generated on: {% now "d M Y" %}<br>
+            {% if date_from or date_to %}
+              Period: {{ date_from|default:"Start" }} to {{ date_to|default:"End" }}
+            {% endif %}
+        </div>
+      </td>
+    </tr>
+  </table>
+
+  <table class="data-table">
     <thead>
       <tr>
-        <th>#</th>
-        <th>Employee</th>
-        <th>Total Leave (days)</th>
-        <th>Requests</th>
-        <th>Types (days)</th>
+        <th width="5%" class="text-center">#</th>
+        <th width="25%">Employee Name</th>
+        <th width="15%" class="text-center">Total Days</th>
+        <th width="15%" class="text-center">Requests</th>
+        <th width="40%">Leave Breakdown (Type: Days)</th>
       </tr>
     </thead>
     <tbody>
       {% for item in summary %}
       <tr>
-        <td>{{ forloop.counter }}</td>
-        <td>{{ item.employee }}</td>
-        <td>{{ item.total_days }}</td>
-        <td>{{ item.requests }}</td>
-        <td>{{ item.type_breakdown|default:"—" }}</td>
+        <td class="text-center">{{ forloop.counter }}</td>
+        <td class="font-bold">{{ item.employee }}</td>
+        <td class="text-center font-bold">{{ item.total_days }}</td>
+        <td class="text-center">{{ item.requests }}</td>
+        <td class="type-breakdown">
+            {{ item.type_breakdown|default:"—" }}
+        </td>
       </tr>
       {% empty %}
-      <tr><td colspan="5" style="text-align:center;color:#777;">No data.</td></tr>
+      <tr>
+        <td colspan="5" class="text-center" style="padding: 20px; color: #888;">
+            No leave records found for the selected criteria.
+        </td>
+      </tr>
       {% endfor %}
     </tbody>
   </table>
+
+  <div class="footer-section">
+    <div class="signature-box">
+        HR Manager / Authorized Signature
+    </div>
+  </div>
+
 </body>
 </html>

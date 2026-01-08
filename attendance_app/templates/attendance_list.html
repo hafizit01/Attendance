@@ -1,133 +1,193 @@
 {% extends "base.html" %}
+{% block title %}Attendance Records{% endblock %}
 {% block content %}
-<div class="p-4 sm:p-6 bg-white dark:bg-gray-800 rounded shadow transition-colors duration-300">
-  <h1 class="text-xl sm:text-2xl font-bold mb-4 text-gray-900 dark:text-gray-100">Attendance Records</h1>
 
-  <!-- Add Attendance Button -->
-  <a href="{% url 'attendance_app:attendance_add' %}"
-     class="bg-blue-600 hover:bg-blue-700 text-white px-3 sm:px-4 py-2 rounded mb-4 inline-block text-sm sm:text-base transition">
-    ➕ Add Attendance
-  </a>
-
- <a class="inline-flex items-center gap-2 rounded bg-blue-600 px-3 py-2 text-white hover:bg-blue-700"
-   href="{% url 'attendance_app:attendance_list_pdf' %}?start_date={{ start_date }}&end_date={{ end_date }}{% if request.GET.employee %}&employee={{ request.GET.employee }}{% endif %}{% if request.GET.department %}&department={{ request.GET.department }}{% endif %}"
-   target="_blank" rel="noopener">
-  🧾 View PDF
-</a>
-
+<div class="w-full px-2 sm:px-4 py-6 space-y-6">
   
-  <!-- Filter Form -->
-  <form method="get" class="flex flex-col sm:flex-row flex-wrap gap-2 mb-4">
-    <input type="date" name="start_date" value="{{ request.GET.start_date }}"
-           class="border px-2 py-1 rounded text-sm bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100">
+  <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+    <div>
+        <h1 class="text-2xl font-bold text-gray-800 dark:text-white flex items-center gap-2">
+            <span class="p-2 bg-blue-100 dark:bg-blue-900 rounded-lg text-blue-600">📋</span>
+            Attendance Records
+        </h1>
+        <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">Manage and track daily attendance logs efficiently.</p>
+    </div>
 
-    <input type="date" name="end_date" value="{{ request.GET.end_date }}"
-           class="border px-2 py-1 rounded text-sm bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100">
-
-    <select name="employee"
-            class="border px-2 py-1 rounded text-sm bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100">
-      <option value="">-- Select Employee --</option>
-      {% for emp in employees %}
-        <option value="{{ emp.id }}" {% if request.GET.employee == emp.id|stringformat:"s" %}selected{% endif %}>
-          {{ emp.name }}
-        </option>
-      {% endfor %}
-    </select>
-
-    <select name="department"
-            class="border px-2 py-1 rounded text-sm bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100">
-      <option value="">-- Select Department --</option>
-      {% for dept in departments %}
-        <option value="{{ dept.id }}" {% if request.GET.department == dept.id|stringformat:"s" %}selected{% endif %}>
-          {{ dept.name }}
-        </option>
-      {% endfor %}
-    </select>
-
-    <button type="submit"
-            class="bg-blue-600 hover:bg-blue-700 text-white px-3 sm:px-4 py-1 sm:py-2 rounded text-sm sm:text-base transition">
-      🔍 Filter
-    </button>
-  </form>
-
-  <!-- Table -->
-  <!-- Table -->
-<div class="overflow-x-auto">
-  <table class="table-auto w-full border border-gray-300 dark:border-gray-700 text-xs sm:text-sm">
-    <thead class="bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-gray-100">
-      <tr>
-        <th class="border border-gray-300 dark:border-gray-700 px-2 sm:px-4 py-2">Name</th>
-        <th class="border border-gray-300 dark:border-gray-700 px-2 sm:px-4 py-2">Date</th>
-        <th class="border border-gray-300 dark:border-gray-700 px-2 sm:px-4 py-2">Time</th>
-        <th class="border border-gray-300 dark:border-gray-700 px-2 sm:px-4 py-2">Status</th>
-        <th class="border border-gray-300 dark:border-gray-700 px-2 sm:px-4 py-2 text-right">Actions</th>
-      </tr>
-    </thead>
-    <tbody class="text-gray-800 dark:text-gray-200">
-      {% for record in attendance_summary %}
-      <tr class="hover:bg-gray-50 dark:hover:bg-gray-900 transition">
-        <td class="border border-gray-300 dark:border-gray-700 px-2 sm:px-4 py-2">{{ record.employee.name }}</td>
-        <td class="border border-gray-300 dark:border-gray-700 px-2 sm:px-4 py-2">{{ record.date }}</td>
-        <td class="border border-gray-300 dark:border-gray-700 px-2 sm:px-4 py-2">
-          {% if record.in_time and record.out_time %}
-            {{ record.in_time|time:"h:i A" }} - {{ record.out_time|time:"h:i A" }}
-          {% elif record.in_time %}
-            {{ record.in_time|time:"h:i A" }} - --
-          {% elif record.out_time %}
-            -- - {{ record.out_time|time:"h:i A" }}
-          {% else %}
-            --
-          {% endif %}
-        </td>
-        <td class="border border-gray-300 dark:border-gray-700 px-2 sm:px-4 py-2
-          {% if record.status == 'Absent' %} text-red-500 font-semibold
-          {% elif record.status == 'Present' %} text-green-500 font-semibold
-          {% elif record.status == 'Weekly Off' %} text-yellow-500 font-semibold
-          {% elif record.status == 'Public Holiday' %} text-indigo-400 font-semibold
-          {% elif record.status == 'Leave' %} text-blue-500 font-semibold
-          {% endif %}
-        ">
-          {{ record.status }}
-        </td>
-
-        <!-- Actions -->
-<!-- Actions -->
-<td class="border border-gray-300 dark:border-gray-700 px-2 sm:px-4 py-2">
-  <div class="flex items-center justify-end gap-2">
-    {% if record.attendance_id %}
-      <a href="{% url 'attendance_app:attendance_edit' record.attendance_id %}"
-         class="inline-flex items-center gap-1 rounded bg-amber-500 px-2 sm:px-3 py-1 text-white text-xs sm:text-sm hover:bg-amber-600 transition">
-        ✏️ Edit
-      </a>
-
-      <form action="{% url 'attendance_app:attendance_delete' record.attendance_id %}"
-            method="post"
-            onsubmit="return confirm('Are you sure you want to delete this attendance record?');"
-            class="inline">
-        {% csrf_token %}
-        <button type="submit"
-                class="inline-flex items-center gap-1 rounded bg-red-600 px-2 sm:px-3 py-1 text-white text-xs sm:text-sm hover:bg-red-700 transition">
-          🗑️ Delete
-        </button>
-      </form>
-    {% else %}
-      <span class="text-gray-400 italic">—</span>
-    {% endif %}
+    <div class="flex flex-wrap gap-3">
+        <a href="{% url 'attendance_app:attendance_add' %}"
+           class="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg shadow-md transition-all hover:-translate-y-0.5">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+            Add Attendance
+        </a>
+        
+        <a href="{% url 'attendance_app:attendance_list_pdf' %}?start_date={{ start_date }}&end_date={{ end_date }}{% if request.GET.employee %}&employee={{ request.GET.employee }}{% endif %}{% if request.GET.department %}&department={{ request.GET.department }}{% endif %}"
+           target="_blank" rel="noopener"
+           class="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold rounded-lg shadow-md transition-all hover:-translate-y-0.5">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
+            Export PDF
+        </a>
+    </div>
   </div>
-</td>
 
+  <div class="bg-white dark:bg-gray-800 p-5 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
+    <form method="get" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
+        <div>
+            <label class="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1.5">Start Date</label>
+            <input type="date" name="start_date" value="{{ request.GET.start_date|default:start_date }}"
+                   class="w-full bg-gray-50 dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-gray-800 dark:text-gray-200 text-sm px-3 py-2 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all">
+        </div>
 
-      </tr>
-      {% empty %}
-      <tr>
-        <td colspan="5" class="text-center py-4 text-gray-600 dark:text-gray-400">
-          No records found.
-        </td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
+        <div>
+            <label class="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1.5">End Date</label>
+            <input type="date" name="end_date" value="{{ request.GET.end_date|default:end_date }}"
+                   class="w-full bg-gray-50 dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-gray-800 dark:text-gray-200 text-sm px-3 py-2 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all">
+        </div>
+
+        <div>
+            <label class="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1.5">Employee</label>
+            <select name="employee"
+                    class="w-full bg-gray-50 dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-gray-800 dark:text-gray-200 text-sm px-3 py-2 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none appearance-none transition-all">
+                <option value="">All Employees</option>
+                {% for emp in employees %}
+                    <option value="{{ emp.id }}" {% if request.GET.employee == emp.id|stringformat:"s" %}selected{% endif %}>{{ emp.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div>
+            <label class="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1.5">Department</label>
+            <select name="department"
+                    class="w-full bg-gray-50 dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-gray-800 dark:text-gray-200 text-sm px-3 py-2 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none appearance-none transition-all">
+                <option value="">All Departments</option>
+                {% for dept in departments %}
+                    <option value="{{ dept.id }}" {% if request.GET.department == dept.id|stringformat:"s" %}selected{% endif %}>{{ dept.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="flex gap-2">
+            <button type="submit" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold px-4 py-2 rounded-lg shadow transition-all">
+                Apply Filter
+            </button>
+            <a href="{% url 'attendance_app:attendance_list' %}" class="p-2 bg-gray-100 dark:bg-gray-700 text-gray-500 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-all" title="Clear">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
+            </a>
+        </div>
+    </form>
+  </div>
+
+  <div class="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+    <div class="overflow-x-auto min-h-[400px]">
+      <table class="w-full text-sm text-left">
+        <thead class="bg-gray-50 dark:bg-gray-700/50 text-gray-500 dark:text-gray-400 uppercase text-xs font-bold tracking-wider border-b border-gray-200 dark:border-gray-700">
+          <tr>
+            <th class="px-6 py-4">Employee Name</th>
+            <th class="px-6 py-4">Date</th>
+            <th class="px-6 py-4">Punch Time</th>
+            <th class="px-6 py-4 text-center">Status</th>
+            <th class="px-6 py-4 text-right">Actions</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
+          {% for record in attendance_summary %}
+          <tr class="group hover:bg-blue-50/30 dark:hover:bg-blue-900/10 transition-colors">
+            <td class="px-6 py-4">
+                <div class="font-bold text-gray-900 dark:text-gray-100">{{ record.employee.name }}</div>
+                <div class="text-[10px] text-gray-500 uppercase">{{ record.employee.department.name|default:"General" }}</div>
+            </td>
+            <td class="px-6 py-4 font-mono text-gray-600 dark:text-gray-300">
+                {{ record.date }}
+            </td>
+            <td class="px-6 py-4">
+                <div class="flex items-center gap-2 font-mono text-xs">
+                    {% if record.in_time %}
+                        <span class="bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400 px-2 py-1 rounded">
+                            IN: {{ record.in_time|time:"h:i A" }}
+                        </span>
+                    {% else %}
+                        <span class="text-gray-300">--:--</span>
+                    {% endif %}
+                    
+                    <span class="text-gray-300">➜</span>
+
+                    {% if record.out_time %}
+                        <span class="bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 px-2 py-1 rounded">
+                            OUT: {{ record.out_time|time:"h:i A" }}
+                        </span>
+                    {% else %}
+                        <span class="text-gray-300">--:--</span>
+                    {% endif %}
+                </div>
+            </td>
+            <td class="px-6 py-4 text-center">
+                {% if record.status == 'Present' %}
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400">
+                        Present
+                    </span>
+                {% elif record.status == 'Absent' %}
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-400">
+                        Absent
+                    </span>
+                {% elif record.status == 'Weekly Off' %}
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400">
+                        Weekly Off
+                    </span>
+                {% elif record.status == 'Public Holiday' %}
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400">
+                        Holiday
+                    </span>
+                {% elif record.status == 'Leave' %}
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400">
+                        On Leave
+                    </span>
+                {% endif %}
+            </td>
+            <td class="px-6 py-4 text-right">
+                <div class="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                    {% if record.attendance_id %}
+                        <a href="{% url 'attendance_app:attendance_edit' record.attendance_id %}" 
+                           class="p-1.5 text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20 rounded-lg transition-colors" title="Edit">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                        </a>
+                        <form action="{% url 'attendance_app:attendance_delete' record.attendance_id %}" method="post" 
+                              onsubmit="return confirm('Are you sure you want to delete this record?');" class="inline">
+                            {% csrf_token %}
+                            <button type="submit" class="p-1.5 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/20 rounded-lg transition-colors" title="Delete">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                            </button>
+                        </form>
+                    {% else %}
+                        <span class="text-xs text-gray-300 italic">No Action</span>
+                    {% endif %}
+                </div>
+            </td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="5" class="px-6 py-20 text-center">
+                <div class="flex flex-col items-center">
+                    <div class="p-4 bg-gray-50 dark:bg-gray-700 rounded-full mb-4">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
+                    </div>
+                    <h3 class="text-lg font-bold text-gray-800 dark:text-gray-200">No Records Found</h3>
+                    <p class="text-sm text-gray-500">Try adjusting the date range or filters.</p>
+                </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
 </div>
 
-</div>
-{% endblock %}
+<style>
+    /* Custom Scrollbar */
+    .overflow-x-auto::-webkit-scrollbar { height: 8px; width: 8px; }
+    .overflow-x-auto::-webkit-scrollbar-track { background: #f8fafc; }
+    .dark .overflow-x-auto::-webkit-scrollbar-track { background: #1e293b; }
+    .overflow-x-auto::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+    .dark .overflow-x-auto::-webkit-scrollbar-thumb { background: #475569; }
+</style>
+
+{% endblock content %}

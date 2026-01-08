@@ -1,147 +1,158 @@
 {% extends "base.html" %}
+{% block title %}Monthly Report{% endblock %}
 {% block content %}
 {% load custom_filters %}
 {% load time_filters %}
 
-<h2 class="text-2xl font-bold text-gray-800 dark:text-gray-100 mb-6">🕒 Monthly Work Time Report</h2>
+<div class="w-full px-2">
+    <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+        <div class="flex items-center gap-2">
+            <span class="p-1.5 bg-blue-100 dark:bg-blue-900 rounded text-blue-600 text-lg">🕒</span>
+            <h2 class="text-xl font-bold text-gray-800 dark:text-white">Monthly Report</h2>
+        </div>
 
-<!-- Filter Form -->
-<form method="get" class="bg-white dark:bg-gray-900 p-6 rounded-lg shadow-md mb-6 transition-colors duration-300">
-  <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-
-    <div>
-      <label class="text-sm text-gray-600 dark:text-gray-300">📅 Start Date</label>
-      <input type="date" name="start_date" value="{{ request.GET.start_date }}"
-             class="w-full border border-gray-300 dark:border-gray-700 
-                    bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-200 
-                    px-3 py-2 rounded-md focus:ring focus:ring-blue-400">
+        <form method="get" action="{% url 'attendance_app:monthly_work_time_pdf' %}" target="_blank">
+            <input type="hidden" name="start_date" value="{{ start_date|date:'Y-m-d' }}">
+            <input type="hidden" name="end_date" value="{{ end_date|date:'Y-m-d' }}">
+            {% if selected_department %}<input type="hidden" name="department" value="{{ selected_department }}">{% endif %}
+            {% if selected_employee %}<input type="hidden" name="employee" value="{{ selected_employee }}">{% endif %}
+            
+            <button type="submit" class="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold py-1.5 px-4 rounded shadow transition-all">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
+                Export PDF
+            </button>
+        </form>
     </div>
 
-    <div>
-      <label class="text-sm text-gray-600 dark:text-gray-300">📅 End Date</label>
-      <input type="date" name="end_date" value="{{ request.GET.end_date }}"
-             class="w-full border border-gray-300 dark:border-gray-700 
-                    bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-200 
-                    px-3 py-2 rounded-md focus:ring focus:ring-blue-400">
+    <div class="bg-white dark:bg-gray-800 p-3 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 mb-5">
+        <form method="get" class="flex flex-wrap items-end gap-3">
+            <div class="flex-1 min-w-[140px]">
+                <label class="block text-[10px] font-bold text-gray-400 uppercase mb-1">📅 Start</label>
+                <input type="date" name="start_date" value="{{ start_date|date:'Y-m-d' }}"
+                       class="w-full border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-gray-800 dark:text-gray-200 text-xs px-2 py-1.5 rounded outline-none focus:ring-1 focus:ring-blue-500">
+            </div>
+
+            <div class="flex-1 min-w-[140px]">
+                <label class="block text-[10px] font-bold text-gray-400 uppercase mb-1">📅 End</label>
+                <input type="date" name="end_date" value="{{ end_date|date:'Y-m-d' }}"
+                       class="w-full border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-gray-800 dark:text-gray-200 text-xs px-2 py-1.5 rounded outline-none focus:ring-1 focus:ring-blue-500">
+            </div>
+
+            <div class="flex-1 min-w-[150px]">
+                <label class="block text-[10px] font-bold text-gray-400 uppercase mb-1">🧑‍💼 Employee</label>
+                <select name="employee" class="w-full border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-gray-800 dark:text-gray-200 text-xs px-2 py-1.5 rounded outline-none">
+                    <option value="">All Employees</option>
+                    {% for emp in employees %}
+                        <option value="{{ emp.id }}" {% if selected_employee == emp.id %}selected{% endif %}>{{ emp.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="flex-1 min-w-[150px]">
+                <label class="block text-[10px] font-bold text-gray-400 uppercase mb-1">🏢 Dept</label>
+                <select name="department" class="w-full border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-gray-800 dark:text-gray-200 text-xs px-2 py-1.5 rounded outline-none">
+                    <option value="">All Departments</option>
+                    {% for dept in departments %}
+                        <option value="{{ dept.id }}" {% if selected_department == dept.id %}selected{% endif %}>{{ dept.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="flex gap-1">
+                <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-5 py-2 rounded transition-all">
+                    Filter
+                </button>
+                <a href="{% url 'attendance_app:monthly_work_time_report' %}" class="p-2 bg-gray-100 dark:bg-gray-700 text-gray-500 rounded hover:bg-gray-200" title="Reset">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                </a>
+            </div>
+        </form>
     </div>
 
-    <div>
-      <label class="text-sm text-gray-600 dark:text-gray-300">🧑‍💼 Employee</label>
-      <select name="employee"
-              class="w-full border border-gray-300 dark:border-gray-700 
-                     bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-200 
-                     px-3 py-2 rounded-md">
-        <option value="">-- All Employees --</option>
-        {% for emp in employees %}
-          <option value="{{ emp.id }}" {% if request.GET.employee == emp.id|stringformat:"s" %}selected{% endif %}>{{ emp.name }}</option>
-        {% endfor %}
-      </select>
+    <div class="relative bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+        <div class="overflow-x-auto min-h-[500px]">
+            <table class="w-full text-xs text-left border-collapse">
+                <thead class="sticky top-0 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-100 z-10">
+                    <tr class="uppercase font-bold border-b border-gray-200 dark:border-gray-600">
+                        <th class="px-4 py-4">ID</th>
+                        <th class="px-4 py-4 min-w-[180px]">Employee Details</th>
+                        <th class="px-3 py-4 text-center">✅ Pres</th>
+                        <th class="px-3 py-4 text-center">❌ Abs</th>
+                        <th class="px-3 py-4 text-center">🛌 Off</th>
+                        <th class="px-3 py-4 text-center">📅 Leave</th>
+                        <th class="px-3 py-4 text-center">🕒 Late</th>
+                        <th class="px-3 py-4 text-center">📈 Over</th>
+                        <th class="px-4 py-4 text-center text-blue-600 bg-blue-50/50 dark:bg-blue-900/20">🧮 Work Hours</th>
+                        <th class="px-4 py-4 text-center">🧭 Expected</th>
+                        <th class="px-4 py-4 text-center">🔄 Difference</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
+                    {% for data in report_data %}
+                        <tr class="hover:bg-gray-50 dark:hover:bg-gray-900/40 transition-colors">
+                            <td class="px-4 py-4 text-gray-400 font-mono font-medium">{{ forloop.counter }}</td>
+                            <td class="px-4 py-4">
+                                <div class="font-bold text-gray-900 dark:text-gray-100 text-sm mb-0.5">{{ data.employee.name }}</div>
+                                <div class="inline-block bg-gray-100 dark:bg-gray-700 px-1.5 py-0.5 rounded text-[10px] text-gray-500 dark:text-gray-400 font-semibold uppercase tracking-tight">
+                                    {{ data.employee.department.name|default:"General" }}
+                                </div>
+                            </td>
+                            <td class="px-3 py-4 text-center">
+                                <span class="font-bold text-emerald-600 text-sm">{{ data.present_days }}</span>
+                            </td>
+                            <td class="px-3 py-4 text-center">
+                                <span class="font-bold text-rose-500 text-sm">{{ data.absent_days }}</span>
+                            </td>
+                            <td class="px-3 py-4 text-center text-gray-500 font-medium">{{ data.weekly_off_days }}</td>
+                            <td class="px-3 py-4 text-center">
+                                <span class="bg-blue-50 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 px-2 py-1 rounded-md text-[11px] font-bold">
+                                    {{ data.leave_days }}
+                                </span>
+                            </td>
+                            <td class="px-3 py-4 text-center font-mono text-amber-600 font-semibold">{{ data.late_time }}</td>
+                            <td class="px-3 py-4 text-center font-mono text-purple-600 font-semibold">{{ data.over_time }}</td>
+                            <td class="px-4 py-4 text-center font-bold font-mono text-blue-600 dark:text-blue-400 bg-blue-50/30 dark:bg-blue-900/10 text-sm">
+                                {{ data.total_work_hours }}
+                            </td>
+                            <td class="px-4 py-4 text-center font-mono text-gray-400">
+                                {{ data.expected_work_time_excl_off|format_timedelta }}
+                            </td>
+                            <td class="px-4 py-4 text-center">
+                                {% if data.work_time_difference.total_seconds < 0 %}
+                                    <div class="inline-flex items-center px-2.5 py-1 rounded-full bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 font-bold text-[11px]">
+                                        +{{ data.work_time_difference|abs_timedelta|format_timedelta }}
+                                    </div>
+                                {% elif data.work_time_difference.total_seconds > 0 %}
+                                    <div class="inline-flex items-center px-2.5 py-1 rounded-full bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 font-bold text-[11px]">
+                                        -{{ data.work_time_difference|format_timedelta }}
+                                    </div>
+                                {% else %}
+                                    <span class="text-gray-300 font-mono">00:00:00</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                    {% empty %}
+                        <tr>
+                            <td colspan="11" class="px-4 py-20 text-center">
+                                <div class="text-gray-300 mb-2">
+                                    <svg class="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                                </div>
+                                <p class="text-gray-500 font-medium">No records found for the selected filter.</p>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
     </div>
-
-    <div>
-      <label class="text-sm text-gray-600 dark:text-gray-300">🏢 Department</label>
-      <select name="department"
-              class="w-full border border-gray-300 dark:border-gray-700 
-                     bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-200 
-                     px-3 py-2 rounded-md">
-        <option value="">-- All Departments --</option>
-        {% for dept in departments %}
-          <option value="{{ dept.id }}" {% if request.GET.department == dept.id|stringformat:"s" %}selected{% endif %}>{{ dept.name }}</option>
-        {% endfor %}
-      </select>
-    </div>
-
-    <div class="flex items-end">
-      <button type="submit"
-              class="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-4 py-2 rounded-md shadow w-full">
-        🔍 Filter
-      </button>
-    </div>
-  </div>
-</form>
-
-
-<!-- PDF Export -->
-<form method="get" action="{% url 'attendance_app:monthly_work_time_pdf' %}" target="_blank" class="mb-6">
-  <input type="hidden" name="start_date" value="{{ start_date|date:'Y-m-d' }}">
-  <input type="hidden" name="end_date" value="{{ end_date|date:'Y-m-d' }}">
-  {% if selected_department %}
-    <input type="hidden" name="department" value="{{ selected_department }}">
-  {% endif %}
-  {% if selected_employee %}
-    <input type="hidden" name="employee" value="{{ selected_employee }}">
-  {% endif %}
-  <button type="submit"
-          class="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded-lg shadow transition">
-    📄 Export PDF
-  </button>
-</form>
-
-
-<!-- Report Table -->
-<div class="overflow-x-auto bg-white dark:bg-gray-900 rounded-lg shadow-md transition-colors duration-300">
-  <table class="min-w-full text-sm text-left text-gray-700 dark:text-gray-200 border border-gray-400 dark:border-gray-700 shadow rounded-xl">
-    <thead class="bg-gray-100 dark:bg-gray-800 text-xs text-gray-800 dark:text-gray-200 uppercase border-b border-gray-400 dark:border-gray-700">
-      <tr>
-        <th class="px-4 py-3 border-r">#️⃣</th>
-        <th class="px-4 py-3 border-r">🧑‍💼 Name</th>
-        <th class="px-4 py-3 border-r">🟢 Start</th>
-        <th class="px-4 py-3 border-r">🔴 End</th>
-        <th class="px-4 py-3 border-r">✅ Present</th>
-        <th class="px-4 py-3 border-r">❌ Absent</th>
-        <th class="px-4 py-3 border-r">🛌 Off Days</th>
-        <th class="px-4 py-3 border-r">📅 Leave</th>
-        {% if report_data|length and report_data.0.holiday_days > 0 %}
-          <th class="px-4 py-3 border-r">🏖 Public</th>
-        {% endif %}
-        <th class="px-4 py-3 border-r">☑️ Approved</th>
-        <th class="px-4 py-3 border-r">🕒 Late</th>
-        <th class="px-4 py-3 border-r">📉 Less</th>
-        <th class="px-4 py-3 border-r">⏰ Over</th>
-        <th class="px-4 py-3 border-r">🧮 Final Work Hours</th>
-        <th class="px-4 py-3 border-r">🧭 Expected</th>
-        <th class="px-4 py-3">🔄 Diff</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for data in report_data %}
-        <tr class="hover:bg-gray-50 dark:hover:bg-gray-800 border-t border-gray-300 dark:border-gray-700 transition-colors">
-          <td class="px-4 py-2 border-r">{{ forloop.counter }}</td>
-          <td class="px-4 py-2 border-r">{{ data.employee.name }}</td>
-          <td class="px-4 py-2 border-r">{{ data.start_date }}</td>
-          <td class="px-4 py-2 border-r">{{ data.end_date }}</td>
-          <td class="px-4 py-2 border-r">{{ data.present_days }}</td>
-          <td class="px-4 py-2 border-r">{{ data.absent_days }}</td>
-          <td class="px-4 py-2 border-r">{{ data.weekly_off_days }}</td>
-          <td class="px-4 py-2 border-r">{{ data.leave_days }}</td>
-          {% if report_data|length and report_data.0.holiday_days > 0 %}
-            <td class="px-4 py-2 border-r">{{ data.holiday_days }}</td>
-          {% endif %}
-          <td class="px-4 py-2 border-r">{{ data.approved_leave_count }}</td>
-          <td class="px-4 py-2 border-r">{{ data.late_time }}</td>
-          <td class="px-4 py-2 border-r">{{ data.less_time }}</td>
-          <td class="px-4 py-2 border-r">{{ data.over_time }}</td>
-          <td class="px-4 py-2 border-r">{{ data.final_work_time }}</td>
-          <td class="px-4 py-2 border-r">{{ data.expected_work_time_excl_off|format_timedelta }}</td>
-
-          <td class="px-4 py-2 font-semibold">
-            {% if data.work_time_difference.total_seconds < 0 %}
-              <span class="text-green-600">+{{ data.work_time_difference|abs_timedelta|format_timedelta }}</span>
-            {% elif data.work_time_difference.total_seconds > 0 %}
-              <span class="text-red-600">-{{ data.work_time_difference|format_timedelta }}</span>
-            {% else %}
-              <span class="text-gray-500 dark:text-gray-400">00:00:00</span>
-            {% endif %}
-          </td>
-        </tr>
-      {% empty %}
-        <tr>
-          <td colspan="17" class="text-center py-6 text-gray-500 dark:text-gray-400 border-t border-gray-300 dark:border-gray-700">
-            ❗ No data found for the selected range.
-          </td>
-        </tr>
-      {% endfor %}
-    </tbody>
-  </table>
 </div>
+
+<style>
+    /* Table scrollbar customization */
+    .overflow-x-auto::-webkit-scrollbar { height: 8px; width: 8px; }
+    .overflow-x-auto::-webkit-scrollbar-track { background: #f8fafc; }
+    .dark .overflow-x-auto::-webkit-scrollbar-track { background: #1e293b; }
+    .overflow-x-auto::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+    .dark .overflow-x-auto::-webkit-scrollbar-thumb { background: #475569; }
+</style>
 {% endblock content %}

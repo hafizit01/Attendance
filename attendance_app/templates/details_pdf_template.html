@@ -1,105 +1,162 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
     {% load static %}
-    {% load time_filters %}
     <meta charset="UTF-8">
     <title>Attendance Report</title>
     <style>
-        @font-face {
-            font-family: 'DejaVu Sans';
-            src: url("{% static 'fonts/SourceSansPro-Regular.ttf' %}") format('truetype');
+    
+    @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap');
+
+        @page {
+            size: A4 landscape;
+            margin: 15mm 10mm;
         }
-        @page { margin: 30px; }
+
         body {
-            font-family: 'DejaVu Sans', sans-serif;
-            font-size: 12px;
+            /* 2. Font Family Update */
+            font-family: 'Roboto', sans-serif;
+            font-size: 11px;
             margin: 0;
+            color: #333;
+            line-height: 1.3;
         }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 10px;
+        
+        @page {
+            size: A4;
+            margin: 15mm 10mm;
+            @bottom-right {
+                content: "Page " counter(page) " of " counter(pages);
+                font-size: 9px; color: #777;
+            }
         }
-        th, td {
-            border: 1px solid #999;
-            padding: 6px;
-            text-align: left;
+        
+        
+        /* Header Styling */
+        .header { border-bottom: 2px solid #003366; padding-bottom: 10px; margin-bottom: 15px; }
+        .company-name { font-size: 18px; font-weight: bold; color: #003366; }
+        .report-title { font-size: 14px; font-weight: bold; text-transform: uppercase; margin-top: 5px; }
+        .meta-info { font-size: 10px; color: #555; margin-top: 5px; }
+
+        /* Table Styling */
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td { border: 1px solid #ccc; padding: 6px 4px; text-align: center; }
+        th { background-color: #f2f2f2; font-weight: bold; font-size: 9px; color: #333; }
+        
+        /* Specific Column Alignments */
+        .text-left { text-align: left; padding-left: 5px; }
+        .text-right { text-align: right; padding-right: 5px; }
+
+        /* Status Colors */
+        .status-present { color: #006400; font-weight: bold; } /* Green */
+        .status-absent { color: #cc0000; font-weight: bold; }  /* Red */
+        .status-leave { color: #0000cc; }                      /* Blue */
+        .status-holiday { color: #660066; }                    /* Purple */
+        
+        /* Footer/Stats Styling */
+        .summary-box { 
+            margin-top: 20px; 
+            border: 1px solid #ddd; 
+            padding: 10px; 
+            background-color: #f9f9f9;
+            width: 50%;
         }
-        th {
-            background-color: #eee;
-        }
-        tfoot td {
-            font-weight: bold;
-        }
-        footer {
-            font-size: 10px;
-            color: #888;
-            text-align: center;
-            font-style: italic;
-            margin-top: 20px;
-        }
+        .footer { margin-top: 30px; text-align: center; font-size: 9px; color: #888; font-style: italic; border-top: 1px solid #eee; padding-top: 5px; }
     </style>
 </head>
 <body>
-    <h2>Attendance Report</h2>
-    <p><strong>Employee:</strong> {{ employee.name }}</p>
-    <p><strong>Period:</strong> {{ start_date }} to {{ end_date }}</p>
+
+    <div class="header">
+        <div style="float: left; width: 70%;">
+            <div class="company-name">{{ company_name }}</div>
+            <div class="meta-info">
+                <strong>Employee:</strong> {{ employee.name }} (ID: {{ employee.device_user_id }})<br>
+                <strong>Department:</strong> {{ employee.department.name }}
+            </div>
+        </div>
+        <div style="float: right; width: 30%; text-align: right;">
+            <div class="report-title">Attendance Report</div>
+            <div class="meta-info">
+                {{ start_date|date:"d M Y" }} to {{ end_date|date:"d M Y" }}
+            </div>
+        </div>
+        <div style="clear: both;"></div>
+    </div>
 
     <table>
         <thead>
             <tr>
-                <th>Date</th>
-                <th>In Time</th>
-                <th>Out Time</th>
-                <th>Status</th>
-                <th>Work Time</th>
-                <th>Over Time</th>
-                <th>Less Time</th>
+                <th width="12%">Date</th>
+                <th width="10%">Day</th>
+                <th width="10%">In Time</th>
+                <th width="10%">Out Time</th>
+                <th width="15%">Status</th>
+                <th width="12%">Work Time</th>
+                <th width="12%">Over Time</th>
+                <th width="12%">Less Time</th>
             </tr>
         </thead>
         <tbody>
-            {% for date, data in attendance_summary %}
+            {% for row in summary %}
             <tr>
-                <td>{{ date }}</td>
-                <td>{{ data.in_time|default:"-" }}</td>
-                <td>{{ data.out_time|default:"-" }}</td>
+                <td>{{ row.date|date:"d-M-y" }}</td>
+                <td>{{ row.weekday }}</td>
+                
+                <td>{{ row.in_time }}</td>
+                <td>{{ row.out_time }}</td>
+                
                 <td>
-                    {% if data.status == "Absent" %}
-                        <span style="color: red;">Absent</span>
-                    {% elif data.status == "On Leave" %}
-                        <span style="color: green;">Leave</span>
-                    {% elif data.status == "Off Day" %}
-                        <span style="color: blue;">Off Day</span>
+                    {% if row.status == 'Present' %}
+                        <span class="status-present">Present</span>
+                    {% elif row.status == 'Absent' %}
+                        <span class="status-absent">Absent</span>
+                    {% elif row.status == 'On Leave' or row.status == 'Leave' %}
+                        <span class="status-leave">On Leave</span>
+                    {% elif 'Holiday' in row.status or 'Off' in row.status %}
+                        <span class="status-holiday">{{ row.status }}</span>
                     {% else %}
-                        Present
+                        {{ row.status }}
                     {% endif %}
                 </td>
-                <td>{{ data.daily_work_time }}</td>
-                <td>{{ data.over_time }}</td>
-                <td>{{ data.less_time }}</td>
+
+                <td>{{ row.work_time }}</td>
+                <td>{{ row.over_time }}</td>
+                <td>{{ row.less_time }}</td>
             </tr>
             {% endfor %}
         </tbody>
+        
         <tfoot>
-            <tr>
-                <td colspan="4" style="text-align: right;">Total:</td>
-                <td>{{ total_work_duration|format_timedelta }}</td>
-                <td>{{ total_over_time|format_timedelta }}</td>
-                <td>{{ total_less_time|format_timedelta }}</td>
+            <tr style="background-color: #e6e6e6; font-weight: bold;">
+                <td colspan="5" class="text-right">TOTAL DURATION:</td>
+                <td>{{ stats.total_work }}</td>
+                <td>{{ stats.total_over }}</td>
+                <td>{{ stats.total_less }}</td>
             </tr>
         </tfoot>
     </table>
 
-    <div class="summary" style="margin-top: 10px;">
-        <p>✅ Approved Leave Days: {{ approved_leave_count }}</p>
-        <p>📅 Holiday (Off) Days: {{ holiday_count }}</p>
-        <p>🚫 Absent Days: {{ absent_count }}</p>
-        <p>📄 Total Leave Requests: {{ total_leave_requests }}</p>
+    <div class="summary-box">
+        <strong>Summary Statistics:</strong><br>
+        <table style="width: 100%; border: none; margin-top: 5px;">
+            <tr>
+                <td style="border: none; text-align: left;">✅ Present Days:</td>
+                <td style="border: none; text-align: left;"><strong>{{ stats.present }}</strong></td>
+                <td style="border: none; text-align: left;">🚫 Absent Days:</td>
+                <td style="border: none; text-align: left;"><strong style="color: red;">{{ stats.absent }}</strong></td>
+            </tr>
+            <tr>
+                <td style="border: none; text-align: left;">📅 Leave Days:</td>
+                <td style="border: none; text-align: left;"><strong>{{ stats.leave }}</strong></td>
+                <td style="border: none; text-align: left;">🏖 Holidays/Off:</td>
+                <td style="border: none; text-align: left;"><strong>{{ stats.holiday }}</strong></td>
+            </tr>
+        </table>
     </div>
 
-    <footer>
-        develop by: Easy Coding
-    </footer>
+    <div class="footer">
+        Generated by Easy Coding Software • {{ start_date|date:"Y" }}
+    </div>
+
 </body>
 </html>

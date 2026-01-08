@@ -1,120 +1,168 @@
 {% extends "base.html" %}
 
-{% block charts_vendor %}
-<script defer src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-{% endblock %}
-
 {% block content %}
-<main class="flex-1 p-3 sm:p-4 md:p-6">
-  <!-- Header + Filters -->
-  <div class="mb-6">
-    <div class="flex flex-col md:flex-row justify-between items-center gap-4">
-      <h2 class="text-2xl sm:text-3xl font-bold animated-text">📊 Attendance Dashboard</h2>
+<main class="w-full px-4 py-6 space-y-8 animate-in fade-in duration-500">
+  
+  <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white dark:bg-gray-800 p-5 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
+    <div>
+        <h2 class="text-2xl font-bold text-gray-800 dark:text-white flex items-center gap-2">
+            <span class="text-3xl">📊</span> Attendance Dashboard
+        </h2>
+        <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">Overview of today's attendance & monthly trends.</p>
+    </div>
 
-      <!-- Filters + User Menu -->
-      <div class="flex flex-col sm:flex-row items-center gap-3 w-full md:w-auto">
-        <form method="get" class="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-          <select name="department"
-                  class="p-2 border rounded dark:bg-gray-800 dark:text-gray-200 flex-1">
+    <form method="get" class="flex flex-wrap items-center gap-3 w-full md:w-auto bg-gray-50 dark:bg-gray-700/50 p-2 rounded-xl">
+        <select name="department"
+                class="bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 border-none text-sm rounded-lg focus:ring-2 focus:ring-blue-500 px-4 py-2.5 shadow-sm outline-none w-full sm:w-auto">
             <option value="">All Departments</option>
             {% for dept in departments %}
             <option value="{{ dept.id }}" {% if selected_department == dept.id %}selected{% endif %}>
-              {{ dept.name }}
+                {{ dept.name }}
             </option>
             {% endfor %}
-          </select>
-          <button type="submit"
-                  class="bg-blue-600 text-white px-3 py-2 rounded hover:bg-blue-700 text-sm sm:text-base">
-            Filter
-          </button>
-        </form>
+        </select>
+        <button type="submit"
+                class="bg-blue-600 hover:bg-blue-700 text-white font-medium text-sm px-6 py-2.5 rounded-lg shadow-lg shadow-blue-200 dark:shadow-none transition-all w-full sm:w-auto">
+            Apply Filter
+        </button>
+    </form>
+  </div>
 
-        
-      </div>
+  <div class="grid grid-cols-2 md:grid-cols-4 gap-4 sm:gap-6">
+    <div class="relative overflow-hidden bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-lg border border-gray-100 dark:border-gray-700 group hover:scale-[1.02] transition-transform duration-300">
+        <div class="absolute top-0 right-0 -mt-4 -mr-4 w-24 h-24 bg-blue-50 dark:bg-blue-900/20 rounded-full blur-2xl"></div>
+        <h3 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Total Employees</h3>
+        <p class="text-3xl font-extrabold text-gray-800 dark:text-white tabular-nums group-hover:text-blue-600 transition-colors">{{ total_employees }}</p>
+    </div>
+
+    <div class="relative overflow-hidden bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-lg border border-gray-100 dark:border-gray-700 group hover:scale-[1.02] transition-transform duration-300">
+        <div class="absolute top-0 right-0 -mt-4 -mr-4 w-24 h-24 bg-emerald-50 dark:bg-emerald-900/20 rounded-full blur-2xl"></div>
+        <h3 class="text-xs font-bold text-emerald-600/70 uppercase tracking-widest mb-2">Present Today</h3>
+        <p class="text-3xl font-extrabold text-emerald-600 tabular-nums">{{ present }}</p>
+    </div>
+
+    <div class="relative overflow-hidden bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-lg border border-gray-100 dark:border-gray-700 group hover:scale-[1.02] transition-transform duration-300">
+        <div class="absolute top-0 right-0 -mt-4 -mr-4 w-24 h-24 bg-rose-50 dark:bg-rose-900/20 rounded-full blur-2xl"></div>
+        <h3 class="text-xs font-bold text-rose-500/70 uppercase tracking-widest mb-2">Absent Today</h3>
+        <p class="text-3xl font-extrabold text-rose-500 tabular-nums">{{ absent }}</p>
+    </div>
+
+    <div class="relative overflow-hidden bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-lg border border-gray-100 dark:border-gray-700 group hover:scale-[1.02] transition-transform duration-300">
+        <div class="absolute top-0 right-0 -mt-4 -mr-4 w-24 h-24 bg-amber-50 dark:bg-amber-900/20 rounded-full blur-2xl"></div>
+        <h3 class="text-xs font-bold text-amber-500/70 uppercase tracking-widest mb-2">Late Today</h3>
+        <p class="text-3xl font-extrabold text-amber-500 tabular-nums">{{ late }}</p>
     </div>
   </div>
 
-  <!-- KPIs -->
-  <div class="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 mb-8 text-center">
-    <div class="bg-white dark:bg-gray-800 p-3 sm:p-4 shadow rounded">
-      <h3 class="text-gray-600 dark:text-gray-300 text-xs sm:text-sm">Total</h3>
-      <p class="text-lg sm:text-xl font-bold tabular-nums">{{ total_employees }}</p>
-    </div>
-    <div class="bg-green-100 dark:bg-green-900 p-3 sm:p-4 shadow rounded">
-      <h3 class="text-gray-600 dark:text-gray-300 text-xs sm:text-sm">Present</h3>
-      <p class="text-lg sm:text-xl font-bold tabular-nums">{{ present }}</p>
-    </div>
-    <div class="bg-red-100 dark:bg-red-900 p-3 sm:p-4 shadow rounded">
-      <h3 class="text-gray-600 dark:text-gray-300 text-xs sm:text-sm">Absent</h3>
-      <p class="text-lg sm:text-xl font-bold tabular-nums">{{ absent }}</p>
-    </div>
-    <div class="bg-yellow-100 dark:bg-yellow-900 p-3 sm:p-4 shadow rounded">
-      <h3 class="text-gray-600 dark:text-gray-300 text-xs sm:text-sm">Late</h3>
-      <p class="text-lg sm:text-xl font-bold tabular-nums">{{ late }}</p>
-    </div>
-  </div>
-
-  <!-- Charts -->
-  <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-    <div class="bg-white dark:bg-gray-800 p-4 sm:p-6 rounded shadow">
-      <h3 class="text-lg sm:text-xl mb-4 font-semibold text-center">📈 Monthly Attendance Trend</h3>
-      <div class="relative w-full h-56 sm:h-64">
-        <canvas id="trendChart" data-chart="trend"></canvas>
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <div class="lg:col-span-2 bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
+      <div class="flex items-center justify-between mb-6">
+          <h3 class="text-lg font-bold text-gray-800 dark:text-white flex items-center gap-2">
+              <span class="w-2 h-6 bg-blue-500 rounded-full"></span>
+              Monthly Trend
+          </h3>
+          <span class="text-xs font-medium text-gray-400 bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">Last 30 Days</span>
+      </div>
+      <div class="relative h-64 w-full">
+        <canvas id="trendChart"></canvas>
       </div>
     </div>
 
-    <div class="bg-white dark:bg-gray-800 p-4 sm:p-6 rounded shadow">
-      <h3 class="text-lg sm:text-xl mb-4 font-semibold text-center">📊 Today’s Summary</h3>
-      <div class="w-40 h-40 sm:w-60 sm:h-60 mx-auto">
-        <canvas id="summaryChart" data-chart="summary"></canvas>
+    <div class="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col items-center justify-center">
+      <h3 class="text-lg font-bold text-gray-800 dark:text-white mb-6 text-center">Today's Summary</h3>
+      <div class="w-48 h-48 relative">
+        <canvas id="summaryChart"></canvas>
+        <div class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+            <span class="text-sm text-gray-400">Total</span>
+            <span class="text-xl font-bold text-gray-800 dark:text-white">{{ total_employees }}</span>
+        </div>
       </div>
     </div>
   </div>
 
   {% if messages %}
-  <div class="mb-4">
+  <div class="space-y-2">
     {% for message in messages %}
-      <p class="text-sm text-green-700 dark:text-green-300">{{ message }}</p>
+      <div class="p-4 rounded-xl bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 text-sm font-medium border border-blue-100 dark:border-blue-800">
+        {{ message }}
+      </div>
     {% endfor %}
   </div>
   {% endif %}
 
-  <!-- Today's Attendance Table -->
-  <h3 class="text-lg sm:text-xl font-semibold mb-4 text-center animated-text">Today's Attendance</h3>
-
-  <div class="overflow-x-auto bg-white dark:bg-gray-800 p-3 sm:p-4 rounded shadow">
-    <table class="table-auto w-full text-xs sm:text-sm text-left">
-      <thead class="bg-gray-200 dark:bg-gray-700">
-        <tr>
-          <th class="px-2 sm:px-4 py-2">Employee</th>
-          <th class="px-2 sm:px-4 py-2">In Time</th>
-          <th class="px-2 sm:px-4 py-2">Out Time</th>
-          <th class="px-2 sm:px-4 py-2">Total</th>
-          <th class="px-2 sm:px-4 py-2">Late</th>
-          <th class="px-2 sm:px-4 py-2">Less</th>
-          <th class="px-2 sm:px-4 py-2">Over</th>
-        </tr>
-      </thead>
-      <tbody id="employeeTableBody">
-        {% for data in employee_data %}
-        <tr class="border-t border-gray-200 dark:border-gray-700 {% if forloop.counter > 10 %}hidden-row hidden{% endif %}">
-          <td class="px-2 sm:px-4 py-2">{{ data.employee.name }}</td>
-          <td class="px-2 sm:px-4 py-2 tabular-nums">{{ data.in_time|default:"-" }}</td>
-          <td class="px-2 sm:px-4 py-2 tabular-nums">{{ data.out_time|default:"-" }}</td>
-          <td class="px-2 sm:px-4 py-2 tabular-nums">{{ data.total_work_time }}</td>
-          <td class="px-2 sm:px-4 py-2 tabular-nums">{{ data.late_time }}</td>
-          <td class="px-2 sm:px-4 py-2 tabular-nums">{{ data.less_time }}</td>
-          <td class="px-2 sm:px-4 py-2 tabular-nums">{{ data.over_time }}</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+  <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
+    <div class="p-6 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center">
+        <h3 class="text-lg font-bold text-gray-800 dark:text-white flex items-center gap-2">
+            <span class="text-xl">📋</span> Today's Attendance Log
+        </h3>
+    </div>
+    
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm text-left">
+        <thead class="bg-gray-50 dark:bg-gray-700/50 text-gray-500 dark:text-gray-400 uppercase text-xs font-bold tracking-wider">
+          <tr>
+            <th class="px-6 py-4">Employee</th>
+            <th class="px-6 py-4">In Time</th>
+            <th class="px-6 py-4">Out Time</th>
+            <th class="px-6 py-4 text-center">Total</th>
+            <th class="px-6 py-4 text-center">Late</th>
+            <th class="px-6 py-4 text-center">Less</th>
+            <th class="px-6 py-4 text-center">Over</th>
+            <th class="px-6 py-4 text-center">Status</th>
+          </tr>
+        </thead>
+        <tbody id="employeeTableBody" class="divide-y divide-gray-100 dark:divide-gray-700">
+          {% for data in employee_data %}
+          <tr class="group hover:bg-blue-50/50 dark:hover:bg-blue-900/10 transition-colors {% if forloop.counter > 10 %}hidden-row hidden{% endif %}">
+            <td class="px-6 py-4 font-medium text-gray-900 dark:text-gray-100">
+                <div class="flex items-center gap-3">
+                    <div class="w-8 h-8 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center text-xs font-bold text-gray-500">
+                        {{ data.employee.name|slice:":1" }}
+                    </div>
+                    {{ data.employee.name }}
+                </div>
+            </td>
+            <td class="px-6 py-4 tabular-nums text-gray-600 dark:text-gray-300">
+                {% if data.in_time %}
+                    <span class="bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400 px-2 py-1 rounded text-xs font-bold">{{ data.in_time }}</span>
+                {% else %}-{% endif %}
+            </td>
+            <td class="px-6 py-4 tabular-nums text-gray-600 dark:text-gray-300">
+                {% if data.out_time %}
+                    <span class="bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 px-2 py-1 rounded text-xs font-bold">{{ data.out_time }}</span>
+                {% else %}-{% endif %}
+            </td>
+            <td class="px-6 py-4 text-center tabular-nums font-mono text-gray-500">{{ data.total_work_time }}</td>
+            <td class="px-6 py-4 text-center tabular-nums font-mono text-amber-600">{{ data.late_time }}</td>
+            <td class="px-6 py-4 text-center tabular-nums font-mono text-rose-500">{{ data.less_time }}</td>
+            <td class="px-6 py-4 text-center tabular-nums font-mono text-purple-600">{{ data.over_time }}</td>
+            <td class="px-6 py-4 text-center">
+                {% if data.status == 'Present' %}
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300">
+                        Completed
+                    </span>
+                {% elif data.status == 'Present (Active)' %}
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300 animate-pulse">
+                        Active
+                    </span>
+                {% else %}
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300">
+                        Absent
+                    </span>
+                {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
 
     {% if employee_data|length > 10 %}
-    <div class="text-center mt-4 sm:mt-6">
+    <div class="p-4 border-t border-gray-100 dark:border-gray-700 text-center bg-gray-50 dark:bg-gray-800/50">
       <button id="loadMoreBtn"
-              class="inline-block px-4 sm:px-6 py-2 sm:py-3 bg-gradient-to-r from-blue-500 via-blue-600 to-blue-700 text-white font-semibold rounded-lg shadow hover:from-blue-600 hover:via-blue-700 hover:to-blue-800 transition">
-        Load More
+              class="inline-flex items-center gap-2 px-6 py-2.5 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-sm font-semibold text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 transition shadow-sm">
+        Load More Records
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
       </button>
     </div>
     {% endif %}
@@ -122,86 +170,53 @@
 </main>
 
 <style>
-  .hidden{display:none}
-  .animated-text{
-    background: linear-gradient(270deg,#ff0044,#00ff99,#0066ff,#ff0044);
-    background-size:800% 800%;
-    -webkit-background-clip:text;
-    -webkit-text-fill-color:transparent;
-    animation: gradientAnimation 10s ease infinite;
-  }
-  @media (prefers-reduced-motion: reduce){
-    .animated-text{animation:none}
-  }
-  @keyframes gradientAnimation{
-    0%{background-position:0% 50%}
-    50%{background-position:100% 50%}
-    100%{background-position:0% 50%}
-  }
+  .hidden { display: none; }
 </style>
 {% endblock content %}
 
 {% block extra_scripts %}
-<script>
-document.addEventListener("DOMContentLoaded", function() {
-  const loadMoreBtn = document.getElementById("loadMoreBtn");
-  if (!loadMoreBtn) return;
-
-  const hiddenRows = document.querySelectorAll("#employeeTableBody .hidden-row");
-  let visibleCount = 10;   // শুরুর 10টা শো হয়
-
-  loadMoreBtn.addEventListener("click", function() {
-    let shown = 0;
-    for (let i = visibleCount; i < hiddenRows.length && shown < 10; i++) {
-      hiddenRows[i].classList.remove("hidden");
-      shown++;
-    }
-    visibleCount += shown;
-    if (visibleCount >= hiddenRows.length) {
-      loadMoreBtn.style.display = "none"; // সব দেখানো হলে বাটন হাইড
-    }
-  });
-});
-</script>
-
-
-<!-- load Chart.js (ensure it's available before using) -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
 <script>
 document.addEventListener("DOMContentLoaded", function() {
+  // Load More Logic
+  const loadMoreBtn = document.getElementById("loadMoreBtn");
+  if (loadMoreBtn) {
+    const hiddenRows = document.querySelectorAll("#employeeTableBody .hidden-row");
+    let visibleCount = 10;
+
+    loadMoreBtn.addEventListener("click", function() {
+      let shown = 0;
+      for (let i = visibleCount; i < hiddenRows.length && shown < 10; i++) {
+        hiddenRows[i].classList.remove("hidden");
+        hiddenRows[i].classList.add("animate-in", "fade-in", "slide-in-from-bottom-2");
+        shown++;
+      }
+      visibleCount += shown;
+      if (visibleCount >= hiddenRows.length) {
+        loadMoreBtn.style.display = "none";
+      }
+    });
+  }
+
+  // Chart Logic
   try {
-    // 1) Debug raw JSON (what template passed). Use escapejs to be safe.
-    console.log("DEBUG raw attendance_trend_json:", `{{ attendance_trend_json|escapejs }}`);
-
-    // 2) Parse JSON safely. If it's not present, fallback to [].
-    let attendanceTrend = [];
-    try {
-      const raw = '{{ attendance_trend_json|escapejs }}';
-      attendanceTrend = raw ? JSON.parse(raw) : [];
-    } catch (e) {
-      console.error("Failed to parse attendance_trend_json:", e);
-      attendanceTrend = [];
-    }
-    console.log("DEBUG parsed attendanceTrend:", attendanceTrend);
-
-    // 3) Prepare series (safe number conversion)
+    const raw = '{{ attendance_trend_json|escapejs }}';
+    const attendanceTrend = raw ? JSON.parse(raw) : [];
+    
     const labels = attendanceTrend.map(i => i.date);
     const presentData = attendanceTrend.map(i => Number(i.present || 0));
     const absentData = attendanceTrend.map(i => Number(i.absent || 0));
     const lateData = attendanceTrend.map(i => Number(i.late || 0));
 
-    // LOG if empty (helps debug)
-    if (!labels.length) {
-      console.warn("attendanceTrend is empty — charts will render empty series.");
-    }
+    // Trend Chart
+    const trendCtx = document.getElementById('trendChart')?.getContext('2d');
+    if (trendCtx) {
+      // Gradient for Present
+      const gradientPresent = trendCtx.createLinearGradient(0, 0, 0, 400);
+      gradientPresent.addColorStop(0, 'rgba(34, 197, 94, 0.2)');
+      gradientPresent.addColorStop(1, 'rgba(34, 197, 94, 0)');
 
-    // 4) Trend chart element
-    const trendEl = document.getElementById('trendChart');
-    if (!trendEl) {
-      console.error("Canvas with id 'trendChart' NOT FOUND");
-    } else {
-      const trendCtx = trendEl.getContext('2d');
       new Chart(trendCtx, {
         type: 'line',
         data: {
@@ -211,81 +226,88 @@ document.addEventListener("DOMContentLoaded", function() {
               label: 'Present',
               data: presentData,
               borderColor: '#22c55e',
-              backgroundColor: 'rgba(34,197,94,0.15)',
-              tension: 0.3,
+              backgroundColor: gradientPresent,
+              tension: 0.4,
               fill: true,
-              pointRadius: 3
+              pointBackgroundColor: '#fff',
+              pointBorderColor: '#22c55e',
+              pointRadius: 4,
+              pointHoverRadius: 6
             },
             {
               label: 'Absent',
               data: absentData,
-              borderColor: '#ef4444',
-              backgroundColor: 'rgba(239,68,68,0.12)',
-              tension: 0.3,
-              fill: true,
-              pointRadius: 3
+              borderColor: '#f43f5e',
+              backgroundColor: 'transparent',
+              borderDash: [5, 5],
+              tension: 0.4,
+              pointRadius: 0,
+              pointHoverRadius: 4
             },
             {
               label: 'Late',
               data: lateData,
-              borderColor: '#eab308',
-              backgroundColor: 'rgba(234,179,8,0.08)',
-              tension: 0.3,
-              borderDash: [4,4],
-              pointRadius: 3
+              borderColor: '#f59e0b',
+              backgroundColor: 'transparent',
+              tension: 0.4,
+              pointRadius: 2
             }
           ]
         },
         options: {
           responsive: true,
           maintainAspectRatio: false,
+          interaction: { mode: 'index', intersect: false },
           plugins: {
-            legend: { position: 'bottom' },
-            title: { display: true, text: 'Last 30 Days Attendance' }
+            legend: { position: 'top', align: 'end', labels: { usePointStyle: true, boxWidth: 8 } },
+            tooltip: {
+                backgroundColor: 'rgba(17, 24, 39, 0.9)',
+                titleFont: { size: 13 },
+                bodyFont: { size: 13 },
+                padding: 10,
+                cornerRadius: 8,
+                displayColors: true
+            }
           },
           scales: {
-            x: { ticks: { maxRotation: 0, minRotation: 0 } },
-            y: { beginAtZero: true, title: { display: true, text: 'Count' } }
+            x: { grid: { display: false }, ticks: { font: { size: 10 } } },
+            y: { beginAtZero: true, grid: { color: '#f3f4f6' }, border: { display: false } }
           }
         }
       });
     }
 
-    // 5) Summary pie (today)
+    // Pie Chart
     const todaySummary = {
       present: Number({{ present|default:0 }}),
       absent: Number({{ absent|default:0 }}),
       late:   Number({{ late|default:0 }})
     };
-    console.log("DEBUG todaySummary:", todaySummary);
 
-    const summaryEl = document.getElementById('summaryChart');
-    if (!summaryEl) {
-      console.error("Canvas with id 'summaryChart' NOT FOUND");
-    } else {
-      const summaryCtx = summaryEl.getContext('2d');
+    const summaryCtx = document.getElementById('summaryChart')?.getContext('2d');
+    if (summaryCtx) {
       new Chart(summaryCtx, {
-        type: 'pie',
+        type: 'doughnut',
         data: {
-          labels: ['Present','Absent','Late'],
+          labels: ['Present', 'Absent', 'Late'],
           datasets: [{
             data: [todaySummary.present, todaySummary.absent, todaySummary.late],
-            backgroundColor: ['#22c55e','#ef4444','#eab308'],
-            borderColor: '#fff',
-            borderWidth: 1
+            backgroundColor: ['#22c55e', '#f43f5e', '#f59e0b'],
+            borderWidth: 0,
+            hoverOffset: 10
           }]
         },
         options: {
           responsive: true,
-          plugins: { legend: { position: 'bottom' } }
+          cutout: '75%',
+          plugins: { legend: { display: false } }
         }
       });
     }
 
   } catch (err) {
-    console.error("Unexpected chart error:", err);
+    console.error("Chart Error:", err);
   }
 });
 </script>
-
 {% endblock %}

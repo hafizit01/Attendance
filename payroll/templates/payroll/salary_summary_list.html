@@ -1,169 +1,225 @@
 {% extends 'base.html' %}
-
+{% block title %}Salary Summary{% endblock %}
 {% block content %}
-<h2 class="text-2xl md:text-3xl font-semibold mb-4 text-gray-800 dark:text-gray-100 text-center">
-  🧾 Salary Summary List
-</h2>
-
-<div class="mt-4 text-right">
-  {% if summaries %}
-    <a href="{% url 'payroll:salary_summary_pdf' %}?month={{ selected_month }}&department={{ selected_department_id }}&employee={{ selected_employee_id }}"
-       class="inline-flex items-center bg-green-600 text-white px-4 py-2 rounded-md shadow hover:bg-green-700 transition duration-150"
-       target="_blank">📄 Export PDF</a>
-  {% else %}
-    <button class="inline-flex items-center bg-gray-300 text-gray-600 px-4 py-2 rounded-md shadow cursor-not-allowed" disabled>
-      📄 Export PDF (No Data)
-    </button>
-  {% endif %}
-</div>
-
-<!-- Filters -->
-<form method="get" class="bg-white dark:bg-gray-900 dark:text-gray-200 p-6 rounded-lg shadow-md mb-6">
-  <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-    <div>
-      <label for="month" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Select Month:</label>
-      <input type="month" id="month" name="month" value="{{ selected_month }}"
-             class="w-full border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-200 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 px-3 py-2">
-    </div>
-
-    <div>
-      <label for="department" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Select Department:</label>
-      <select id="department" name="department"
-              class="w-full border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-200 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 px-3 py-2">
-        <option value="">All Departments</option>
-        {% for dept in departments %}
-          <option value="{{ dept.id }}" {% if dept.id|stringformat:"s" == selected_department_id %}selected{% endif %}>
-            {{ dept.name }}
-          </option>
-        {% endfor %}
-      </select>
-    </div>
-
-    <div>
-      <label for="employee" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Select Employee:</label>
-      <select id="employee" name="employee"
-              class="w-full border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-200 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 px-3 py-2">
-        <option value="">All Employees</option>
-        {% for emp in employees %}
-          <option value="{{ emp.id }}" {% if emp.id|stringformat:"s" == selected_employee_id %}selected{% endif %}>
-            {{ emp.name }}
-          </option>
-        {% endfor %}
-      </select>
-    </div>
-
-    <div class="flex items-end">
-      <button type="submit"
-              class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold px-4 py-2 rounded-md transition shadow">
-        📊 Show Report
-      </button>
-    </div>
-  </div>
-</form>
-
 {% load custom_filters %}
 
-{% if summaries %}
-  <!-- ✅ শুধু horizontal scroll: overflow-x-auto; কোন max-h/overflow-auto নেই -->
-  <div class="overflow-x-auto rounded-lg border border-gray-300 dark:border-gray-700">
-    <!-- ✅ টেবিলকে বড় করা হয়েছে যেন ডানে-বামে স্ক্রল আসে -->
-    <table class="min-w-[1400px] lg:min-w-[1600px] divide-y divide-gray-200 dark:divide-gray-700">
-      <thead class="bg-gray-100 dark:bg-gray-800">
-        <tr>
-          <th class="px-4 py-2 text-left text-xs font-medium text-gray-600 dark:text-gray-300 uppercase border">#</th>
-          <th class="px-4 py-2 text-left text-xs font-medium text-gray-600 dark:text-gray-300 uppercase border">Employee</th>
-          <th class="px-4 py-2 text-left text-xs font-medium text-gray-600 dark:text-gray-300 uppercase border whitespace-nowrap">Month</th>
+<div class="w-full px-2 sm:px-4 py-6 space-y-6 animate-in fade-in duration-500">
 
-          <!-- টাকা/সংখ্যা কলাম: nowrap + tabular-nums + right -->
-          <th class="px-4 py-2 text-right text-xs font-medium text-gray-600 dark:text-gray-300 uppercase border whitespace-nowrap">Base Salary</th>
-          <th class="px-4 py-2 text-right text-xs font-medium text-gray-600 dark:text-gray-300 uppercase border whitespace-nowrap">Bank Transfer</th>
-          <th class="px-4 py-2 text-right text-xs font-medium text-gray-600 dark:text-gray-300 uppercase border whitespace-nowrap">Cash Amount</th>
+  <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+    <div>
+        <h1 class="text-2xl font-bold text-gray-800 dark:text-white flex items-center gap-2">
+            <span class="p-2 bg-emerald-100 dark:bg-emerald-900 rounded-lg text-emerald-600">🧾</span>
+            Salary Summary
+        </h1>
+        <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">Monthly payroll breakdown and financial summary.</p>
+    </div>
 
-          <th class="px-4 py-2 text-center text-xs font-medium text-gray-600 dark:text-gray-300 uppercase border whitespace-nowrap">Present</th>
-          <th class="px-4 py-2 text-center text-xs font-medium text-gray-600 dark:text-gray-300 uppercase border whitespace-nowrap">Leave</th>
-          <th class="px-4 py-2 text-center text-xs font-medium text-gray-600 dark:text-gray-300 uppercase border whitespace-nowrap">Absent</th>
-          <th class="px-4 py-2 text-center text-xs font-medium text-gray-600 dark:text-gray-300 uppercase border whitespace-nowrap">Weekly Off</th>
-          <th class="px-4 py-2 text-center text-xs font-medium text-gray-600 dark:text-gray-300 uppercase border whitespace-nowrap">Public Holidays</th>
-          <th class="px-4 py-2 text-center text-xs font-medium text-gray-600 dark:text-gray-300 uppercase border whitespace-nowrap">Late Time</th>
-          <th class="px-4 py-2 text-center text-xs font-medium text-gray-600 dark:text-gray-300 uppercase border whitespace-nowrap">Over Time</th>
-          <th class="px-4 py-2 text-center text-xs font-medium text-gray-600 dark:text-gray-300 uppercase border whitespace-nowrap">Total Work</th>
-          <th class="px-4 py-2 text-center text-xs font-medium text-gray-600 dark:text-gray-300 uppercase border whitespace-nowrap">Expected Work</th>
-          <th class="px-4 py-2 text-center text-xs font-medium text-gray-600 dark:text-gray-300 uppercase border whitespace-nowrap">Diff</th>
-
-          <th class="px-4 py-2 text-right text-xs font-medium text-gray-600 dark:text-gray-300 uppercase border whitespace-nowrap">Earned Salary</th>
-          <th class="px-4 py-2 text-right text-xs font-medium text-gray-600 dark:text-gray-300 uppercase border whitespace-nowrap">Bonus</th>
-          <th class="px-4 py-2 text-right text-xs font-medium text-green-600 uppercase border whitespace-nowrap">Final Salary</th>
-          <th class="px-4 py-2 text-right text-xs font-medium text-red-600 uppercase border whitespace-nowrap">Payable Cash</th>
-        </tr>
-      </thead>
-
-      <tbody class="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
-        {% for s in summaries %}
-        <tr class="odd:bg-white even:bg-gray-50 dark:odd:bg-gray-900 dark:even:bg-gray-800 hover:bg-blue-50 dark:hover:bg-gray-700 transition">
-          <td class="px-4 py-2 border">{{ forloop.counter }}</td>
-          <td class="px-4 py-2 border">{{ s.employee.name }}</td>
-          <td class="px-4 py-2 border whitespace-nowrap">{{ s.month }}</td>
-
-          <td class="px-4 py-2 border text-right tabular-nums whitespace-nowrap">৳ {{ s.base_salary|floatformat:2 }}</td>
-          <td class="px-4 py-2 border text-right tabular-nums whitespace-nowrap">৳ {{ s.bank_transfer|floatformat:2 }}</td>
-          <td class="px-4 py-2 border text-right tabular-nums whitespace-nowrap">৳ {{ s.cash_amount|floatformat:2 }}</td>
-
-          <td class="px-4 py-2 border text-center tabular-nums whitespace-nowrap">{{ s.present_days }}</td>
-          <td class="px-4 py-2 border text-center tabular-nums whitespace-nowrap">{{ s.leave_days }}</td>
-          <td class="px-4 py-2 border text-center tabular-nums whitespace-nowrap">{{ s.absent_days }}</td>
-          <td class="px-4 py-2 border text-center tabular-nums whitespace-nowrap">{{ s.weekly_off_days }}</td>
-          <td class="px-4 py-2 border text-center tabular-nums whitespace-nowrap">{{ s.holiday_days }}</td>
-          <td class="px-4 py-2 border text-center tabular-nums whitespace-nowrap">{{ s.late_time }}</td>
-          <td class="px-4 py-2 border text-center tabular-nums whitespace-nowrap">{{ s.over_time|format_timedelta }}</td>
-          <td class="px-4 py-2 border text-center tabular-nums whitespace-nowrap">{{ s.total_work_hours }}</td>
-          <td class="px-4 py-2 border text-center tabular-nums whitespace-nowrap">{{ s.expected_work_hours }}</td>
-          <td class="px-4 py-2 border text-center tabular-nums whitespace-nowrap">{{ s.work_time_difference }}</td>
-
-          <td class="px-4 py-2 border text-right tabular-nums whitespace-nowrap">৳ {{ s.earned_salary|floatformat:2 }}</td>
-          <td class="px-4 py-2 border text-right tabular-nums whitespace-nowrap">
-            {% if s.bonus_amount and s.bonus_amount|floatformat:2 != "0.00" %}
-              <span class="inline-flex items-center rounded-full bg-amber-100 dark:bg-amber-900 text-amber-800 dark:text-amber-200 text-xs font-medium px-2 py-0.5">
-                ৳ {{ s.bonus_amount|floatformat:2 }}
-              </span>
-            {% else %}
-              ৳ 0.00
-            {% endif %}
-          </td>
-          <td class="px-4 py-2 border font-semibold text-green-700 dark:text-green-400 text-right tabular-nums whitespace-nowrap">৳ {{ s.final_salary|floatformat:2 }}</td>
-          <td class="px-4 py-2 border font-semibold text-red-700 dark:text-red-400 text-right tabular-nums whitespace-nowrap">৳ {{ s.payable_cash|floatformat:2 }}</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-
-      <tfoot class="bg-gray-100 dark:bg-gray-800 font-semibold">
-        <tr>
-          <td colspan="3" class="px-4 py-2 border text-right">Basic Salary Total:</td>
-          <td class="px-4 py-2 border text-blue-700 dark:text-blue-400 font-bold text-right tabular-nums whitespace-nowrap">৳ {{ total_base_salary|floatformat:2 }}</td>
-          <td class="px-4 py-2 border text-blue-700 dark:text-blue-400 font-bold text-right tabular-nums whitespace-nowrap">৳ {{ total_bank_transfer|floatformat:2 }}</td>
-          <td class="px-4 py-2 border text-blue-700 dark:text-blue-400 font-bold text-right tabular-nums whitespace-nowrap">৳ {{ total_cash_amount|floatformat:2 }}</td>
-          <td colspan="7" class="border"></td>
-          <td class="px-4 py-2 border text-right">Difference:</td>
-          <td class="px-4 py-2 border 
-            {% if total_salary_difference > 0 %} text-green-700 dark:text-green-400
-            {% elif total_salary_difference < 0 %} text-red-600 dark:text-red-400
-            {% else %} text-gray-700 dark:text-gray-300 {% endif %} tabular-nums whitespace-nowrap">
-            ৳ {{ total_salary_difference|floatformat:2 }}
-            {% if total_salary_difference > 0 %}
-              <span class="ml-2 text-green-600 dark:text-green-400 font-normal text-xs">(Extra Salary Paid)</span>
-            {% elif total_salary_difference < 0 %}
-              <span class="ml-2 text-red-600 dark:text-red-400 font-normal text-xs">(Company Balance)</span>
-            {% else %}
-              <span class="ml-2 text-gray-600 dark:text-gray-400 font-normal text-xs">(No Difference)</span>
-            {% endif %}
-          </td>
-          <td class="px-4 py-2 border text-right">Final Salary Total:</td>
-          <td class="px-4 py-2 border text-green-700 dark:text-green-400 font-bold text-right tabular-nums whitespace-nowrap">৳ {{ total_final_salary|floatformat:2 }}</td>
-          <td class="px-4 py-2 border text-red-700 dark:text-red-400 font-bold text-right tabular-nums whitespace-nowrap">৳ {{ total_payable_cash|floatformat:2 }}</td>
-        </tr>
-      </tfoot>
-    </table>
+    {% if summaries %}
+    <a href="{% url 'payroll:salary_summary_pdf' %}?month={{ selected_month }}&department={{ selected_department_id }}&employee={{ selected_employee_id }}"
+       target="_blank"
+       class="inline-flex items-center gap-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl shadow-lg shadow-emerald-200 dark:shadow-none transition-all hover:-translate-y-0.5 active:scale-95">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+        Export PDF
+    </a>
+    {% endif %}
   </div>
-{% else %}
-  <p class="text-center text-gray-500 dark:text-gray-300 mt-8 font-semibold text-lg">No data found for the selected month.</p>
-{% endif %}
-{% endblock %}
+
+  {% if summaries %}
+  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div class="bg-white dark:bg-gray-800 p-5 rounded-2xl shadow border-l-4 border-blue-500 dark:border-blue-400">
+          <div class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Total Base Salary</div>
+          <div class="text-2xl font-bold text-blue-600 dark:text-blue-400 tabular-nums">
+              ৳ {{ total_base_salary|floatformat:2 }}
+          </div>
+      </div>
+
+      <div class="bg-white dark:bg-gray-800 p-5 rounded-2xl shadow border-l-4 border-indigo-500 dark:border-indigo-400">
+          <div class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Total Final Salary</div>
+          <div class="text-2xl font-bold text-indigo-600 dark:text-indigo-400 tabular-nums">
+              ৳ {{ total_final_salary|floatformat:2 }}
+          </div>
+      </div>
+
+      <div class="bg-white dark:bg-gray-800 p-5 rounded-2xl shadow border-l-4 border-rose-500 dark:border-rose-400">
+          <div class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Total Payable Cash</div>
+          <div class="text-2xl font-bold text-rose-600 dark:text-rose-400 tabular-nums">
+              ৳ {{ total_payable_cash|floatformat:2 }}
+          </div>
+      </div>
+
+      <div class="bg-white dark:bg-gray-800 p-5 rounded-2xl shadow border-l-4 
+                  {% if total_salary_difference < 0 %} border-orange-500 {% else %} border-green-500 {% endif %}">
+          <div class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Net Difference</div>
+          <div class="text-2xl font-bold tabular-nums
+                      {% if total_salary_difference < 0 %} text-orange-600 {% else %} text-green-600 {% endif %}">
+              ৳ {{ total_salary_difference|floatformat:2 }}
+          </div>
+      </div>
+  </div>
+  {% endif %}
+
+  <div class="bg-white dark:bg-gray-800 p-5 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
+    <form method="get" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 items-end">
+        <div>
+            <label class="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1.5">Select Month</label>
+            <input type="month" name="month" value="{{ selected_month }}"
+                   class="w-full bg-gray-50 dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-gray-800 dark:text-gray-200 text-sm px-3 py-2.5 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all">
+        </div>
+
+        <div>
+            <label class="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1.5">Department</label>
+            <select name="department"
+                    class="w-full bg-gray-50 dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-gray-800 dark:text-gray-200 text-sm px-3 py-2.5 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none appearance-none transition-all">
+                <option value="">All Departments</option>
+                {% for dept in departments %}
+                    <option value="{{ dept.id }}" {% if dept.id|stringformat:"s" == selected_department_id %}selected{% endif %}>{{ dept.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div>
+            <label class="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1.5">Employee</label>
+            <select name="employee"
+                    class="w-full bg-gray-50 dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-gray-800 dark:text-gray-200 text-sm px-3 py-2.5 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none appearance-none transition-all">
+                <option value="">All Employees</option>
+                {% for emp in employees %}
+                    <option value="{{ emp.id }}" {% if emp.id|stringformat:"s" == selected_employee_id %}selected{% endif %}>{{ emp.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm px-4 py-2.5 rounded-xl shadow-md transition-all">
+            Show Report
+        </button>
+    </form>
+  </div>
+
+  {% if summaries %}
+  <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-xl border border-gray-100 dark:border-gray-700 overflow-hidden relative">
+    <div class="overflow-x-auto min-h-[500px] pb-2">
+      <table class="w-full text-xs text-left border-collapse whitespace-nowrap">
+        <thead class="bg-gray-50 dark:bg-gray-700/50 text-gray-500 dark:text-gray-400 uppercase font-bold tracking-wider sticky top-0 z-10 shadow-sm">
+          <tr>
+            <th class="px-4 py-4 w-12 text-center sticky left-0 z-20 bg-gray-50 dark:bg-gray-800">#</th>
+            <th class="px-4 py-4 min-w-[180px] sticky left-12 z-20 bg-gray-50 dark:bg-gray-800 shadow-[4px_0_12px_-4px_rgba(0,0,0,0.1)]">Employee</th>
+            <th class="px-4 py-4">Month</th>
+            
+            <th class="px-4 py-4 text-right bg-blue-50/50 dark:bg-blue-900/10 text-blue-600">Base Salary</th>
+            <th class="px-4 py-4 text-right bg-blue-50/50 dark:bg-blue-900/10 text-blue-600">Bank Trans.</th>
+            <th class="px-4 py-4 text-right bg-blue-50/50 dark:bg-blue-900/10 text-blue-600">Cash Amt</th>
+
+            <th class="px-3 py-4 text-center">✅ Pres</th>
+            <th class="px-3 py-4 text-center">📅 Leave</th>
+            <th class="px-3 py-4 text-center">❌ Abs</th>
+            <th class="px-3 py-4 text-center">🛌 Off</th>
+            <th class="px-3 py-4 text-center">🏖 Hol</th>
+            <th class="px-3 py-4 text-center text-amber-600">🕒 Late</th>
+            <th class="px-3 py-4 text-center text-purple-600">Over</th>
+            <th class="px-4 py-4 text-center font-bold">Total Work</th>
+            <th class="px-4 py-4 text-center">Expected</th>
+            <th class="px-4 py-4 text-center">Diff</th>
+
+            <th class="px-4 py-4 text-right text-indigo-600">Earned</th>
+            <th class="px-4 py-4 text-right text-indigo-600">Bonus</th>
+            <th class="px-4 py-4 text-right text-emerald-600 font-extrabold bg-emerald-50/50 dark:bg-emerald-900/10">Final Salary</th>
+            <th class="px-4 py-4 text-right text-rose-600 font-extrabold bg-rose-50/50 dark:bg-rose-900/10">Payable Cash</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
+          {% for s in summaries %}
+          <tr class="group hover:bg-gray-50/80 dark:hover:bg-gray-900/40 transition-colors">
+            <td class="px-4 py-4 text-center text-gray-400 font-mono sticky left-0 z-10 bg-white dark:bg-gray-800 group-hover:bg-gray-50 dark:group-hover:bg-gray-900">{{ forloop.counter }}</td>
+            <td class="px-4 py-4 font-bold text-gray-800 dark:text-gray-100 sticky left-12 z-10 bg-white dark:bg-gray-800 group-hover:bg-gray-50 dark:group-hover:bg-gray-900 shadow-[4px_0_12px_-4px_rgba(0,0,0,0.05)]">
+                {{ s.employee.name }}
+            </td>
+            <td class="px-4 py-4 font-mono text-gray-500">{{ s.month }}</td>
+
+            <td class="px-4 py-4 text-right font-mono text-gray-600 dark:text-gray-300 bg-blue-50/10">৳ {{ s.base_salary|floatformat:2 }}</td>
+            <td class="px-4 py-4 text-right font-mono text-gray-600 dark:text-gray-300 bg-blue-50/10">৳ {{ s.bank_transfer|floatformat:2 }}</td>
+            <td class="px-4 py-4 text-right font-mono text-gray-600 dark:text-gray-300 bg-blue-50/10">৳ {{ s.cash_amount|floatformat:2 }}</td>
+
+            <td class="px-3 py-4 text-center font-bold text-emerald-600">{{ s.present_days }}</td>
+            <td class="px-3 py-4 text-center text-blue-500">{{ s.leave_days }}</td>
+            <td class="px-3 py-4 text-center font-bold text-rose-500">{{ s.absent_days }}</td>
+            <td class="px-3 py-4 text-center text-gray-400">{{ s.weekly_off_days }}</td>
+            <td class="px-3 py-4 text-center text-gray-400">{{ s.holiday_days }}</td>
+            <td class="px-3 py-4 text-center font-mono text-amber-600">{{ s.late_time }}</td>
+            <td class="px-3 py-4 text-center font-mono text-purple-600">{{ s.over_time|format_timedelta }}</td>
+            <td class="px-4 py-4 text-center font-mono font-bold text-blue-600">{{ s.total_work_hours }}</td>
+            <td class="px-4 py-4 text-center font-mono text-gray-400">{{ s.expected_work_hours }}</td>
+            <td class="px-4 py-4 text-center font-mono text-gray-500">{{ s.work_time_difference }}</td>
+
+            <td class="px-4 py-4 text-right font-mono font-semibold text-indigo-600">৳ {{ s.earned_salary|floatformat:2 }}</td>
+            <td class="px-4 py-4 text-right font-mono">
+                {% if s.bonus_amount and s.bonus_amount|floatformat:2 != "0.00" %}
+                    <span class="bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 px-2 py-0.5 rounded font-bold">
+                        ৳ {{ s.bonus_amount|floatformat:2 }}
+                    </span>
+                {% else %}
+                    <span class="text-gray-300">-</span>
+                {% endif %}
+            </td>
+            <td class="px-4 py-4 text-right font-mono font-bold text-emerald-600 bg-emerald-50/30 dark:bg-emerald-900/10">৳ {{ s.final_salary|floatformat:2 }}</td>
+            <td class="px-4 py-4 text-right font-mono font-bold text-rose-600 bg-rose-50/30 dark:bg-rose-900/10">৳ {{ s.payable_cash|floatformat:2 }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+        
+        <tfoot class="bg-gray-100 dark:bg-gray-800 text-xs border-t-2 border-gray-300 dark:border-gray-600 font-bold sticky bottom-0 z-20 shadow-[0_-4px_12px_-4px_rgba(0,0,0,0.1)]">
+            <tr>
+                <td colspan="3" class="px-4 py-4 text-right text-gray-900 dark:text-white uppercase tracking-wider sticky left-0 bg-gray-100 dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700">
+                    Grand Total:
+                </td>
+
+                <td class="px-4 py-4 text-right font-mono text-blue-700 dark:text-blue-400 bg-blue-50/20">
+                    ৳ {{ total_base_salary|floatformat:2 }}
+                </td>
+
+                <td class="px-4 py-4 text-right font-mono text-blue-700 dark:text-blue-400 bg-blue-50/20">
+                    ৳ {{ total_bank_transfer|floatformat:2 }}
+                </td>
+
+                <td class="px-4 py-4 text-right font-mono text-blue-700 dark:text-blue-400 bg-blue-50/20">
+                    ৳ {{ total_cash_amount|floatformat:2 }}
+                </td>
+                
+                <td colspan="10" class="px-4 py-4 text-center text-gray-400 italic font-normal bg-gray-50 dark:bg-gray-800/50">
+                    --
+                </td>
+
+                <td class="px-4 py-4 text-center text-gray-400">-</td> 
+                <td class="px-4 py-4 text-center text-gray-400">-</td>
+
+                <td class="px-4 py-4 text-right font-mono text-white bg-emerald-600">
+                    ৳ {{ total_final_salary|floatformat:2 }}
+                </td>
+
+                <td class="px-4 py-4 text-right font-mono text-white bg-rose-600">
+                    ৳ {{ total_payable_cash|floatformat:2 }}
+                </td>
+            </tr>
+        </tfoot>
+      </table>
+    </div>
+  </div>
+  {% else %}
+  <div class="flex flex-col items-center justify-center py-20 bg-white dark:bg-gray-800 rounded-2xl shadow border border-gray-100 dark:border-gray-700">
+      <div class="p-4 bg-gray-50 dark:bg-gray-700 rounded-full mb-4">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+      </div>
+      <h3 class="text-lg font-bold text-gray-800 dark:text-gray-200">No Salary Records Found</h3>
+      <p class="text-sm text-gray-500">Please select a different month or check employee data.</p>
+  </div>
+  {% endif %}
+
+</div>
+
+<style>
+    /* Sticky Column Shadow Logic */
+    thead th:nth-child(2), tbody td:nth-child(2) {
+        box-shadow: 4px 0 8px -4px rgba(0,0,0,0.05);
+        clip-path: inset(0px -10px 0px 0px);
+    }
+</style>
+
+{% endblock content %}

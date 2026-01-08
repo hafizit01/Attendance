@@ -1,74 +1,5 @@
-
-from zk import ZK, const
-from attendance_app.models import Attendance, Employee
-from django.utils.timezone import make_aware
-import logging
-
-
-from datetime import datetime
-
-logger = logging.getLogger(__name__)
-
-# def import_attendance(ip='192.168.68.111', port=4370, department=None):
-#     zk = ZK(ip, port=port, timeout=5)
-#     conn = None
-#     try:
-#         conn = zk.connect()
-#         conn.disable_device()
-
-#         users = conn.get_users()
-#         for u in users:
-#             # ডিপার্টমেন্ট প্যারামিটার থাকলে সেটাও employee তে অ্যাসাইন করো
-#             emp, created = Employee.objects.get_or_create(
-#                 device_user_id=u.user_id,
-#                 defaults={
-#                     'name': u.name,
-#                     'department': department
-#                 }
-#             )
-#             if created:
-#                 logger.info(f"New employee added: {emp.name} (ID: {emp.device_user_id}), Department: {department}")
-
-#         attendances = conn.get_attendance()
-
-#         for att in attendances:
-#             user_id = att.user_id
-#             timestamp = att.timestamp.replace(microsecond=0)
-
-#             if timestamp.tzinfo is None or timestamp.tzinfo.utcoffset(timestamp) is None:
-#                 timestamp = make_aware(timestamp)
-
-#             status = 'In' if timestamp.hour < 12 else 'Out'
-
-#             try:
-#                 emp = Employee.objects.get(device_user_id=user_id)
-#                 obj, created = Attendance.objects.get_or_create(
-#                     employee=emp,
-#                     timestamp=timestamp,
-#                     status=status
-#                 )
-#                 if created:
-#                     logger.info(f"✔️ Attendance created: {emp.name} - {timestamp} - {status}")
-#                 else:
-#                     logger.debug(f"ℹ️ Already exists: {emp.name} - {timestamp} - {status}")
-#             except Employee.DoesNotExist:
-#                 logger.warning(f"⚠️ Employee with device_user_id={user_id} not found.")
-#                 continue
-
-#     except Exception as e:
-#         logger.error(f"❌ Error syncing attendance: {e}")
-#         raise e
-
-#     finally:
-#         if conn:
-#             try:
-#                 conn.enable_device()
-#                 conn.disconnect()
-#             except Exception as e:
-#                 logger.error(f"⚠️ Cleanup error: {e}")
-
-from datetime import datetime
-from django.utils.timezone import make_aware
+from datetime import datetime, timedelta
+from django.utils.timezone import make_aware, is_naive
 from zk import ZK
 import logging
 from attendance_app.models import Employee, Attendance
@@ -77,8 +8,10 @@ logger = logging.getLogger(__name__)
 
 def import_attendance(devices):
     """
-    devices: list of dicts with keys: ip, port, department
-    Returns: list of results per device (success/failure and message)
+    Import logic:
+    1. First Punch of the day = 'In'
+    2. Last Punch of the day = 'Out' (Updates existing Out record)
+    3. Ignore punches within 5 minutes of previous punch (Debounce)
     """
     results = []
 
@@ -96,68 +29,118 @@ def import_attendance(devices):
             conn = zk.connect()
             conn.disable_device()
 
+            # --- Sync Users ---
             users = conn.get_users()
             for u in users:
                 emp, created = Employee.objects.get_or_create(
                     device_user_id=u.user_id,
-                    company=company,  # company যুক্ত করলুম
+                    company=company,
                     defaults={
                         'name': u.name or f"User {u.user_id}",
                         'department': department
                     }
                 )
                 if created:
-                    logger.info(f"➕ New employee added: {emp.name} (ID: {emp.device_user_id}), Dept: {department.name}")
+                    logger.info(f"➕ New employee added: {emp.name}")
 
+            # --- Sync Attendance ---
             attendances = conn.get_attendance()
             if not attendances:
-                raise Exception(f"No attendance data received from device {ip}:{port} or device is offline.")
+                raise Exception(f"No attendance data received or device offline.")
 
-            start_date = make_aware(datetime(2025, 1, 1))
+            # টাইম অনুযায়ী সর্ট করা খুব জরুরি "First In" লজিকের জন্য
+            attendances.sort(key=lambda x: x.timestamp)
+
+            start_date = make_aware(datetime(2025, 12, 1))
             created_count = 0
+            updated_count = 0
             skipped_count = 0
+            
+            # Debounce Time (একই মানুষ ৫ মিনিটের মধ্যে ২ বার দিলে ইগনোর করবে)
+            DEBOUNCE_MINUTES = 5 
 
             for att in attendances:
                 user_id = att.user_id
                 timestamp = att.timestamp.replace(microsecond=0)
 
-                if timestamp.tzinfo is None or timestamp.tzinfo.utcoffset(timestamp) is None:
+                # Timezone adjustment
+                if is_naive(timestamp):
                     timestamp = make_aware(timestamp)
 
                 if timestamp < start_date:
                     skipped_count += 1
                     continue
 
-                status = 'In' if timestamp.hour < 14 else 'Out'
-
                 try:
                     emp = Employee.objects.get(device_user_id=user_id, company=company)
+                    date_only = timestamp.date()
 
-                    # Avoid duplicate attendance
-                    if not Attendance.objects.filter(employee=emp, timestamp=timestamp, status=status).exists():
+                    # 1. আজকের দিনের রেকর্ড চেক করি
+                    day_records = Attendance.objects.filter(employee=emp, timestamp__date=date_only).order_by('timestamp')
+                    
+                    if not day_records.exists():
+                        # A. যদি আজ কোনো রেকর্ড না থাকে -> এটাই প্রথম পাঞ্চ (In)
                         Attendance.objects.create(
-                            employee=emp,
-                            timestamp=timestamp,
-                            status=status
+                            employee=emp, timestamp=timestamp, status='In', company=company
                         )
                         created_count += 1
+                    
+                    else:
+                        # B. যদি রেকর্ড থাকে, লজিক চেক করি
+                        last_record = day_records.last()
+                        first_record = day_records.first()
+
+                        # --- Debounce Check ---
+                        # যদি লাস্ট রেকর্ডের ৫ মিনিটের মধ্যে হয়, তবে ইগনোর (ভুল করে ২ বার চাপ দিয়েছে)
+                        time_diff = (timestamp - last_record.timestamp).total_seconds() / 60
+                        if time_diff < DEBOUNCE_MINUTES:
+                            continue
+
+                        # --- Logic: First In, Last Out ---
+                        
+                        # কেস ১: যদি নতুন টাইমটা 'In' টাইমের চেয়েও আগে হয় (খুব রেয়ার, ডিভাইস সিঙ্ক ইস্যু)
+                        if timestamp < first_record.timestamp:
+                            first_record.timestamp = timestamp
+                            first_record.status = 'In'
+                            first_record.save()
+                            updated_count += 1
+                        
+                        # কেস ২: এটা কি 'Out' হবে?
+                        else:
+                            # যদি মাঝখানে অনেকগুলো পাঞ্চ থাকে, আমরা চাই শুধু একটাই 'Out' রেকর্ড থাকুক (Latest time)
+                            # তাই আমরা চেক করব 'Out' রেকর্ড আছে কিনা
+                            out_record = day_records.filter(status='Out').first()
+
+                            if out_record:
+                                # যদি অলরেডি Out থাকে, সেটার টাইম আপডেট করে লেটেস্ট টাইম বসাবো
+                                out_record.timestamp = timestamp
+                                out_record.save()
+                                updated_count += 1
+                            else:
+                                # যদি Out না থাকে, নতুন Out ক্রিয়েট করব
+                                Attendance.objects.create(
+                                    employee=emp, timestamp=timestamp, status='Out', company=company
+                                )
+                                created_count += 1
 
                 except Employee.DoesNotExist:
-                    logger.warning(f"⚠️ Employee with device_user_id={user_id} not found in company {company}.")
+                    continue
+                except Exception as inner_e:
+                    logger.error(f"Error processing record for user {user_id}: {inner_e}")
                     continue
 
             results.append({
                 'department': department.name,
                 'status': 'success',
-                'message': f"✔️ Synced {created_count} new records. Skipped {skipped_count} old entries."
+                'message': f"✔️ Synced {created_count} new, Updated {updated_count} records (Last Out)."
             })
 
         except Exception as e:
-            logger.error(f"❌ Failed to sync from {department.name} ({ip}:{port}) - {e}")
+            logger.error(f"❌ Failed to sync {department.name}: {e}")
             results.append({
                 'department': department.name,
                 'status': 'error',
-                'message': f"❌ Failed to sync: {e}"
+                'message': str(e)
             })
 
         finally:
@@ -165,7 +148,7 @@ def import_attendance(devices):
                 try:
                     conn.enable_device()
                     conn.disconnect()
-                except Exception as e:
-                    logger.error(f"⚠️ Cleanup error on device {ip}:{port} - {e}")
+                except:
+                    pass
 
     return results
