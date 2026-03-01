@@ -6,7 +6,7 @@
   <div class="flex flex-col lg:flex-row justify-between items-end gap-4 bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
     <div class="w-full lg:w-auto">
       <h1 class="text-2xl font-bold tracking-tight text-gray-900 dark:text-gray-100 flex items-center gap-2">
-        <span>💰</span> Set Base Salaries & Bonuses
+        <span>💸</span> Set Base Salaries & Bonuses
       </h1>
       <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">
         Showing {{ employees|length }} employees. (Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }})
@@ -213,79 +213,105 @@ document.addEventListener('DOMContentLoaded', function () {
   const changesCountEl = document.getElementById('changes-count');
   const resetBtn = document.getElementById('reset-btn');
 
-  // 1. Change Tracking Logic
+  // 1. Change Tracking Logic (Updated to handle duplicate inputs)
   const initial = new Map();
   const inputs = Array.from(form.querySelectorAll('input, select'));
   inputs.forEach(el => initial.set(el.name, el.value));
 
   function updateChanged() {
     let changed = 0;
+    const checkedNames = new Set();
+    
     inputs.forEach(el => {
-      // Check if value changed (ignoring empty strings vs nulls)
-      if ((initial.get(el.name) || '') !== (el.value || '')) changed++;
+      // Avoid double counting for Mobile + Desktop inputs
+      if (!checkedNames.has(el.name)) {
+        if ((initial.get(el.name) || '') !== (el.value || '')) {
+            changed++;
+        }
+        checkedNames.add(el.name);
+      }
     });
     
     changesCountEl.textContent = changed;
     
     if (changed > 0) {
       saveBar.classList.remove('hidden');
-      setTimeout(() => saveBar.setAttribute('data-visible', 'true'), 10); // Trigger animation
+      setTimeout(() => saveBar.setAttribute('data-visible', 'true'), 10);
     } else {
       saveBar.setAttribute('data-visible', 'false');
       setTimeout(() => saveBar.classList.add('hidden'), 300);
     }
   }
 
-  // 2. Bonus Mutual Exclusion Logic (Locking)
+  // 2. Bonus Mutual Exclusion Logic (Updated for multiple inputs)
   function handleBonusLock(empId) {
-    const percent = document.querySelector(`input[name="bonus_percent_${empId}"]`);
-    const fixed = document.querySelector(`input[name="bonus_fixed_${empId}"]`);
-    if (!percent || !fixed) return;
+    // Select ALL inputs (Desktop + Mobile)
+    const percents = document.querySelectorAll(`input[name="bonus_percent_${empId}"]`);
+    const fixeds = document.querySelectorAll(`input[name="bonus_fixed_${empId}"]`);
+    
+    if (percents.length === 0 || fixeds.length === 0) return;
 
-    const pVal = parseFloat(percent.value) || 0;
-    const fVal = parseFloat(fixed.value) || 0;
+    // Use value from the first input (since they are synced)
+    const pVal = parseFloat(percents[0].value) || 0;
+    const fVal = parseFloat(fixeds[0].value) || 0;
 
-    // Remove previous disabled states first
-    percent.disabled = false;
-    fixed.disabled = false;
-    percent.parentElement.classList.remove('opacity-50');
-    fixed.parentElement.classList.remove('opacity-50');
+    // Logic to disable/enable inputs across both views
+    percents.forEach(el => {
+        el.disabled = false;
+        el.parentElement.classList.remove('opacity-50');
+        if (fVal > 0) {
+            el.disabled = true;
+            el.value = '';
+            el.parentElement.classList.add('opacity-50');
+        }
+    });
 
-    if (pVal > 0) {
-      fixed.disabled = true;
-      fixed.value = ''; // Optional: clear value
-      fixed.parentElement.classList.add('opacity-50');
-    } else if (fVal > 0) {
-      percent.disabled = true;
-      percent.value = ''; // Optional: clear value
-      percent.parentElement.classList.add('opacity-50');
-    }
+    fixeds.forEach(el => {
+        el.disabled = false;
+        el.parentElement.classList.remove('opacity-50');
+        if (pVal > 0) {
+            el.disabled = true;
+            el.value = '';
+            el.parentElement.classList.add('opacity-50');
+        }
+    });
   }
 
-  // 3. Bank Transfer Clamping
-  function clampBank(target) {
-    if (!target.dataset.emp) return;
-    const empId = target.dataset.emp;
-    const baseEl = document.querySelector(`input[name="salary_${empId}"]`);
-    const bankEl = document.querySelector(`input[name="bank_transfer_${empId}"]`);
+  // 3. Bank Transfer Clamping (Updated for multiple inputs)
+  function clampBank(empId) {
+    const bases = document.querySelectorAll(`input[name="salary_${empId}"]`);
+    const banks = document.querySelectorAll(`input[name="bank_transfer_${empId}"]`);
     
-    if(baseEl && bankEl) {
-        const baseVal = parseFloat(baseEl.value) || 0;
-        const bankVal = parseFloat(bankEl.value) || 0;
+    if(bases.length === 0 || banks.length === 0) return;
+
+    const baseVal = parseFloat(bases[0].value) || 0;
+    const bankVal = parseFloat(banks[0].value) || 0;
+
+    banks.forEach(bankEl => {
         if(bankVal > baseVal) {
-            bankEl.classList.add('text-red-600', 'font-bold'); // Visual warning
+            bankEl.classList.add('text-red-600', 'font-bold');
         } else {
             bankEl.classList.remove('text-red-600', 'font-bold');
         }
-    }
+    });
   }
 
-  // Event Listeners
+  // Event Listeners with SYNC LOGIC
   form.addEventListener('input', (e) => {
+    // A. SYNC LOGIC: Update duplicate fields (Desktop <-> Mobile)
+    const name = e.target.name;
+    const val = e.target.value;
+    const relatedInputs = document.querySelectorAll(`input[name="${name}"], select[name="${name}"]`);
+    
+    relatedInputs.forEach(el => {
+        if (el !== e.target) {
+            el.value = val;
+        }
+    });
+
+    // B. Normal Logic
     updateChanged();
     
-    // Extract ID for bonus logic
-    const name = e.target.name;
     const id = name.split('_').pop();
     
     if (name.includes('bonus')) {
@@ -293,16 +319,17 @@ document.addEventListener('DOMContentLoaded', function () {
     }
     
     if (name.includes('salary') || name.includes('bank')) {
-        clampBank(e.target);
+        clampBank(id);
     }
   });
 
   resetBtn.addEventListener('click', () => {
     inputs.forEach(el => {
       el.value = initial.get(el.name);
-      // Reset disabled states
+      // Re-apply disabled states
       const id = el.name.split('_').pop();
       if(el.name.includes('bonus')) handleBonusLock(id);
+      if(el.name.includes('salary') || el.name.includes('bank')) clampBank(id);
     });
     updateChanged();
   });
@@ -311,8 +338,9 @@ document.addEventListener('DOMContentLoaded', function () {
   const processedIds = new Set();
   inputs.forEach(el => {
     const id = el.name.split('_').pop();
-    if (el.name.includes('bonus') && !processedIds.has(id)) {
-      handleBonusLock(id);
+    if (!processedIds.has(id)) {
+      if (el.name.includes('bonus')) handleBonusLock(id);
+      if (el.name.includes('salary')) clampBank(id);
       processedIds.add(id);
     }
   });

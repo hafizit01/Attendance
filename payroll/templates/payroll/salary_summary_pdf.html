@@ -2,13 +2,25 @@
 <html lang="en">
 <head>
     {% load static %}
-    {% load custom_filters %}
+    {% load custom_filters %} 
     <meta charset="UTF-8">
     <title>Salary Summary - {{ selected_month }}</title>
     <style>
+        @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap');
+
+        body {
+            font-family: 'Roboto', sans-serif;
+            /* Font size increased from 8.5px to 9.5px */
+            font-size: 10px; 
+            margin: 0;
+            color: #333;
+            line-height: 1.3;
+        }
+        
         @page {
             size: A4 landscape;
-            margin: 15mm 10mm;
+            /* Side margins reduced to 5mm to accommodate larger font */
+            margin: 10mm 5mm; 
             @bottom-right {
                 content: "Page " counter(page) " of " counter(pages);
                 font-family: 'Helvetica', sans-serif;
@@ -16,16 +28,11 @@
                 color: #666;
             }
         }
-        body {
-            font-family: 'Helvetica', 'Arial', sans-serif;
-            font-size: 10px;
-            color: #333;
-            line-height: 1.3;
-        }
+        
         .header-container {
             border-bottom: 2px solid #2c3e50;
-            padding-bottom: 10px;
-            margin-bottom: 15px;
+            padding-bottom: 8px;
+            margin-bottom: 12px;
             overflow: hidden;
         }
         .logo-section { float: left; width: 60px; }
@@ -48,32 +55,37 @@
             color: #1f2937;
             font-weight: bold;
             text-transform: uppercase;
-            font-size: 9px;
-            padding: 6px 3px;
+            /* Header font increased */
+            font-size: 8.5px;
+            padding: 6px 1px; /* Padding tightened slightly */
             border: 1px solid #d1d5db;
             text-align: center;
         }
         td {
             border: 1px solid #d1d5db;
-            padding: 5px 3px;
+            padding: 4px 1px; /* Padding tightened slightly */
             text-align: center;
             vertical-align: middle;
         }
         tr:nth-child(even) { background-color: #f9fafb; }
 
-        .text-left { text-align: left; padding-left: 5px; }
-        .text-right { text-align: right; padding-right: 5px; }
+        .text-left { text-align: left; padding-left: 4px; }
+        .text-right { text-align: right; padding-right: 4px; }
         .font-mono { font-family: 'Courier New', monospace; letter-spacing: -0.5px; }
         .font-bold { font-weight: bold; }
         
-        /* Specific Column Colors */
-        .col-money { color: #1e3a8a; } /* Blue */
-        .col-final { color: #047857; font-weight: bold; background-color: #ecfdf5; } /* Green */
-        .col-payable { color: #be123c; font-weight: bold; background-color: #fff1f2; } /* Red */
+        /* Column Colors */
+        .col-money { color: #1e3a8a; } 
+        .col-bank { color: #555; }
+        .col-final { color: #047857; font-weight: bold; background-color: #ecfdf5; } 
+        .col-payable { color: #be123c; font-weight: bold; background-color: #fff1f2; } 
+        
+        /* Negative/Warning Color */
+        .text-danger { color: #dc2626; font-weight: bold; }
 
         /* Footer Totals */
         tfoot tr { background-color: #e5e7eb; font-weight: bold; border-top: 2px solid #374151; }
-        tfoot td { padding: 8px 3px; font-size: 10px; }
+        tfoot td { padding: 8px 2px; font-size: 9.5px; }
 
         .signature-section {
             margin-top: 40px;
@@ -123,25 +135,31 @@
     <thead>
         <tr>
             <th width="3%">#</th>
-            <th width="12%" class="text-left">Employee Name</th>
-            <th width="7%">Base Salary</th>
-            <th width="7%">Bank Trans.</th>
-            <th width="7%">Cash Amt</th>
+            <th width="10%" class="text-left">Employee Name</th>
             
-            <th width="4%">Pres</th>
-            <th width="4%">Leave</th>
-            <th width="4%">Abs</th>
-            <th width="4%">Off</th>
-            <th width="4%">Hol</th>
+            <th width="5%">Base Sal</th>
+            <th width="5%">Bank</th>
+            <th width="5%">Cash</th>
             
-            <th width="5%">Late</th>
-            <th width="5%">OT</th>
-            <th width="5%">Work Hr</th>
+            <th width="3%">Pres</th>
+            <th width="3%">Lev</th>
+            <th width="3%">Abs</th>
+            <th width="3%">Off</th>
+            <th width="3%">Hol</th>
+            
+            <th width="4%">Late</th>
+            <th width="4%">OT</th>
+            
+            <th width="4%" style="background-color: #e0f2fe;">Exp.Hr</th>
+            <th width="4%">Work.Hr</th>
+            <th width="5%" style="background-color: #fff7ed;">Time Diff</th>
             
             <th width="5%">Earned</th>
             <th width="5%">Bonus</th>
-            <th width="8%">Final Salary</th>
-            <th width="8%">Payable</th>
+            <th width="6%">Final Sal</th>
+            <th width="6%">Payable</th>
+            
+            <th width="5%" style="background-color: #fef2f2;">Sal. Diff</th>
         </tr>
     </thead>
     <tbody>
@@ -149,9 +167,10 @@
         <tr>
             <td>{{ forloop.counter }}</td>
             <td class="text-left font-bold">{{ s.employee.name }}</td>
+            
             <td class="text-right font-mono col-money">{{ s.base_salary|floatformat:0 }}</td>
-            <td class="text-right font-mono">{{ s.bank_transfer|floatformat:0 }}</td>
-            <td class="text-right font-mono">{{ s.cash_amount|floatformat:0 }}</td>
+            <td class="text-right font-mono col-bank">{{ s.bank_transfer|floatformat:0 }}</td>
+            <td class="text-right font-mono col-bank">{{ s.cash_amount|floatformat:0 }}</td>
             
             <td>{{ s.present_days }}</td>
             <td>{{ s.leave_days }}</td>
@@ -159,18 +178,30 @@
             <td>{{ s.weekly_off_days }}</td>
             <td>{{ s.holiday_days }}</td>
             
-            <td class="font-mono" style="font-size:9px;">{{ s.late_time }}</td>
-            <td class="font-mono" style="font-size:9px;">{{ s.over_time|format_timedelta }}</td>
-            <td class="font-mono" style="font-size:9px;">{{ s.total_work_hours }}</td>
+            <td class="font-mono" style="font-size:8.5px;">{{ s.late_time }}</td>
+            <td class="font-mono" style="font-size:8.5px;">{{ s.over_time|format_timedelta }}</td>
+            
+            <td class="font-mono" style="background-color: #f0f9ff;">
+                {{ s.expected_hours|default:"--" }}
+            </td>
+            <td class="font-mono">{{ s.total_work_hours }}</td>
+            
+            <td class="font-mono {% if s.time_difference_val < 0 %}text-danger{% endif %}" style="background-color: #fff7ed;">
+                {{ s.time_difference_str }}
+            </td>
             
             <td class="text-right font-mono">{{ s.earned_salary|floatformat:0 }}</td>
             <td class="text-right font-mono">{{ s.bonus_amount|floatformat:0 }}</td>
             <td class="text-right font-mono col-final">{{ s.final_salary|floatformat:0 }}</td>
             <td class="text-right font-mono col-payable">{{ s.payable_cash|floatformat:0 }}</td>
+            
+            <td class="text-right font-mono {% if s.salary_difference < 0 %}text-danger{% endif %}" style="background-color: #fef2f2;">
+                {{ s.salary_difference|floatformat:0 }}
+            </td>
         </tr>
         {% empty %}
         <tr>
-            <td colspan="17" style="padding: 20px; text-align: center; color: #666; font-style: italic;">
+            <td colspan="20" style="padding: 20px; text-align: center; color: #666; font-style: italic;">
                 No salary records found for this period.
             </td>
         </tr>
@@ -180,19 +211,20 @@
     {% if summaries %}
     <tfoot>
         <tr>
-            <td colspan="2" class="text-right">GRAND TOTAL:</td>
+            <td colspan="2" class="text-right">TOTAL:</td>
+            
             <td class="text-right font-mono">{{ total_base_salary|floatformat:0 }}</td>
             <td class="text-right font-mono">{{ total_bank_transfer|floatformat:0 }}</td>
-            <td class="text-right font-mono">{{ total_cash_amount|floatformat:0 }}</td>
+            <td class="text-right font-mono">{{ total_payable_cash|floatformat:0 }}</td>
             
-            <td colspan="8" style="background-color:#e5e7eb; border:none;"></td> <td colspan="2" class="text-right">NET PAYABLE:</td>
-            <td class="text-right font-mono col-final" style="font-size: 11px;">{{ total_final_salary|floatformat:0 }}</td>
-            <td class="text-right font-mono col-payable" style="font-size: 11px;">{{ total_payable_cash|floatformat:0 }}</td>
-        </tr>
-        <tr>
-            <td colspan="15" class="text-right" style="color: #555;">Net Difference (Final - Base):</td>
-            <td colspan="2" class="text-right font-mono font-bold" 
-                style="color: {% if total_salary_difference < 0 %}#dc2626{% else %}#16a34a{% endif %};">
+            <td colspan="10" style="background-color:#e5e7eb; border:none;"></td> 
+            
+            <td class="text-right font-mono">{{ total_earned|floatformat:0 }}</td>
+            <td class="text-right font-mono">{{ total_bonus|floatformat:0 }}</td>
+            <td class="text-right font-mono col-final">{{ total_final_salary|floatformat:0 }}</td>
+            <td class="text-right font-mono col-payable">{{ total_payable_cash|floatformat:0 }}</td>
+            
+            <td class="text-right font-mono font-bold {% if total_salary_difference < 0 %}text-danger{% endif %}">
                 {{ total_salary_difference|floatformat:0 }}
             </td>
         </tr>

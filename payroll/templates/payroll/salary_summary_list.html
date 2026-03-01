@@ -18,8 +18,8 @@
     <a href="{% url 'payroll:salary_summary_pdf' %}?month={{ selected_month }}&department={{ selected_department_id }}&employee={{ selected_employee_id }}"
        target="_blank"
        class="inline-flex items-center gap-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl shadow-lg shadow-emerald-200 dark:shadow-none transition-all hover:-translate-y-0.5 active:scale-95">
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-        Export PDF
+       <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+       Export PDF
     </a>
     {% endif %}
   </div>
@@ -102,7 +102,6 @@
           <tr>
             <th class="px-4 py-4 w-12 text-center sticky left-0 z-20 bg-gray-50 dark:bg-gray-800">#</th>
             <th class="px-4 py-4 min-w-[180px] sticky left-12 z-20 bg-gray-50 dark:bg-gray-800 shadow-[4px_0_12px_-4px_rgba(0,0,0,0.1)]">Employee</th>
-            <th class="px-4 py-4">Month</th>
             
             <th class="px-4 py-4 text-right bg-blue-50/50 dark:bg-blue-900/10 text-blue-600">Base Salary</th>
             <th class="px-4 py-4 text-right bg-blue-50/50 dark:bg-blue-900/10 text-blue-600">Bank Trans.</th>
@@ -115,14 +114,17 @@
             <th class="px-3 py-4 text-center">🏖 Hol</th>
             <th class="px-3 py-4 text-center text-amber-600">🕒 Late</th>
             <th class="px-3 py-4 text-center text-purple-600">Over</th>
+            
+            <th class="px-4 py-4 text-center bg-sky-50 dark:bg-sky-900/10 text-sky-700">Expected</th>
             <th class="px-4 py-4 text-center font-bold">Total Work</th>
-            <th class="px-4 py-4 text-center">Expected</th>
-            <th class="px-4 py-4 text-center">Diff</th>
+            <th class="px-4 py-4 text-center bg-orange-50 dark:bg-orange-900/10 text-orange-700">Time Diff</th>
 
             <th class="px-4 py-4 text-right text-indigo-600">Earned</th>
             <th class="px-4 py-4 text-right text-indigo-600">Bonus</th>
             <th class="px-4 py-4 text-right text-emerald-600 font-extrabold bg-emerald-50/50 dark:bg-emerald-900/10">Final Salary</th>
             <th class="px-4 py-4 text-right text-rose-600 font-extrabold bg-rose-50/50 dark:bg-rose-900/10">Payable Cash</th>
+            
+            <th class="px-4 py-4 text-right bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300">Sal. Diff</th>
           </tr>
         </thead>
         <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
@@ -132,7 +134,6 @@
             <td class="px-4 py-4 font-bold text-gray-800 dark:text-gray-100 sticky left-12 z-10 bg-white dark:bg-gray-800 group-hover:bg-gray-50 dark:group-hover:bg-gray-900 shadow-[4px_0_12px_-4px_rgba(0,0,0,0.05)]">
                 {{ s.employee.name }}
             </td>
-            <td class="px-4 py-4 font-mono text-gray-500">{{ s.month }}</td>
 
             <td class="px-4 py-4 text-right font-mono text-gray-600 dark:text-gray-300 bg-blue-50/10">৳ {{ s.base_salary|floatformat:2 }}</td>
             <td class="px-4 py-4 text-right font-mono text-gray-600 dark:text-gray-300 bg-blue-50/10">৳ {{ s.bank_transfer|floatformat:2 }}</td>
@@ -145,9 +146,14 @@
             <td class="px-3 py-4 text-center text-gray-400">{{ s.holiday_days }}</td>
             <td class="px-3 py-4 text-center font-mono text-amber-600">{{ s.late_time }}</td>
             <td class="px-3 py-4 text-center font-mono text-purple-600">{{ s.over_time|format_timedelta }}</td>
-            <td class="px-4 py-4 text-center font-mono font-bold text-blue-600">{{ s.total_work_hours }}</td>
-            <td class="px-4 py-4 text-center font-mono text-gray-400">{{ s.expected_work_hours }}</td>
-            <td class="px-4 py-4 text-center font-mono text-gray-500">{{ s.work_time_difference }}</td>
+            
+            <td class="px-4 py-4 text-center font-mono text-sky-600 bg-sky-50/30">{{ s.expected_hours }}</td>
+            <td class="px-4 py-4 text-center font-mono font-bold text-gray-700 dark:text-gray-200">{{ s.total_work_hours }}</td>
+            
+            <td class="px-4 py-4 text-center font-mono font-bold bg-orange-50/30
+                       {% if s.time_difference_val < 0 %} text-rose-600 {% else %} text-emerald-600 {% endif %}">
+                {{ s.time_difference_str }}
+            </td>
 
             <td class="px-4 py-4 text-right font-mono font-semibold text-indigo-600">৳ {{ s.earned_salary|floatformat:2 }}</td>
             <td class="px-4 py-4 text-right font-mono">
@@ -161,13 +167,18 @@
             </td>
             <td class="px-4 py-4 text-right font-mono font-bold text-emerald-600 bg-emerald-50/30 dark:bg-emerald-900/10">৳ {{ s.final_salary|floatformat:2 }}</td>
             <td class="px-4 py-4 text-right font-mono font-bold text-rose-600 bg-rose-50/30 dark:bg-rose-900/10">৳ {{ s.payable_cash|floatformat:2 }}</td>
+            
+            <td class="px-4 py-4 text-right font-mono font-bold bg-gray-50 dark:bg-gray-800
+                       {% if s.salary_difference < 0 %} text-rose-600 {% else %} text-emerald-600 {% endif %}">
+                ৳ {{ s.salary_difference|floatformat:2 }}
+            </td>
           </tr>
           {% endfor %}
         </tbody>
         
         <tfoot class="bg-gray-100 dark:bg-gray-800 text-xs border-t-2 border-gray-300 dark:border-gray-600 font-bold sticky bottom-0 z-20 shadow-[0_-4px_12px_-4px_rgba(0,0,0,0.1)]">
             <tr>
-                <td colspan="3" class="px-4 py-4 text-right text-gray-900 dark:text-white uppercase tracking-wider sticky left-0 bg-gray-100 dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700">
+                <td colspan="2" class="px-4 py-4 text-right text-gray-900 dark:text-white uppercase tracking-wider sticky left-0 bg-gray-100 dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700">
                     Grand Total:
                 </td>
 
@@ -180,15 +191,20 @@
                 </td>
 
                 <td class="px-4 py-4 text-right font-mono text-blue-700 dark:text-blue-400 bg-blue-50/20">
-                    ৳ {{ total_cash_amount|floatformat:2 }}
+                    ৳ {{ total_payable_cash|floatformat:2 }}
                 </td>
                 
                 <td colspan="10" class="px-4 py-4 text-center text-gray-400 italic font-normal bg-gray-50 dark:bg-gray-800/50">
                     --
                 </td>
 
-                <td class="px-4 py-4 text-center text-gray-400">-</td> 
-                <td class="px-4 py-4 text-center text-gray-400">-</td>
+                <td class="px-4 py-4 text-right text-indigo-600">
+                    ৳ {{ total_earned|floatformat:2 }}
+                </td>
+                
+                <td class="px-4 py-4 text-right text-amber-600">
+                    ৳ {{ total_bonus|floatformat:2 }}
+                </td>
 
                 <td class="px-4 py-4 text-right font-mono text-white bg-emerald-600">
                     ৳ {{ total_final_salary|floatformat:2 }}
@@ -196,6 +212,11 @@
 
                 <td class="px-4 py-4 text-right font-mono text-white bg-rose-600">
                     ৳ {{ total_payable_cash|floatformat:2 }}
+                </td>
+                
+                <td class="px-4 py-4 text-right font-mono font-bold
+                           {% if total_salary_difference < 0 %} text-rose-600 {% else %} text-emerald-600 {% endif %}">
+                    ৳ {{ total_salary_difference|floatformat:2 }}
                 </td>
             </tr>
         </tfoot>

@@ -432,7 +432,7 @@ def generate_attendance_table(employee_qs, start_date_str, end_date_str):
 
 def get_monthly_report_context(request):
     """
-    একটি কমন ফাংশন যা HTML এবং PDF উভয় ভিউর জন্য ডাটা ক্যালকুলেট করবে।
+    একটি কমন ফাংশন যা HTML এবং PDF উভয় ভিউর জন্য ডাটা ক্যালকুলেট করবে।
     """
     user = request.user
     user_company = getattr(getattr(user, "profile", None), "company", None)
@@ -477,6 +477,9 @@ def get_monthly_report_context(request):
 
         present_days, absent_days, leave_count, holiday_count, off_count = 0, 0, 0, 0, 0
         total_work, total_late, total_over = timedelta(), timedelta(), timedelta()
+        
+        # 🟢 Expected time ঠিক রাখার জন্য ক্যালেন্ডার ছুটির ভেরিয়েবল
+        calendar_holiday_count, calendar_off_count = 0, 0
 
         days_range = (end_date - start_date).days + 1
         for i in range(days_range):
@@ -484,27 +487,47 @@ def get_monthly_report_context(request):
             wd = curr.strftime('%A')
             punches = att_dict.get(curr, [])
 
+            is_holiday = curr in holiday_dates
+            is_off_day = (wd == off_day)
+
+            # 🟢 শুধু Expected Time ক্যালকুলেশনের জন্য
+            if is_holiday: calendar_holiday_count += 1
+            elif is_off_day: calendar_off_count += 1
+
+            # 🟢 আপনার অরিজিনাল Priority Logic (কোনো চেঞ্জ নেই)
             if punches:
                 present_days += 1
-                t_in, t_out = min(punches), max(punches) if len(punches) > 1 else None
+                t_in = min(punches)
+                t_out = max(punches) if len(punches) > 1 else None
+                
                 exp_dt = make_aware(datetime.combine(curr, expected_in)) if is_naive(datetime.combine(curr, expected_in)) else datetime.combine(curr, expected_in)
                 t_in_aware = make_aware(t_in) if is_naive(t_in) else t_in
+                
                 if t_in_aware > exp_dt: total_late += (t_in_aware - exp_dt)
+                
                 if t_out:
                     t_out_aware = make_aware(t_out) if is_naive(t_out) else t_out
                     actual_start = max(t_in_aware, exp_dt)
                     if t_out_aware > actual_start:
                         dur = t_out_aware - actual_start
                         total_work += dur
-                        if dur > REGULAR_WORK_TIME: total_over += (dur - REGULAR_WORK_TIME)
+                        
+                        # শুধু ওভারটাইম আপডেট
+                        if is_holiday or is_off_day: total_over += dur
+                        elif dur > REGULAR_WORK_TIME: total_over += (dur - REGULAR_WORK_TIME)
+                        
             elif curr in leave_dates:
                 leave_count += 1
                 total_work += REGULAR_WORK_TIME
-            elif curr in holiday_dates: holiday_count += 1
-            elif wd == off_day: off_count += 1
-            else: absent_days += 1
+            elif is_holiday: 
+                holiday_count += 1
+            elif is_off_day: 
+                off_count += 1
+            else: 
+                absent_days += 1
 
-        expected_hours = (days_range - off_count - holiday_count) * REGULAR_WORK_TIME
+        # 🟢 Expected hours ক্যালেন্ডারের ছুটি দিয়ে হিসাব হবে, ফলে ওভারটাইম ব্যালেন্স মিলবে
+        expected_hours = (days_range - calendar_off_count - calendar_holiday_count) * REGULAR_WORK_TIME
         
         def fmt(td):
             s = int(td.total_seconds()); return f"{s//3600:02d}:{(s%3600)//60:02d}:{s%60:02d}"
@@ -1456,11 +1479,28 @@ def employee_attendance_pdf(request, employee_id):
                 if out_time_val > actual_start:
                     daily_w = out_time_val - actual_start
             
-            # OT / Less Logic
-            if daily_w > shift_dur:
-                daily_o = daily_w - shift_dur
+            # 🟢 Overtime / Less Logic (UPDATED)
+            is_off_day = (off_day and weekday == off_day)
+            is_pub_holiday = (curr_date in holiday_dates)
+
+            if is_off_day or is_pub_holiday:
+                # ছুটির দিন বা সাপ্তাহিক বন্ধে আসলে পুরো কাজটাই ওভারটাইম
+                daily_o = daily_w
+                daily_l = timedelta(0) # ছুটির দিনে কোনো Less Time পেনাল্টি নেই
+                
+                # রিপোর্টে বোঝার সুবিধার জন্য স্ট্যাটাস পরিবর্তন
+                if is_off_day: 
+                    status = "Present (Weekly Off)"
+                else: 
+                    status = "Present (Holiday)"
             else:
-                daily_l = shift_dur - daily_w
+                # রেগুলার কর্মদিবসের হিসাব
+                if daily_w > shift_dur:
+                    daily_o = daily_w - shift_dur
+                    daily_l = timedelta(0) # সেফটির জন্য যুক্ত করা হলো
+                else:
+                    daily_o = timedelta(0) # সেফটির জন্য যুক্ত করা হলো
+                    daily_l = shift_dur - daily_w
 
         elif curr_date in leave_dates:
             status = "Leave" # or "On Leave"
@@ -1659,11 +1699,28 @@ def attendance_pdf_report(request, employee_id):
                 if out_time_val > actual_start:
                     daily_w = out_time_val - actual_start
             
-            # Overtime / Less time calculation
-            if daily_w > shift_dur:
-                daily_o = daily_w - shift_dur
+            # 🟢 Overtime / Less Logic (UPDATED)
+            is_off_day = (off_day and weekday == off_day)
+            is_pub_holiday = (curr_date in holiday_dates)
+
+            if is_off_day or is_pub_holiday:
+                # ছুটির দিন বা সাপ্তাহিক বন্ধে আসলে পুরো কাজটাই ওভারটাইম
+                daily_o = daily_w
+                daily_l = timedelta(0) # ছুটির দিনে কোনো Less Time পেনাল্টি নেই
+                
+                # রিপোর্টে বোঝার সুবিধার জন্য স্ট্যাটাস পরিবর্তন
+                if is_off_day: 
+                    status = "Present (Weekly Off)"
+                else: 
+                    status = "Present (Holiday)"
             else:
-                daily_l = shift_dur - daily_w
+                # রেগুলার কর্মদিবসের হিসাব
+                if daily_w > shift_dur:
+                    daily_o = daily_w - shift_dur
+                    daily_l = timedelta(0) # সেফটির জন্য যুক্ত করা হলো
+                else:
+                    daily_o = timedelta(0) # সেফটির জন্য যুক্ত করা হলো
+                    daily_l = shift_dur - daily_w
 
         elif curr_date in leave_dates:
             status = "On Leave"
@@ -1772,7 +1829,7 @@ def _clip_days(start, end, d_from, d_to):
 
 def get_leave_summary_data(user, get_params):
     """
-    HTML এবং PDF উভয়ের জন্য কমন ডাটা প্রসেসিং ফাংশন।
+    HTML এবং PDF উভয়ের জন্য কমন ডাটা প্রসেসিং ফাংশন।
     রিটার্ন করে: context dictionary
     """
     user_company = getattr(user.profile, 'company', None)
@@ -1800,12 +1857,13 @@ def get_leave_summary_data(user, get_params):
         'employee', 'employee__department'
     ).only(
         'employee__id', 'employee__name', 'employee__department__name',
-        'start_date', 'end_date', 'status', 'leave_type', 'remarks'
+        'start_date', 'end_date', 'status', 'leave_type', 'reason' # 🟢 remarks পরিবর্তন করে reason করা হয়েছে
     ).order_by('-start_date', '-id')
 
     # Apply Filters
     if q:
-        qs = qs.filter(Q(employee__name__icontains=q) | Q(remarks__icontains=q))
+        # 🟢 remarks__icontains পরিবর্তন করে reason__icontains করা হয়েছে
+        qs = qs.filter(Q(employee__name__icontains=q) | Q(reason__icontains=q))
     if status:
         qs = qs.filter(status=status)
     if dept_id:
