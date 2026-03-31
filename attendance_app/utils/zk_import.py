@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta
 from django.utils.timezone import make_aware, is_naive
+from collections import defaultdict
 from zk import ZK
 import logging
 from attendance_app.models import Employee, Attendance
@@ -12,6 +13,7 @@ def import_attendance(devices):
     1. First Punch of the day = 'In'
     2. Last Punch of the day = 'Out' (Updates existing Out record)
     3. Ignore punches within 5 minutes of previous punch (Debounce)
+    4. Smart Check: Does not overwrite manually edited database records.
     """
     results = []
 
@@ -48,7 +50,7 @@ def import_attendance(devices):
             if not attendances:
                 raise Exception(f"No attendance data received or device offline.")
 
-            # টাইম অনুযায়ী সর্ট করা খুব জরুরি "First In" লজিকের জন্য
+            # টাইম অনুযায়ী সর্ট করা খুব জরুরি "First In" লজিকের জন্য
             attendances.sort(key=lambda x: x.timestamp)
 
             start_date = make_aware(datetime(2025, 12, 1))
@@ -56,8 +58,16 @@ def import_attendance(devices):
             updated_count = 0
             skipped_count = 0
             
-            # Debounce Time (একই মানুষ ৫ মিনিটের মধ্যে ২ বার দিলে ইগনোর করবে)
+            # Debounce Time
             DEBOUNCE_MINUTES = 5 
+
+            # 🟢 Optimization: লুপের বাইরে সব মেশিনের পাঞ্চগুলো একটি ডিকশনারিতে সেট করে নিচ্ছি
+            # এতে লুপের ভেতরে বারবার চেক করতে গিয়ে সার্ভার স্লো হবে না
+            user_day_punches = defaultdict(set)
+            for a in attendances:
+                t = a.timestamp.replace(microsecond=0)
+                if is_naive(t): t = make_aware(t)
+                user_day_punches[(a.user_id, t.date())].add(t)
 
             for att in attendances:
                 user_id = att.user_id
@@ -78,6 +88,11 @@ def import_attendance(devices):
                     # 1. আজকের দিনের রেকর্ড চেক করি
                     day_records = Attendance.objects.filter(employee=emp, timestamp__date=date_only).order_by('timestamp')
                     
+                    # 🟢 এক্স্যাক্ট একই পাঞ্চ ডাটাবেসে থাকলে প্রথমেই স্কিপ করবে
+                    if day_records.filter(timestamp=timestamp).exists():
+                        skipped_count += 1
+                        continue
+
                     if not day_records.exists():
                         # A. যদি আজ কোনো রেকর্ড না থাকে -> এটাই প্রথম পাঞ্চ (In)
                         Attendance.objects.create(
@@ -91,33 +106,36 @@ def import_attendance(devices):
                         first_record = day_records.first()
 
                         # --- Debounce Check ---
-                        # যদি লাস্ট রেকর্ডের ৫ মিনিটের মধ্যে হয়, তবে ইগনোর (ভুল করে ২ বার চাপ দিয়েছে)
                         time_diff = (timestamp - last_record.timestamp).total_seconds() / 60
                         if time_diff < DEBOUNCE_MINUTES:
                             continue
 
+                        # বর্তমান ইউজার এবং দিনের অরিজিনাল মেশিনের পাঞ্চ লিস্ট
+                        machine_punches = user_day_punches[(user_id, date_only)]
+
                         # --- Logic: First In, Last Out ---
                         
-                        # কেস ১: যদি নতুন টাইমটা 'In' টাইমের চেয়েও আগে হয় (খুব রেয়ার, ডিভাইস সিঙ্ক ইস্যু)
+                        # কেস ১: In টাইম আপডেট
                         if timestamp < first_record.timestamp:
-                            first_record.timestamp = timestamp
-                            first_record.status = 'In'
-                            first_record.save()
-                            updated_count += 1
+                            # 🟢 শুধু তখনি ডাটা ওভাররাইট করবে যদি ডাটাবেসের টাইমটা আপনি এডিট না করে থাকেন
+                            if first_record.timestamp in machine_punches:
+                                first_record.timestamp = timestamp
+                                first_record.status = 'In'
+                                first_record.save()
+                                updated_count += 1
                         
-                        # কেস ২: এটা কি 'Out' হবে?
+                        # কেস ২: Out টাইম আপডেট বা ক্রিয়েট
                         else:
-                            # যদি মাঝখানে অনেকগুলো পাঞ্চ থাকে, আমরা চাই শুধু একটাই 'Out' রেকর্ড থাকুক (Latest time)
-                            # তাই আমরা চেক করব 'Out' রেকর্ড আছে কিনা
                             out_record = day_records.filter(status='Out').first()
 
                             if out_record:
-                                # যদি অলরেডি Out থাকে, সেটার টাইম আপডেট করে লেটেস্ট টাইম বসাবো
-                                out_record.timestamp = timestamp
-                                out_record.save()
-                                updated_count += 1
+                                # 🟢 শুধু তখনি আপডেট করবে যদি নতুন টাইমটা বড় হয় এবং আগের আউট টাইমটা এডিট করা না হয়
+                                if timestamp > out_record.timestamp and out_record.timestamp in machine_punches:
+                                    out_record.timestamp = timestamp
+                                    out_record.save()
+                                    updated_count += 1
                             else:
-                                # যদি Out না থাকে, নতুন Out ক্রিয়েট করব
+                                # যদি Out না থাকে, নতুন Out ক্রিয়েট করব
                                 Attendance.objects.create(
                                     employee=emp, timestamp=timestamp, status='Out', company=company
                                 )
