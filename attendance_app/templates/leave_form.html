@@ -1,101 +1,35 @@
 {% extends "base.html" %}
-{% block title %}Leave Application{% endblock %}
-
+{% block title %}{{ title|default:"Leave Application" }}{% endblock %}
 {% block content %}
-<div class="flex items-center justify-center min-h-[calc(100vh-100px)] px-4 py-6">
-  
-  <div class="w-full max-w-lg bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-gray-100 dark:border-gray-700 overflow-hidden animate-in fade-in zoom-in duration-300">
-    
-    <div class="bg-gray-50 dark:bg-gray-700/50 px-6 py-5 border-b border-gray-100 dark:border-gray-700 flex items-center gap-3">
-      <div class="p-2 bg-purple-100 dark:bg-purple-900/50 text-purple-600 rounded-lg">
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-        </svg>
+<div class="mx-auto max-w-2xl space-y-6">
+  <div>
+    <a href="{% url 'attendance_app:leave_list' %}" class="btn-ghost btn-sm -ml-3 mb-2">← Leave requests</a>
+    <h1 class="page-title">{{ title|default:"Leave Application" }}</h1>
+    <p class="page-subtitle">Approved ছুটির দিনগুলো রিপোর্ট ও বেতনে পুরো শিফট হিসেবে ধরা হয়।</p>
+  </div>
+
+  <form method="post" class="card overflow-hidden" novalidate>
+    {% csrf_token %}
+    <div class="space-y-5 p-5 sm:p-6">
+      {% if form.non_field_errors %}
+      <div class="flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 p-3.5 text-sm text-rose-700 dark:border-rose-500/20 dark:bg-rose-500/10 dark:text-rose-300" role="alert">
+        {% include "partials/icon.html" with name="alert" %}<div>{% for e in form.non_field_errors %}<p>{{ e }}</p>{% endfor %}</div>
       </div>
-      <div>
-        <h1 class="text-xl font-bold text-gray-900 dark:text-gray-100">Leave Application</h1>
-        <p class="text-xs text-gray-500 dark:text-gray-400">Fill out the form to request a leave.</p>
+      {% endif %}
+      <div class="grid grid-cols-1 gap-5 sm:grid-cols-2">
+        {% for field in form %}
+          {% if field.name == "employee" or field.name == "reason" %}
+            {% include "partials/form_field.html" with field=field wrap="sm:col-span-2" %}
+          {% else %}
+            {% include "partials/form_field.html" with field=field %}
+          {% endif %}
+        {% endfor %}
       </div>
     </div>
-
-    <form method="post" class="p-6 space-y-5" id="leaveForm">
-      {% csrf_token %}
-
-      {% if form.non_field_errors %}
-        <div class="p-4 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-800 text-red-600 dark:text-red-400 text-sm flex items-start gap-2">
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mt-0.5 shrink-0" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/></svg>
-          <div>
-            {% for error in form.non_field_errors %}<p>{{ error }}</p>{% endfor %}
-          </div>
-        </div>
-      {% endif %}
-
-      {% for field in form %}
-        <div class="space-y-1.5">
-          <label for="{{ field.id_for_label }}" class="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider ml-1">
-            {{ field.label }}
-          </label>
-          
-          <div class="relative">
-            {{ field }}
-          </div>
-
-          {% if field.help_text %}
-            <p class="text-xs text-gray-400 ml-1">{{ field.help_text }}</p>
-          {% endif %}
-
-          {% if field.errors %}
-            <p class="text-red-500 text-xs mt-1 ml-1 font-medium flex items-center gap-1">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/></svg>
-              {{ field.errors.0 }}
-            </p>
-          {% endif %}
-        </div>
-      {% endfor %}
-
-      <div class="pt-4 flex flex-col sm:flex-row gap-3">
-        <a href="{% url 'attendance_app:leave_list' %}" 
-           class="flex-1 text-center py-3 px-4 rounded-xl border border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300 font-semibold hover:bg-gray-50 dark:hover:bg-gray-700 transition-all">
-           Cancel
-        </a>
-        <button type="submit" 
-                class="flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold shadow-lg shadow-purple-500/30 transition-all hover:-translate-y-0.5">
-           <span>Submit Request</span>
-           <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg>
-        </button>
-      </div>
-
-    </form>
-  </div>
+    <div class="flex flex-col-reverse gap-3 border-t border-slate-100 bg-slate-50/60 px-5 py-4 sm:flex-row sm:justify-end sm:px-6 dark:border-slate-800 dark:bg-slate-800/40">
+      <a href="{% url 'attendance_app:leave_list' %}" class="btn-secondary">Cancel</a>
+      <button type="submit" class="btn-primary">{% include "partials/icon.html" with name="check-circle" cls="h-4 w-4" %}Submit request</button>
+    </div>
+  </form>
 </div>
-
-<script>
-  document.addEventListener("DOMContentLoaded", function() {
-    // Select all inputs, selects, and textareas inside the form
-    const formElements = document.querySelectorAll('#leaveForm input, #leaveForm select, #leaveForm textarea');
-    
-    // Tailwind classes for inputs
-    const inputClasses = [
-      "w-full", "bg-gray-50", "dark:bg-gray-900", 
-      "border", "border-gray-200", "dark:border-gray-600", 
-      "text-gray-900", "dark:text-gray-100", 
-      "rounded-xl", "px-4", "py-3", 
-      "focus:ring-2", "focus:ring-purple-500", "focus:border-purple-500", 
-      "outline-none", "transition-all", "shadow-sm"
-    ];
-
-    formElements.forEach(element => {
-      // Add classes (ignoring checkbox/radio for now, assuming standard inputs)
-      if (element.type !== 'checkbox' && element.type !== 'radio') {
-        element.classList.add(...inputClasses);
-      }
-      
-      // Specifically for Date Inputs if they don't have a placeholder
-      if(element.type === 'date' || element.type === 'datetime-local') {
-         element.style.colorScheme = "light dark"; // Fix calendar icon visibility in dark mode
-      }
-    });
-  });
-</script>
-
 {% endblock %}

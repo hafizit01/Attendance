@@ -1,205 +1,74 @@
-<!DOCTYPE html>
-<html lang="bn">
-<head>
-  <meta charset="utf-8">
-  <title>Attendance Report</title>
+{% extends "pdf/base.html" %}
+{% block title %}Attendance Register{% endblock %}
+{% block footer_title %}Attendance Register {{ start_date|date:"d M" }} – {{ end_date|date:"d M Y" }}{% endblock %}
+{% block eyebrow %}Attendance{% endblock %}
+{% block heading %}Attendance Register{% endblock %}
+{% block extra_css %}
+  .daybox { margin-bottom: 10pt; }
+  .dayhead { font-size: 8.6pt; font-weight: 700; color: #0f172a; padding: 0 0 4pt 2pt; border-left: 2.5pt solid #4f46e5; padding-left: 6pt; margin-bottom: 4pt; page-break-after: avoid; }
+  .dayhead span { font-weight: 500; color: #94a3b8; }
+{% endblock %}
 
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+Bengali:wght@400;500;600;700&display=swap" rel="stylesheet">
+{% block meta %}
+<table class="meta"><tr>
+  <td><div class="k">Period</div><div class="v">{% if start_date == end_date %}{{ start_date|date:"l, d M Y" }}{% else %}{{ start_date|date:"d M Y" }} – {{ end_date|date:"d M Y" }}{% endif %}</div></td>
+  <td><div class="k">Branch</div><div class="v">{{ branch_name }}</div></td>
+  <td><div class="k">Department</div><div class="v">{{ department_name|default:"All departments" }}</div></td>
+  <td><div class="k">Employee</div><div class="v">{{ employee_name|default:"All employees" }}</div></td>
+</tr></table>
+{% endblock %}
 
-  <style>
-  
-  @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap');
+{% block kpis %}
+<table class="kpis"><tr>
+  <td class="kw"><div class="kpi brand"><div class="k">Records</div><div class="v">{{ record_count }}</div><div class="s">employee-days</div></div></td>
+  <td class="kw"><div class="kpi good"><div class="k">Present</div><div class="v">{{ present }}</div></div></td>
+  <td class="kw"><div class="kpi bad"><div class="k">Absent</div><div class="v">{{ absent }}</div></div></td>
+  <td class="kw"><div class="kpi"><div class="k">Leave</div><div class="v">{{ leave }}</div></div></td>
+  <td class="kw"><div class="kpi"><div class="k">Off / holiday</div><div class="v">{{ off }}</div></div></td>
+  <td class="kw"><div class="kpi"><div class="k">Total worked</div><div class="v">{{ total_worked }}</div><div class="s">hh:mm</div></div></td>
+</tr></table>
+{% endblock %}
 
-        @page {
-            size: A4 landscape;
-            margin: 15mm 10mm;
-        }
-
-        body {
-            /* 2. Font Family Update */
-            font-family: 'Roboto', sans-serif;
-            font-size: 11px;
-            margin: 0;
-            color: #333;
-            line-height: 1.3;
-        }
-        
-    /* Page Setup */
-    @page {
-        size: A4;
-        margin: 15mm 12mm;
-        @bottom-right {
-            content: "Page " counter(page) " of " counter(pages);
-            font-size: 9px; color: #666;
-        }
-    }
-
-    
-
-    /* Header Section */
-    .header-container {
-      width: 100%;
-      border-bottom: 2px solid #2563eb;
-      padding-bottom: 15px;
-      margin-bottom: 20px;
-    }
-    .header-table { width: 100%; border: none; }
-    .header-table td { border: none; padding: 0; vertical-align: middle; }
-    
-    .company-title { font-size: 20px; font-weight: 700; color: #1e3a8a; margin: 0; }
-    .report-name { font-size: 14px; text-transform: uppercase; font-weight: 600; color: #555; letter-spacing: 1px; }
-    .meta-info { font-size: 10px; color: #666; margin-top: 5px; }
-
-    /* Data Table */
-    .data-table {
-      width: 100%;
-      border-collapse: collapse;
-      margin-top: 10px;
-    }
-    .data-table th, .data-table td {
-      border: 1px solid #e2e8f0;
-      padding: 8px 10px;
-      text-align: left;
-    }
-    .data-table th {
-      background-color: #f1f5f9;
-      color: #334155;
-      font-weight: 600;
-      font-size: 9pt;
-      text-transform: uppercase;
-    }
-    .data-table tr:nth-child(even) { background-color: #f8fafc; }
-    
-    /* Typography Helpers */
-    .text-center { text-align: center !important; }
-    .text-right { text-align: right !important; }
-    .font-bold { font-weight: 600; }
-    .text-sm { font-size: 9pt; }
-
-    /* Status Badges */
-    .badge {
-      display: inline-block;
-      padding: 3px 8px;
-      border-radius: 4px;
-      font-size: 8pt;
-      font-weight: 600;
-      text-transform: capitalize;
-    }
-    
-    /* Status Colors */
-    .status-present { background-color: #dcfce7; color: #15803d; border: 1px solid #bbf7d0; } /* Green */
-    .status-late    { background-color: #ffedd5; color: #c2410c; border: 1px solid #fed7aa; } /* Orange */
-    .status-absent  { background-color: #fee2e2; color: #b91c1c; border: 1px solid #fecaca; } /* Red */
-    .status-leave   { background-color: #dbeafe; color: #1d4ed8; border: 1px solid #bfdbfe; } /* Blue */
-    .status-holiday { background-color: #f3e8ff; color: #7e22ce; border: 1px solid #e9d5ff; } /* Purple */
-    .status-off     { background-color: #f1f5f9; color: #64748b; border: 1px solid #e2e8f0; } /* Gray */
-
-    /* Footer / Signature */
-    .footer-section { margin-top: 40px; width: 100%; }
-    .signature-box {
-      width: 200px;
-      border-top: 1px solid #999;
-      text-align: center;
-      padding-top: 5px;
-      font-size: 10px;
-      float: right;
-    }
-  </style>
-</head>
-<body>
-
-  <div class="header-container">
-    <table class="header-table">
-      <tr>
-        <td style="width: 60%;">
-          {% if company_name %}
-            <h1 class="company-title">{{ company_name }}</h1>
-          {% else %}
-            <h1 class="company-title">Company Name</h1>
-          {% endif %}
-          <div class="meta-info">Generated by: {{ user.get_full_name|default:user.username }}</div>
-        </td>
-        <td style="width: 40%; text-align: right;">
-          <div class="report-name">Attendance Report</div>
-          <div class="meta-info">
-            <strong>Date Range:</strong><br>
-            {{ start_date }} — {{ end_date }}
-          </div>
-        </td>
-      </tr>
-    </table>
-  </div>
-
-  <table class="data-table">
+{% block content %}
+{# প্রতিটা দিন আলাদা ছোট টেবিল — একটা বিশাল টেবিল পাতায় ভাঙতে WeasyPrint অনেক সময় নেয় #}
+{% for day in days %}
+<div class="daybox">
+  <div class="dayhead">{{ day.date|date:"l, d M Y" }} <span>· {{ day.present }} of {{ day.rows|length }} present</span></div>
+  <table class="tbl">
     <thead>
       <tr>
-        <th style="width: 5%;">#</th>
-        <th style="width: 20%;">Employee Name</th>
-        <th style="width: 15%;">Department</th>
-        <th style="width: 15%;">Date</th>
-        <th style="width: 10%;" class="text-center">In Time</th>
-        <th style="width: 10%;" class="text-center">Out Time</th>
-        <th style="width: 15%;" class="text-center">Status</th>
-        <th style="width: 10%;" class="text-center">Worked</th>
+        <th style="width:4%">#</th>
+        <th style="width:30%">Employee</th>
+        <th style="width:22%">Department</th>
+        <th class="ctr">In</th>
+        <th class="ctr">Out</th>
+        <th class="num">Worked</th>
+        <th style="width:13%">Status</th>
       </tr>
     </thead>
     <tbody>
-      {% for row in rows %}
+      {% for r in day.rows %}
       <tr>
-        <td>{{ forloop.counter }}</td>
-        <td class="font-bold">{{ row.employee_name }}</td>
-        <td class="text-sm">{{ row.department_name }}</td>
-        <td>{{ row.date }}</td>
-        
-        <td class="text-center">
-            {{ row.check_in|default:"-" }}
-        </td>
-        <td class="text-center">
-            {{ row.check_out|default:"-" }}
-        </td>
-        
-        <td class="text-center">
-          {% if row.status == 'Present' %}
-            <span class="badge status-present">Present</span>
-          {% elif row.status == 'Late' %}
-            <span class="badge status-late">Late</span>
-          {% elif row.status == 'Absent' %}
-            <span class="badge status-absent">Absent</span>
-          {% elif row.status == 'Leave' %}
-            <span class="badge status-leave">On Leave</span>
-          {% elif row.status == 'Public Holiday' %}
-            <span class="badge status-holiday">Holiday</span>
-          {% elif row.status == 'Weekly Off' %}
-            <span class="badge status-off">Off Day</span>
-          {% else %}
-            <span class="badge status-off">{{ row.status|default:"-" }}</span>
-          {% endif %}
-        </td>
-        
-        <td class="text-center font-bold">
-            {{ row.worked_hours }}
-        </td>
-      </tr>
-      {% empty %}
-      <tr>
-        <td colspan="8" class="text-center" style="padding: 20px; color: #666; font-style: italic;">
-          No attendance records found for this period.
-        </td>
+        <td class="sl">{{ forloop.counter }}</td>
+        <td class="name">{{ r.employee.name }}</td>
+        <td class="muted">{{ r.employee.department.name|default:"—" }}</td>
+        <td class="ctr mono">{% if r.in_time %}{{ r.in_time|time:"h:i A" }}{% else %}<span class="muted">—</span>{% endif %}</td>
+        <td class="ctr mono">{% if r.out_time %}{{ r.out_time|time:"h:i A" }}{% else %}<span class="muted">—</span>{% endif %}</td>
+        <td class="num">{{ r.worked|default:"—" }}</td>
+        <td><span class="st {% if r.status == 'Present' %}st-present{% elif r.status == 'Absent' %}st-absent{% elif r.status == 'Leave' %}st-leave{% elif r.status == 'Public Holiday' %}st-holiday{% else %}st-off{% endif %}">{% if r.status == 'Leave' %}On leave{% elif r.status == 'Public Holiday' %}Holiday{% elif r.status == 'Weekly Off' %}Weekly off{% else %}{{ r.status }}{% endif %}</span></td>
       </tr>
       {% endfor %}
     </tbody>
   </table>
+</div>
+{% empty %}
+<table class="tbl"><tr><td class="empty">No attendance records for this period.</td></tr></table>
+{% endfor %}
+{% endblock %}
 
-  <div class="footer-section">
-    <div style="font-size: 10px; color: #666; float: left;">
-        * Report generated automatically by SmartAttendance System.
-    </div>
-    <div class="signature-box">
-        Authorized Signature
-    </div>
-  </div>
-
-</body>
-</html>
+{% block signatures %}
+<table class="sigs"><tr>
+  <td></td>
+  <td><div class="line">Authorized signature<div class="role">HR / Management</div></div></td>
+</tr></table>
+{% endblock %}

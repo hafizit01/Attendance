@@ -1,12 +1,13 @@
 from datetime import timedelta
 import logging
 import time
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 
 import requests
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.core.cache import cache
+from django.db import transaction
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -51,27 +52,21 @@ def _bkash_use_bearer() -> bool:
 # -------------------------------
 def activate_or_extend_subscription(user, plan: SubscriptionPlan) -> UserSubscription:
     """
-    active সাবস্ক্রিপশন থাকলে শেষে extend, না থাকলে আজ থেকে নতুন সাবস্ক্রিপশন।
-    একটিমাত্র active রাখি।
+    active সাবস্ক্রিপশন থাকলে তার শেষের পরদিন থেকে নতুনটা শুরু (early renewal এ দিন হারায় না),
+    না থাকলে আজ থেকে নতুন সাবস্ক্রিপশন।
+    আগেরটা active রাখা হয়, যাতে তার মেয়াদ শেষ না হওয়া পর্যন্ত ইউজার ব্লক না হয়।
     """
     today = timezone.localdate()
 
-    current = (
+    latest = (
         UserSubscription.objects
         .filter(user=user, active=True, end_date__gte=today)
         .order_by("-end_date")
         .first()
     )
 
-    if current:
-        start = current.end_date + timedelta(days=1)
-    else:
-        start = today
-
+    start = latest.end_date + timedelta(days=1) if latest else today
     end = start + timedelta(days=plan.duration_days)
-
-    # একটিমাত্র active রাখুন
-    UserSubscription.objects.filter(user=user, active=True).update(active=False)
 
     sub = UserSubscription.objects.create(
         user=user,
@@ -137,7 +132,7 @@ def _status_is_success(s: str) -> bool:
 # Create Payment
 # -------------------------------
 @csrf_exempt
-@login_required(login_url="login")
+@login_required  # settings.LOGIN_URL (/login/)
 def create_bkash_payment(request, slug):
     id_token = grant_token_function()
     if not id_token:
@@ -198,27 +193,54 @@ def create_bkash_payment(request, slug):
 
 
 # -------------------------------
-# Execute Payment (internal helper-style view)
+# Plan resolve (invoice থেকে)
 # -------------------------------
-@csrf_exempt
-@login_required(login_url="login")
-def execute_bkash_payment(request, payment_id=None):
+def _plan_from_invoice(invoice: str):
     """
-    get_payment_status() থেকে কল হয়।
+    invoice format: '<plan-slug>-<user_id>-<timestamp>'
+    slug এ '-' থাকতে পারে (যেমন 'basic-plan'), তাই ডান দিক থেকে শেষ দুটো অংশ কেটে নিই।
+    """
+    parts = (invoice or "").rsplit("-", 2)
+    if len(parts) != 3 or not parts[1].isdigit() or not parts[2].isdigit():
+        return None
+    return SubscriptionPlan.objects.filter(slug=parts[0].lower()).first()
+
+
+def _amount_matches(paid, expected: Decimal) -> bool:
+    try:
+        return Decimal(str(paid)).quantize(Decimal("0.01")) == Decimal(expected).quantize(Decimal("0.01"))
+    except (InvalidOperation, TypeError, ValueError):
+        return False
+
+
+# -------------------------------
+# Execute Payment (internal helper)
+# -------------------------------
+def _execute_payment(user, payment_id):
+    """
+    bKash যে paymentID ফেরত দিয়েছে সেটাই execute করে।
     dict রিটার্ন করে যাতে কলার বুঝে রিডাইরেক্ট করতে পারে।
     """
+    if not payment_id:
+        return {"error": "Missing paymentID"}
+
+    # শুধু এই ইউজারের তৈরি করা নির্দিষ্ট payment
+    payment = BkashPayment.objects.filter(user=user, paymentID=payment_id).first()
+    if not payment:
+        return {"error": "Payment not found for this user"}
+
+    # আগেই প্রসেস হয়ে থাকলে আবার bKash এ execute করি না (idempotent)
+    done = BkashPaymentExecute.objects.filter(paymentID=payment_id).first()
+    if done:
+        if done.subscription_id:
+            return {"status": "success"}
+        return {"error": "This payment was already processed but no subscription was activated. Please contact support."}
+
     try:
         id_token = grant_token_function()
         if not id_token:
             return {"error": "Token fetch failed"}
 
-        # সর্বশেষ initiate করা payment ধরা হলো (চাইলে payment_id দিয়ে নির্দিষ্ট করতে পারেন)
-        latest_payment = BkashPayment.objects.filter(user=request.user).last()
-        if not latest_payment:
-            return {"error": "No payment found for the user"}
-
-        payment_id = latest_payment.paymentID
-        payload = {"paymentID": payment_id}
         headers = {
             "accept": "application/json",
             "Authorization": _auth_header(id_token),
@@ -226,84 +248,94 @@ def execute_bkash_payment(request, payment_id=None):
         }
         url = f"{_bkash_base_url()}/tokenized/checkout/execute"
 
-        r = requests.post(url, json=payload, headers=headers, timeout=30)
+        r = requests.post(url, json={"paymentID": payment_id}, headers=headers, timeout=30)
         resp = r.json()
-
-        # error branch
-        code = str(resp.get("statusCode") or "")
-        if code and code != "0000":
-            if code == "2023":
-                return {"status": "insufficient_balance"}
-            elif code == "2029":
-                return {"status": "duplicate_transaction"}
-            else:
-                return {"error": resp.get("statusMessage") or "Execution failed"}
-
-        # success branch → Execute রেকর্ড idempotent ভাবে সেভ
-        exec_defaults = {
-            "user": request.user,
-            "createTime": resp.get("paymentExecuteTime", ""),
-            "trxID": resp.get("trxID", ""),
-            "transactionStatus": resp.get("transactionStatus", ""),
-            "amount": resp.get("amount", ""),
-            "currency": resp.get("currency", ""),
-            "intent": resp.get("intent", ""),
-            "merchantInvoiceNumber": resp.get("merchantInvoiceNumber", ""),
-            "customerMsisdn": resp.get("customerMsisdn", ""),
-            "title": latest_payment.title,
-        }
-        exec_obj, created = BkashPaymentExecute.objects.get_or_create(
-            paymentID=resp.get("paymentID"), defaults=exec_defaults
-        )
-        if not created:
-            # already executed → idempotent success
-            return {"status": "success"}
-
-        # ট্রানজেকশন স্ট্যাটাস ফাইনাল সাকসেস কিনা
-        if not _status_is_success(resp.get("transactionStatus")):
-            return {"error": "Transaction not successful"}
-
-        # প্ল্যান resolve: invoice থেকে slug, নাহলে title
-        invoice = exec_obj.merchantInvoiceNumber or latest_payment.merchantInvoiceNumber or ""
-        plan_slug = invoice.split("-")[0].lower() if invoice else ""
-        plan = None
-        if plan_slug:
-            try:
-                plan = SubscriptionPlan.objects.get(slug=plan_slug)
-            except SubscriptionPlan.DoesNotExist:
-                plan = None
-        if not plan:
-            try:
-                plan = SubscriptionPlan.objects.get(name=exec_obj.title)
-            except SubscriptionPlan.DoesNotExist:
-                return {"error": "Plan not found to activate subscription"}
-
-        # সাবস্ক্রিপশন সক্রিয়/Extend
-        _ = activate_or_extend_subscription(request.user, plan)
-        return {"status": "success"}
-
     except Exception:
         logger.exception("bKash execute error")
         return {"error": "Payment execution failed. Please try again."}
+
+    # error branch
+    code = str(resp.get("statusCode") or "")
+    if code and code != "0000":
+        if code == "2023":
+            return {"status": "insufficient_balance"}
+        elif code == "2029":
+            return {"status": "duplicate_transaction"}
+        else:
+            return {"error": resp.get("statusMessage") or "Execution failed"}
+
+    if resp.get("paymentID") != payment_id:
+        logger.error("bKash execute paymentID mismatch: expected=%s got=%s", payment_id, resp.get("paymentID"))
+        return {"error": "Payment ID mismatch"}
+
+    # ট্রানজেকশন স্ট্যাটাস ফাইনাল সাকসেস কিনা
+    if not _status_is_success(resp.get("transactionStatus")):
+        return {"error": "Transaction not successful"}
+
+    # প্ল্যান resolve: নিজের DB তে রাখা invoice থেকে slug, নাহলে title
+    plan = _plan_from_invoice(payment.merchantInvoiceNumber)
+    if not plan and payment.title:
+        plan = SubscriptionPlan.objects.filter(name=payment.title).first()
+
+    exec_fields = {
+        "user": user,
+        "paymentID": payment_id,
+        "createTime": resp.get("paymentExecuteTime", ""),
+        "trxID": resp.get("trxID", ""),
+        "transactionStatus": resp.get("transactionStatus", ""),
+        "amount": resp.get("amount", ""),
+        "currency": resp.get("currency", ""),
+        "intent": resp.get("intent", ""),
+        "merchantInvoiceNumber": resp.get("merchantInvoiceNumber", ""),
+        "customerMsisdn": resp.get("customerMsisdn", ""),
+        "title": payment.title,
+    }
+
+    # টাকা কাটা হয়ে গেছে, তাই সমস্যা হলেও রেকর্ড (subscription ছাড়া) রাখি — অডিটের জন্য
+    if not plan:
+        BkashPaymentExecute.objects.create(**exec_fields)
+        logger.error("bKash paid but plan not found: paymentID=%s invoice=%s", payment_id, payment.merchantInvoiceNumber)
+        return {"error": "Plan not found to activate subscription"}
+
+    if not _amount_matches(resp.get("amount"), plan.price) or (resp.get("currency") or "BDT") != "BDT":
+        BkashPaymentExecute.objects.create(**exec_fields)
+        logger.error(
+            "bKash amount mismatch: paymentID=%s paid=%s %s plan=%s price=%s",
+            payment_id, resp.get("amount"), resp.get("currency"), plan.slug, plan.price,
+        )
+        return {"error": "Paid amount does not match the plan price. Please contact support."}
+
+    # সাবস্ক্রিপশন সক্রিয়/Extend + execute রেকর্ড একসাথে (atomic)
+    with transaction.atomic():
+        sub = activate_or_extend_subscription(user, plan)
+        BkashPaymentExecute.objects.create(subscription=sub, **exec_fields)
+    return {"status": "success"}
+
+
+@login_required  # settings.LOGIN_URL (/login/)
+def execute_bkash_payment(request):
+    """ম্যানুয়াল execute: ?paymentID=... (সাধারণত get_payment_status থেকেই হয়)"""
+    result = _execute_payment(request.user, request.GET.get("paymentID"))
+    return JsonResponse(result, status=200 if result.get("status") == "success" else 400)
 
 
 # -------------------------------
 # Callback handler from bKash
 # -------------------------------
-@login_required(login_url="login")
+@login_required  # settings.LOGIN_URL (/login/)
 def get_payment_status(request):
     """
     bKash callbackURL এই ভিউ-তে পিং করে।
-    কুয়েরি-প্যারাম status: success/cancel/failure
+    কুয়েরি-প্যারাম status: success/cancel/failure
     """
     status = request.GET.get("status")
     payment_id = request.GET.get("paymentID")
 
     if status == "success":
-        result = execute_bkash_payment(request, payment_id)
+        result = _execute_payment(request.user, payment_id)
         if "status" in result:
             if result["status"] in {"insufficient_balance", "duplicate_transaction"}:
-                return redirect("cancel")
+                return redirect("payment_app:cancel")
             return redirect("payment_app:success")
         elif "error" in result:
             return JsonResponse({"error": result["error"]}, status=400)
@@ -329,11 +361,11 @@ def get_payment_status(request):
 # -------------------------------
 # Simple result pages
 # -------------------------------
-@login_required(login_url="login")
+@login_required  # settings.LOGIN_URL (/login/)
 def success(request):
     return render(request, "success.html")
 
-@login_required(login_url="login")
+@login_required  # settings.LOGIN_URL (/login/)
 def cancel(request):
     return render(request, "cancel.html")
 
@@ -341,7 +373,7 @@ def cancel(request):
 # -------------------------------
 # Example detail page (optional)
 # -------------------------------
-# @login_required(login_url="login")
+# @login_required  # settings.LOGIN_URL (/login/)
 # def payment_details(request, slug):
 #     payment = get_object_or_404(BkashPaymentExecute, slug=slug)
 #     assignments = Assignment.objects.filter(course__titel=payment.title)

@@ -1,0 +1,56 @@
+{# leave_list ও HTMX রেসপন্স দুটোই এই টেবিল ব্যবহার করে #}
+<div class="card overflow-hidden">
+  <div class="overflow-x-auto">
+    <table class="responsive-table table-modern" id="leaveTable">
+      <thead>
+        <tr>
+          <th class="w-12">#</th>
+          <th>Employee</th>
+          <th>Leave type</th>
+          <th>Duration</th>
+          <th>Status</th>
+          <th class="text-right">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for leave in leaves %}
+        <tr data-search="{{ leave.employee.name|lower }} {{ leave.leave_type|lower }} {{ leave.status|lower }}">
+          <td class="rt-hide text-xs tabular-nums text-slate-400">{{ forloop.counter }}</td>
+          <td class="rt-title">
+            <div class="flex items-center gap-3">
+              <span class="avatar">{{ leave.employee.name|slice:":1" }}</span>
+              <div class="min-w-0">
+                <p class="truncate font-semibold text-slate-900 dark:text-white">{{ leave.employee.name }}</p>
+                <p class="truncate text-xs font-normal text-slate-500">{{ leave.employee.department.name|default:"General" }}</p>
+              </div>
+            </div>
+          </td>
+          <td class="text-slate-700 dark:text-slate-200">{{ leave.get_leave_type_display|default:leave.leave_type }}</td>
+          <td class="whitespace-nowrap tabular-nums text-slate-600 dark:text-slate-300">
+            {{ leave.start_date|date:"d M" }}{% if leave.end_date != leave.start_date %} – {{ leave.end_date|date:"d M Y" }}{% else %} {{ leave.start_date|date:"Y" }}{% endif %}
+          </td>
+          <td>
+            {% if leave.status == 'Approved' %}<span class="badge-success"><span class="badge-dot"></span>Approved</span>
+            {% elif leave.status == 'Pending' %}<span class="badge-warning"><span class="badge-dot"></span>Pending</span>
+            {% else %}<span class="badge-danger"><span class="badge-dot"></span>Rejected</span>{% endif %}
+          </td>
+          <td class="text-right">
+            <div class="flex items-center justify-end gap-1">
+              <a href="{% url 'attendance_app:leave_update' leave.pk %}" class="btn-icon h-9 w-9 hover:bg-amber-50 hover:text-amber-600 dark:hover:bg-amber-500/10" title="Edit" aria-label="Edit leave of {{ leave.employee.name }}">{% include "partials/icon.html" with name="pencil" cls="h-4 w-4" %}</a>
+              <form action="{% url 'attendance_app:leave_delete' leave.pk %}" method="post" onsubmit="return confirm('এই ছুটির আবেদনটি মুছে ফেলবেন?');">
+                {% csrf_token %}
+                <button type="submit" class="btn-icon h-9 w-9 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-500/10" title="Delete" aria-label="Delete leave of {{ leave.employee.name }}">{% include "partials/icon.html" with name="trash" cls="h-4 w-4" %}</button>
+              </form>
+            </div>
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="6">
+          {% url 'attendance_app:leave_create' as add_url %}
+          {% include "partials/empty_state.html" with icon="calendar" title="No leave requests" text="There are no leave requests to show right now." action_url=add_url action_label="New request" %}
+        </td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>

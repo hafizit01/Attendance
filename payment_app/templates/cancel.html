@@ -1,31 +1,18 @@
 {% extends 'base.html' %}
+{% block title %}Payment Cancelled{% endblock %}
 {% block content %}
-
-<div class="mx-auto max-w-lg px-6 py-16">
-  <div class="bg-white shadow-lg rounded-2xl p-8 text-center border border-red-200">
-    
-    <!-- Icon -->
-    <div class="mx-auto w-20 h-20 flex items-center justify-center rounded-full bg-red-100 text-red-600 mb-4">
-      ❌
+<div class="mx-auto flex min-h-[60vh] max-w-lg items-center">
+  <div class="card w-full overflow-hidden">
+    <div class="h-1.5 bg-gradient-to-r from-slate-400 to-slate-500"></div>
+    <div class="p-6 text-center sm:p-10">
+      <span class="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400">{% include "partials/icon.html" with name="x-circle" cls="h-8 w-8" %}</span>
+      <h1 class="mt-5 text-2xl font-bold tracking-tight text-slate-900 dark:text-white">Payment cancelled</h1>
+      <p class="mt-2 text-sm text-slate-600 dark:text-slate-300">পেমেন্ট বাতিল হয়েছে, কোনো টাকা কাটা হয়নি। ভুল করে হলে আবার চেষ্টা করুন।</p>
+      <div class="mt-8 flex flex-col-reverse gap-3 sm:flex-row sm:justify-center">
+        <a href="{% url 'attendance_app:dashboard' %}" class="btn-secondary">Back to dashboard</a>
+        <a href="{% url 'subscription_app:view_plans' %}" class="btn-primary">Try again {% include "partials/icon.html" with name="arrow-right" cls="h-4 w-4" %}</a>
+      </div>
     </div>
-
-    <!-- Title -->
-    <h2 class="text-2xl md:text-3xl font-bold text-red-600 mb-3">
-      Payment Cancelled
-    </h2>
-
-    <!-- Message -->
-    <p class="text-gray-600 mb-6">
-      Your payment was cancelled.  
-      If this was a mistake, you can try again and complete your subscription.
-    </p>
-
-    <!-- Button -->
-    <a href="{% url 'subscription_app:view_plans' %}"
-       class="inline-flex items-center justify-center px-6 py-3 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold shadow">
-      View Plans Again →
-    </a>
   </div>
 </div>
-
 {% endblock %}

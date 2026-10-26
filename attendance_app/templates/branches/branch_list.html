@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% block title %}Branches{% endblock %}
+{% block content %}
+<div class="space-y-6">
+  <div class="page-header">
+    <div>
+      <p class="eyebrow">Organization</p>
+      <h1 class="page-title">Branches</h1>
+      <p class="page-subtitle">{% if can_manage %}প্রতিটা শাখার ডিপার্টমেন্ট, ডিভাইস ও ম্যানেজার এক জায়গায়।{% else %}আপনার শাখার তথ্য।{% endif %}</p>
+    </div>
+    {% if can_manage %}
+    <a href="{% url 'attendance_app:branch_add' %}" class="btn-primary self-start lg:self-auto">{% include "partials/icon.html" with name="plus" cls="h-4 w-4" %}Add branch</a>
+    {% endif %}
+  </div>
+
+  {% if unassigned_departments %}
+  <div class="flex items-start gap-2 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-300">
+    {% include "partials/icon.html" with name="alert" %}
+    <p>{{ unassigned_departments }}টি ডিপার্টমেন্ট কোনো ব্রাঞ্চে নেই। <a href="{% url 'attendance_app:department_list' %}" class="link">ডিপার্টমেন্ট এডিট করে</a> ব্রাঞ্চ বেছে দিন।</p>
+  </div>
+  {% endif %}
+
+  <div class="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
+    {% for b in branches %}
+    <article class="card flex flex-col overflow-hidden {% if not b.is_active %}opacity-70{% endif %}">
+      <div class="flex items-start justify-between gap-3 p-5">
+        <div class="flex min-w-0 items-center gap-3">
+          <span class="stat-icon bg-primary-50 text-primary-600 dark:bg-primary-500/10 dark:text-primary-400">{% include "partials/icon.html" with name="building" %}</span>
+          <div class="min-w-0">
+            <h2 class="truncate text-base font-bold text-slate-900 dark:text-white">{{ b.name }}</h2>
+            <p class="truncate text-xs text-slate-500">{{ b.address|default:"No address"|truncatechars:60 }}</p>
+          </div>
+        </div>
+        {% if b.is_active %}<span class="badge-success"><span class="badge-dot"></span>Active</span>{% else %}<span class="badge-neutral">Inactive</span>{% endif %}
+      </div>
+
+      <dl class="grid grid-cols-3 border-y border-slate-100 text-center dark:border-slate-800">
+        <div class="p-3"><dt class="kv-label">Employees</dt><dd class="mt-1 text-xl font-bold tabular-nums text-slate-900 dark:text-white">{{ b.emp_count }}</dd></div>
+        <div class="border-x border-slate-100 p-3 dark:border-slate-800"><dt class="kv-label">Depts</dt><dd class="mt-1 text-xl font-bold tabular-nums text-slate-900 dark:text-white">{{ b.dept_count }}</dd></div>
+        <div class="p-3"><dt class="kv-label">Devices</dt><dd class="mt-1 text-xl font-bold tabular-nums {% if b.device_count %}text-emerald-600 dark:text-emerald-400{% else %}text-slate-400{% endif %}">{{ b.device_count }}</dd></div>
+      </dl>
+
+      <div class="flex-1 space-y-2 p-5">
+        <p class="kv-label">Managers</p>
+        {% for m in b.managers.all %}
+          <div class="flex items-center justify-between gap-2 rounded-xl bg-slate-50 px-3 py-2 dark:bg-slate-800/60">
+            <div class="flex min-w-0 items-center gap-2">
+              <span class="avatar h-8 w-8">{{ m.user.username|slice:":1" }}</span>
+              <div class="min-w-0">
+                <p class="truncate text-sm font-medium text-slate-800 dark:text-slate-100">{{ m.user.get_full_name|default:m.user.username }}</p>
+                <p class="truncate text-xs text-slate-500">@{{ m.user.username }}{% if not m.user.is_active %} · <span class="text-rose-500">disabled</span>{% endif %}</p>
+              </div>
+            </div>
+            {% if can_manage and m.user.is_active %}
+            <form method="post" action="{% url 'attendance_app:manager_remove' m.user_id %}" onsubmit="return confirm('{{ m.user.username|escapejs }} এর লগইন বন্ধ করবেন?');">
+              {% csrf_token %}
+              <button type="submit" class="btn-icon h-8 w-8 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-500/10" title="Disable login" aria-label="Disable login for {{ m.user.username }}">{% include "partials/icon.html" with name="x" cls="h-4 w-4" %}</button>
+            </form>
+            {% endif %}
+          </div>
+        {% empty %}
+          <p class="text-sm text-slate-500">No manager yet — only the owner can see this branch.</p>
+        {% endfor %}
+      </div>
+
+      {% if can_manage %}
+      <div class="flex flex-wrap items-center gap-2 border-t border-slate-100 bg-slate-50/60 px-5 py-3 dark:border-slate-800 dark:bg-slate-800/40">
+        <a href="{% url 'attendance_app:manager_add' b.pk %}" class="btn-secondary btn-sm">{% include "partials/icon.html" with name="user" cls="h-4 w-4" %}Add manager</a>
+        <a href="{% url 'attendance_app:branch_edit' b.pk %}" class="btn-ghost btn-sm">{% include "partials/icon.html" with name="pencil" cls="h-4 w-4" %}Edit</a>
+        <form method="post" action="{% url 'attendance_app:branch_delete' b.pk %}" class="ml-auto" onsubmit="return confirm('“{{ b.name|escapejs }}” ব্রাঞ্চ মুছবেন?');">
+          {% csrf_token %}
+          <button type="submit" class="btn-icon h-9 w-9 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-500/10" title="Delete branch" aria-label="Delete {{ b.name }}">{% include "partials/icon.html" with name="trash" cls="h-4 w-4" %}</button>
+        </form>
+      </div>
+      {% endif %}
+    </article>
+    {% empty %}
+    <div class="card md:col-span-2 xl:col-span-3">
+      {% url 'attendance_app:branch_add' as add_url %}
+      {% include "partials/empty_state.html" with icon="building" title="No branches yet" text="Create your first branch, then add departments and devices to it." action_url=add_url action_label="Add branch" %}
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}

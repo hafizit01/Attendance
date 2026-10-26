@@ -1,6 +1,7 @@
 from django import forms
 from .models import EmployeeProfile
 from payroll.models import EmployeeSalary
+from attendance_app.models import Employee
 
 class EmployeeProfileForm(forms.ModelForm):
     class Meta:
@@ -49,4 +50,17 @@ class EmployeeProfileForm(forms.ModelForm):
             "offer_letter": forms.ClearableFileInput(attrs={"class": "w-full text-gray-700 dark:text-white"}),
             "joining_letter": forms.ClearableFileInput(attrs={"class": "w-full text-gray-700 dark:text-white"}),
         }
+
+    def __init__(self, *args, **kwargs):
+        user = kwargs.pop('user', None)  # view থেকে user পাস করা হবে
+        super().__init__(*args, **kwargs)
+        if user is not None:
+            company = getattr(getattr(user, 'profile', None), 'company', None)
+            # শুধু user-এর company এর employees দেখাবে
+            qs = Employee.objects.filter(company=company) if company else Employee.objects.none()
+            from attendance_app.scoping import manager_branch_of
+            branch = manager_branch_of(user)
+            if branch is not None:
+                qs = qs.filter(department__branch=branch)   # ম্যানেজার শুধু নিজের ব্রাঞ্চের কর্মচারী
+            self.fields['employee'].queryset = qs
 

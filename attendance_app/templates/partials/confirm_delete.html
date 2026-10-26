@@ -1,0 +1,22 @@
+{# ডিলিট নিশ্চিতকরণ কার্ড: {% include "partials/confirm_delete.html" with title="..." subject="..." detail="..." cancel_url=u %} #}
+<div class="mx-auto flex min-h-[60vh] max-w-lg items-center">
+  <div class="card w-full p-6 text-center sm:p-8">
+    <span class="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-rose-50 text-rose-600 dark:bg-rose-500/10 dark:text-rose-400">
+      {% include "partials/icon.html" with name="trash" cls="h-7 w-7" %}
+    </span>
+    <h1 class="mt-5 text-xl font-bold text-slate-900 dark:text-white">{{ title }}</h1>
+    <p class="mt-2 text-sm text-slate-600 dark:text-slate-300">
+      {{ question|default:"Are you sure you want to delete" }} <strong class="font-semibold text-slate-900 dark:text-white">{{ subject }}</strong>?
+    </p>
+    {% if detail %}<p class="mt-1 text-sm text-slate-500">{{ detail }}{% if detail2 and detail2 != detail %} – {{ detail2 }}{% endif %}</p>{% endif %}
+    <div class="mt-4 flex items-start gap-2 rounded-xl bg-amber-50 p-3 text-left text-xs text-amber-800 dark:bg-amber-500/10 dark:text-amber-300">
+      {% include "partials/icon.html" with name="alert" cls="h-4 w-4" %}
+      <span>এই কাজটি ফেরত আনা যাবে না।{% if warning %} {{ warning }}{% endif %}</span>
+    </div>
+    <form method="post" class="mt-6 flex flex-col-reverse gap-3 sm:flex-row">
+      {% csrf_token %}
+      <a href="{{ cancel_url }}" class="btn-secondary flex-1">Cancel</a>
+      <button type="submit" class="btn-danger flex-1">{% include "partials/icon.html" with name="trash" cls="h-4 w-4" %}Yes, delete</button>
+    </form>
+  </div>
+</div>

@@ -1,38 +1,78 @@
 {% extends 'base.html' %}
 {% block title %}{{ title }}{% endblock %}
-
 {% block content %}
-<div class="max-w-4xl mx-auto mt-8 bg-white dark:bg-gray-800 shadow-2xl rounded-2xl p-10">
-  <h2 class="text-3xl font-bold mb-8 text-gray-800 dark:text-gray-100 border-b pb-4">
-    {{ title }}
-  </h2>
+<div class="mx-auto max-w-4xl space-y-6">
+  <div>
+    <a href="{% url 'userapp:employee_profile_list' %}" class="btn-ghost btn-sm -ml-3 mb-2">← Employee profiles</a>
+    <h1 class="page-title">{{ title }}</h1>
+    <p class="page-subtitle">ব্যক্তিগত, যোগাযোগ, চাকরি ও ব্যাংকের তথ্য — যা জানা আছে তা পূরণ করুন।</p>
+  </div>
 
-  <form method="post" enctype="multipart/form-data" class="grid grid-cols-1 md:grid-cols-2 gap-6">
+  <form method="post" enctype="multipart/form-data" class="card overflow-hidden" novalidate>
     {% csrf_token %}
-    {{ form.non_field_errors }}
+    {% if form.non_field_errors %}
+    <div class="m-5 flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 p-3.5 text-sm text-rose-700 sm:m-6 dark:border-rose-500/20 dark:bg-rose-500/10 dark:text-rose-300" role="alert">
+      {% include "partials/icon.html" with name="alert" %}<div>{% for e in form.non_field_errors %}<p>{{ e }}</p>{% endfor %}</div>
+    </div>
+    {% endif %}
 
-    {% for field in form %}
-      <div class="flex flex-col">
-        <label class="mb-2 font-semibold text-gray-700 dark:text-gray-300">
-          {{ field.label }}
-        </label>
-        {{ field }}
-        {% if field.errors %}
-          <p class="text-red-500 text-sm mt-1">{{ field.errors|striptags }}</p>
-        {% endif %}
+    <section class="space-y-5 p-5 sm:p-6">
+      <h2 class="section-title">{% include "partials/icon.html" with name="user" cls="h-4 w-4 text-primary-500" %}Personal</h2>
+      <div class="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+        {% include "partials/form_field.html" with field=form.employee wrap="sm:col-span-2 lg:col-span-1" %}
+        {% include "partials/form_field.html" with field=form.designation %}
+        {% include "partials/form_field.html" with field=form.date_of_birth %}
+        {% include "partials/form_field.html" with field=form.gender %}
+        {% include "partials/form_field.html" with field=form.marital_status %}
+        {% include "partials/form_field.html" with field=form.national_id %}
       </div>
-    {% endfor %}
+    </section>
 
-    <!-- Action Buttons -->
-    <div class="md:col-span-2 flex justify-end gap-4 mt-8">
-      <a href="{% url 'userapp:employee_profile_list' %}" 
-         class="px-6 py-3 rounded-lg bg-gray-400 hover:bg-gray-500 text-white font-semibold shadow-lg transition duration-200">
-        ❌ Cancel
-      </a>
-      <button type="submit" 
-              class="px-6 py-3 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold shadow-lg transition duration-200">
-        ✅ Save
-      </button>
+    <section class="space-y-5 border-t border-slate-100 p-5 sm:p-6 dark:border-slate-800">
+      <h2 class="section-title">{% include "partials/icon.html" with name="mail" cls="h-4 w-4 text-primary-500" %}Contact</h2>
+      <div class="grid grid-cols-1 gap-5 sm:grid-cols-2">
+        {% include "partials/form_field.html" with field=form.mobile_number %}
+        {% include "partials/form_field.html" with field=form.email %}
+        {% include "partials/form_field.html" with field=form.address wrap="sm:col-span-2" %}
+        {% include "partials/form_field.html" with field=form.emergency_contact_name %}
+        {% include "partials/form_field.html" with field=form.emergency_contact_number %}
+      </div>
+    </section>
+
+    <section class="space-y-5 border-t border-slate-100 p-5 sm:p-6 dark:border-slate-800">
+      <h2 class="section-title">{% include "partials/icon.html" with name="building" cls="h-4 w-4 text-primary-500" %}Job</h2>
+      <div class="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+        {% include "partials/form_field.html" with field=form.employee_code %}
+        {% include "partials/form_field.html" with field=form.job_type %}
+        {% include "partials/form_field.html" with field=form.shift %}
+        {% include "partials/form_field.html" with field=form.join_date %}
+        {% include "partials/form_field.html" with field=form.leave_date %}
+      </div>
+    </section>
+
+    <section class="space-y-5 border-t border-slate-100 p-5 sm:p-6 dark:border-slate-800">
+      <h2 class="section-title">{% include "partials/icon.html" with name="money" cls="h-4 w-4 text-primary-500" %}Bank & tax</h2>
+      <div class="grid grid-cols-1 gap-5 sm:grid-cols-2">
+        {% include "partials/form_field.html" with field=form.bank_account %}
+        {% include "partials/form_field.html" with field=form.bank_name %}
+        {% include "partials/form_field.html" with field=form.branch_name %}
+        {% include "partials/form_field.html" with field=form.tax_id %}
+      </div>
+    </section>
+
+    <section class="space-y-5 border-t border-slate-100 p-5 sm:p-6 dark:border-slate-800">
+      <h2 class="section-title">{% include "partials/icon.html" with name="document" cls="h-4 w-4 text-primary-500" %}Photo & documents</h2>
+      <div class="grid grid-cols-1 gap-5 sm:grid-cols-2">
+        {% include "partials/form_field.html" with field=form.image %}
+        {% include "partials/form_field.html" with field=form.resume %}
+        {% include "partials/form_field.html" with field=form.offer_letter %}
+        {% include "partials/form_field.html" with field=form.joining_letter %}
+      </div>
+    </section>
+
+    <div class="flex flex-col-reverse gap-3 border-t border-slate-100 bg-slate-50/60 px-5 py-4 sm:flex-row sm:justify-end sm:px-6 dark:border-slate-800 dark:bg-slate-800/40">
+      <a href="{% url 'userapp:employee_profile_list' %}" class="btn-secondary">Cancel</a>
+      <button type="submit" class="btn-primary">{% include "partials/icon.html" with name="check-circle" cls="h-4 w-4" %}Save profile</button>
     </div>
   </form>
 </div>

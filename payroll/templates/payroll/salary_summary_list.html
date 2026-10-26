@@ -1,246 +1,251 @@
 {% extends 'base.html' %}
 {% block title %}Salary Summary{% endblock %}
 {% block content %}
-{% load custom_filters %}
+<div class="space-y-6">
 
-<div class="w-full px-2 sm:px-4 py-6 space-y-6 animate-in fade-in duration-500">
-
-  <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+  <div class="page-header">
     <div>
-        <h1 class="text-2xl font-bold text-gray-800 dark:text-white flex items-center gap-2">
-            <span class="p-2 bg-emerald-100 dark:bg-emerald-900 rounded-lg text-emerald-600">🧾</span>
-            Salary Summary
-        </h1>
-        <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">Monthly payroll breakdown and financial summary.</p>
+      <p class="eyebrow">Payroll</p>
+      <h1 class="page-title">Salary Summary</h1>
+      <p class="page-subtitle">{% if branch_name %}<span class="font-semibold text-slate-700 dark:text-slate-200">{{ branch_name }}</span> · {% endif %}Monthly payroll breakdown{% if selected_month %} for <span class="font-semibold text-slate-700 dark:text-slate-200">{{ selected_month }}</span>{% endif %}.</p>
     </div>
-
     {% if summaries %}
-    <a href="{% url 'payroll:salary_summary_pdf' %}?month={{ selected_month }}&department={{ selected_department_id }}&employee={{ selected_employee_id }}"
-       target="_blank"
-       class="inline-flex items-center gap-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl shadow-lg shadow-emerald-200 dark:shadow-none transition-all hover:-translate-y-0.5 active:scale-95">
-       <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-       Export PDF
+    <a href="{% url 'payroll:salary_summary_pdf' %}?month={{ selected_month }}{% if selected_department %}&department={{ selected_department }}{% endif %}{% if selected_employee %}&employee={{ selected_employee }}{% endif %}"
+       target="_blank" rel="noopener" class="btn-success self-start lg:self-auto">
+      {% include "partials/icon.html" with name="download" cls="h-4 w-4" %}Export PDF
     </a>
     {% endif %}
   </div>
 
+  {# ── মোট হিসাব ── #}
   {% if summaries %}
-  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-      <div class="bg-white dark:bg-gray-800 p-5 rounded-2xl shadow border-l-4 border-blue-500 dark:border-blue-400">
-          <div class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Total Base Salary</div>
-          <div class="text-2xl font-bold text-blue-600 dark:text-blue-400 tabular-nums">
-              ৳ {{ total_base_salary|floatformat:2 }}
-          </div>
+  <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+    <div class="stat-card">
+      <div class="flex items-start justify-between gap-3">
+        <div class="min-w-0"><p class="stat-label">Total Base Salary</p><p class="stat-value text-2xl">৳{{ total_base_salary|floatformat:"0g" }}</p></div>
+        <span class="stat-icon bg-primary-50 text-primary-600 dark:bg-primary-500/10 dark:text-primary-400">{% include "partials/icon.html" with name="money" %}</span>
       </div>
-
-      <div class="bg-white dark:bg-gray-800 p-5 rounded-2xl shadow border-l-4 border-indigo-500 dark:border-indigo-400">
-          <div class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Total Final Salary</div>
-          <div class="text-2xl font-bold text-indigo-600 dark:text-indigo-400 tabular-nums">
-              ৳ {{ total_final_salary|floatformat:2 }}
-          </div>
+      <p class="mt-3 text-xs text-slate-500">{{ summaries|length }} employee{{ summaries|length|pluralize }}</p>
+    </div>
+    <div class="stat-card">
+      <div class="flex items-start justify-between gap-3">
+        <div class="min-w-0"><p class="stat-label">Total Final Salary</p><p class="stat-value text-2xl text-emerald-600 dark:text-emerald-400">৳{{ total_final_salary|floatformat:"0g" }}</p></div>
+        <span class="stat-icon bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400">{% include "partials/icon.html" with name="check-circle" %}</span>
       </div>
-
-      <div class="bg-white dark:bg-gray-800 p-5 rounded-2xl shadow border-l-4 border-rose-500 dark:border-rose-400">
-          <div class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Total Payable Cash</div>
-          <div class="text-2xl font-bold text-rose-600 dark:text-rose-400 tabular-nums">
-              ৳ {{ total_payable_cash|floatformat:2 }}
-          </div>
+      <p class="mt-3 text-xs text-slate-500">Earned ৳{{ total_earned|floatformat:"0g" }} + bonus ৳{{ total_bonus|floatformat:"0g" }}</p>
+    </div>
+    <div class="stat-card">
+      <div class="flex items-start justify-between gap-3">
+        <div class="min-w-0"><p class="stat-label">Payable Cash</p><p class="stat-value text-2xl text-rose-600 dark:text-rose-400">৳{{ total_payable_cash|floatformat:"0g" }}</p></div>
+        <span class="stat-icon bg-rose-50 text-rose-600 dark:bg-rose-500/10 dark:text-rose-400">{% include "partials/icon.html" with name="inbox" %}</span>
       </div>
-
-      <div class="bg-white dark:bg-gray-800 p-5 rounded-2xl shadow border-l-4 
-                  {% if total_salary_difference < 0 %} border-orange-500 {% else %} border-green-500 {% endif %}">
-          <div class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Net Difference</div>
-          <div class="text-2xl font-bold tabular-nums
-                      {% if total_salary_difference < 0 %} text-orange-600 {% else %} text-green-600 {% endif %}">
-              ৳ {{ total_salary_difference|floatformat:2 }}
-          </div>
+      <p class="mt-3 text-xs text-slate-500">Bank ৳{{ total_bank_transfer|floatformat:"0g" }}{% if rounding_enabled and total_rounding_adjustment %} · rounded +৳{{ total_rounding_adjustment|floatformat:"0g" }}{% endif %}</p>
+    </div>
+    <div class="stat-card">
+      <div class="flex items-start justify-between gap-3">
+        <div class="min-w-0">
+          <p class="stat-label">Net Difference</p>
+          <p class="stat-value text-2xl {% if total_salary_difference < 0 %}text-amber-600 dark:text-amber-400{% else %}text-emerald-600 dark:text-emerald-400{% endif %}">{% if total_salary_difference < 0 %}−{% endif %}৳{{ total_salary_difference|floatformat:"0g"|cut:"-" }}</p>
+        </div>
+        <span class="stat-icon {% if total_salary_difference < 0 %}bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-400{% else %}bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400{% endif %}">{% include "partials/icon.html" with name="trend" %}</span>
       </div>
+      <p class="mt-3 text-xs text-slate-500">Final vs. base salary</p>
+    </div>
   </div>
   {% endif %}
 
-  <div class="bg-white dark:bg-gray-800 p-5 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
-    <form method="get" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 items-end">
+  {# ── ফিল্টার + সেটিং ── #}
+  <div class="grid grid-cols-1 items-start gap-4 xl:grid-cols-3">
+    <div class="card p-4 sm:p-5 xl:col-span-2">
+      <form method="get" class="grid grid-cols-1 items-end gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <div>
-            <label class="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1.5">Select Month</label>
-            <input type="month" name="month" value="{{ selected_month }}"
-                   class="w-full bg-gray-50 dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-gray-800 dark:text-gray-200 text-sm px-3 py-2.5 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all">
+          <label class="form-label" for="s-month">Month</label>
+          <input id="s-month" type="month" name="month" value="{{ selected_month|default:'' }}" class="form-input" required>
         </div>
-
         <div>
-            <label class="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1.5">Department</label>
-            <select name="department"
-                    class="w-full bg-gray-50 dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-gray-800 dark:text-gray-200 text-sm px-3 py-2.5 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none appearance-none transition-all">
-                <option value="">All Departments</option>
-                {% for dept in departments %}
-                    <option value="{{ dept.id }}" {% if dept.id|stringformat:"s" == selected_department_id %}selected{% endif %}>{{ dept.name }}</option>
-                {% endfor %}
-            </select>
+          <label class="form-label" for="s-dept">Department</label>
+          <select id="s-dept" name="department" class="form-select">
+            <option value="">All departments</option>
+            {% for dept in departments %}
+              <option value="{{ dept.id }}" {% if selected_department == dept.id %}selected{% endif %}>{{ dept.name }}</option>
+            {% endfor %}
+          </select>
         </div>
-
         <div>
-            <label class="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1.5">Employee</label>
-            <select name="employee"
-                    class="w-full bg-gray-50 dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-gray-800 dark:text-gray-200 text-sm px-3 py-2.5 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none appearance-none transition-all">
-                <option value="">All Employees</option>
-                {% for emp in employees %}
-                    <option value="{{ emp.id }}" {% if emp.id|stringformat:"s" == selected_employee_id %}selected{% endif %}>{{ emp.name }}</option>
-                {% endfor %}
-            </select>
+          <label class="form-label" for="s-emp">Employee</label>
+          <select id="s-emp" name="employee" class="form-select">
+            <option value="">All employees</option>
+            {% for emp in employees %}
+              <option value="{{ emp.id }}" {% if selected_employee == emp.id %}selected{% endif %}>{{ emp.name }}</option>
+            {% endfor %}
+          </select>
         </div>
+        <button type="submit" class="btn-primary">{% include "partials/icon.html" with name="chart" cls="h-4 w-4" %}Show report</button>
+      </form>
+    </div>
 
-        <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm px-4 py-2.5 rounded-xl shadow-md transition-all">
-            Show Report
-        </button>
-    </form>
+    <div class="card flex flex-col justify-between gap-3 p-4 sm:p-5">
+      <div class="space-y-2">
+        <p class="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-white">{% include "partials/icon.html" with name="cog" cls="h-4 w-4 text-slate-400" %}বেতন সেটিং</p>
+        <div class="flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+          <span>ফিগার মিল:</span>
+          {% if rounding_enabled %}<span class="badge-success">চালু</span>{% else %}<span class="badge-neutral">বন্ধ</span>{% endif %}
+        </div>
+        <p class="text-xs leading-relaxed text-slate-500 dark:text-slate-400">
+          ওভারটাইম: {{ company.get_ot_calculation_display }} · ×{{ ot_settings.ot_multiplier|floatformat:"-2" }}
+          {% if ot_settings.ot_min_minutes %} · ন্যূনতম {{ ot_settings.ot_min_minutes }} মিনিট{% endif %}
+          {% if ot_settings.holiday_ot_multiplier is not None %} · ছুটির দিনে ×{{ ot_settings.holiday_ot_multiplier|floatformat:"-2" }}{% endif %}
+        </p>
+      </div>
+      {% if can_change_settings %}
+      <a href="{% url 'payroll:payroll_settings' %}?next={{ request.get_full_path|urlencode }}" class="btn-secondary btn-sm self-start">সেটিং বদলান</a>
+      {% endif %}
+    </div>
   </div>
 
   {% if summaries %}
-  <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-xl border border-gray-100 dark:border-gray-700 overflow-hidden relative">
-    <div class="overflow-x-auto min-h-[500px] pb-2">
-      <table class="w-full text-xs text-left border-collapse whitespace-nowrap">
-        <thead class="bg-gray-50 dark:bg-gray-700/50 text-gray-500 dark:text-gray-400 uppercase font-bold tracking-wider sticky top-0 z-10 shadow-sm">
-          <tr>
-            <th class="px-4 py-4 w-12 text-center sticky left-0 z-20 bg-gray-50 dark:bg-gray-800">#</th>
-            <th class="px-4 py-4 min-w-[180px] sticky left-12 z-20 bg-gray-50 dark:bg-gray-800 shadow-[4px_0_12px_-4px_rgba(0,0,0,0.1)]">Employee</th>
-            
-            <th class="px-4 py-4 text-right bg-blue-50/50 dark:bg-blue-900/10 text-blue-600">Base Salary</th>
-            <th class="px-4 py-4 text-right bg-blue-50/50 dark:bg-blue-900/10 text-blue-600">Bank Trans.</th>
-            <th class="px-4 py-4 text-right bg-blue-50/50 dark:bg-blue-900/10 text-blue-600">Cash Amt</th>
 
-            <th class="px-3 py-4 text-center">✅ Pres</th>
-            <th class="px-3 py-4 text-center">📅 Leave</th>
-            <th class="px-3 py-4 text-center">❌ Abs</th>
-            <th class="px-3 py-4 text-center">🛌 Off</th>
-            <th class="px-3 py-4 text-center">🏖 Hol</th>
-            <th class="px-3 py-4 text-center text-amber-600">🕒 Late</th>
-            <th class="px-3 py-4 text-center text-purple-600">Over</th>
-            
-            <th class="px-4 py-4 text-center bg-sky-50 dark:bg-sky-900/10 text-sky-700">Expected</th>
-            <th class="px-4 py-4 text-center font-bold">Total Work</th>
-            <th class="px-4 py-4 text-center bg-orange-50 dark:bg-orange-900/10 text-orange-700">Time Diff</th>
+  {# ── মোবাইল: প্রতি কর্মচারীর কার্ড ── #}
+  <div class="space-y-3 md:hidden">
+    {% for s in summaries %}
+    <details class="card group overflow-hidden">
+      <summary class="flex cursor-pointer list-none items-start justify-between gap-3 p-4 [&::-webkit-details-marker]:hidden">
+        <div class="flex min-w-0 items-center gap-3">
+          <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary-50 text-sm font-bold text-primary-700 dark:bg-primary-500/10 dark:text-primary-300">{{ s.employee.name|slice:":1"|upper }}</span>
+          <div class="min-w-0">
+            <p class="truncate font-semibold text-slate-900 dark:text-white">{{ s.employee.name }}</p>
+            <p class="truncate text-xs text-slate-500">{{ s.employee.department.name|default:"—" }}</p>
+          </div>
+        </div>
+        <div class="shrink-0 text-right">
+          <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Payable</p>
+          <p class="text-lg font-bold tabular-nums text-rose-600 dark:text-rose-400">৳{{ s.payable_cash|floatformat:"0g" }}</p>
+        </div>
+      </summary>
+      <div class="grid grid-cols-3 gap-2 border-t border-slate-100 px-4 py-3 text-center dark:border-slate-800">
+        <div><p class="text-[11px] text-slate-400">Base</p><p class="font-semibold tabular-nums">৳{{ s.base_salary|floatformat:"0g" }}</p></div>
+        <div><p class="text-[11px] text-slate-400">Final</p><p class="font-semibold tabular-nums text-emerald-600 dark:text-emerald-400">৳{{ s.final_salary|floatformat:"0g" }}</p></div>
+        <div><p class="text-[11px] text-slate-400">Diff</p><p class="font-semibold tabular-nums {% if s.salary_difference < 0 %}text-rose-600{% else %}text-emerald-600{% endif %}">{{ s.salary_difference|floatformat:"0g" }}</p></div>
+      </div>
+      <div class="flex flex-wrap gap-1.5 px-4 pb-3">
+        <span class="badge-success">{{ s.present_days }} present</span>
+        {% if s.absent_days %}<span class="badge-danger">{{ s.absent_days }} absent</span>{% endif %}
+        {% if s.leave_days %}<span class="badge-info">{{ s.leave_days }} leave</span>{% endif %}
+        {% if s.late_time != "00:00" %}<span class="badge-warning">Late {{ s.late_time }}</span>{% endif %}
+        {% if s.over_time != "00:00" %}<span class="badge-purple">OT {{ s.over_time }}</span>{% endif %}
+      </div>
+      <div class="flex items-center justify-center gap-1 border-t border-slate-100 py-2 text-xs font-medium text-primary-600 dark:border-slate-800 dark:text-primary-400">
+        <span class="group-open:hidden">Show details</span><span class="hidden group-open:inline">Hide details</span>
+        <span class="transition-transform duration-300 group-open:rotate-180">{% include "partials/icon.html" with name="chevron-down" cls="h-4 w-4" %}</span>
+      </div>
+      <dl class="grid grid-cols-2 gap-x-4 gap-y-2 border-t border-slate-100 bg-slate-50/60 px-4 py-3 text-sm dark:border-slate-800 dark:bg-slate-800/40">
+        <dt class="text-slate-500">Bank</dt><dd class="text-right tabular-nums">৳{{ s.bank_transfer|floatformat:"0g" }}</dd>
+        <dt class="text-slate-500">Cash (base)</dt><dd class="text-right tabular-nums">৳{{ s.cash_amount|floatformat:"0g" }}</dd>
+        <dt class="text-slate-500">Weekly off / Holiday</dt><dd class="text-right tabular-nums">{{ s.weekly_off_days }} / {{ s.holiday_days }}</dd>
+        <dt class="text-slate-500">Expected hours</dt><dd class="text-right font-mono text-xs tabular-nums">{{ s.expected_hours }}</dd>
+        <dt class="text-slate-500">Worked hours</dt><dd class="text-right font-mono text-xs tabular-nums">{{ s.total_work_hours }}</dd>
+        <dt class="text-slate-500">Time diff</dt><dd class="text-right font-mono text-xs tabular-nums {% if s.time_difference_val < 0 %}text-rose-600{% else %}text-emerald-600{% endif %}">{{ s.time_difference_str }}</dd>
+        <dt class="text-slate-500">Earned</dt><dd class="text-right tabular-nums">৳{{ s.earned_salary|floatformat:"0g" }}</dd>
+        <dt class="text-slate-500">Bonus</dt><dd class="text-right tabular-nums">{% if s.bonus_amount %}৳{{ s.bonus_amount|floatformat:"0g" }}{% else %}—{% endif %}</dd>
+        {% if s.rounding_adjustment %}<dt class="text-slate-500">Rounded (from ৳{{ s.payable_cash_raw|floatformat:2 }})</dt><dd class="text-right tabular-nums">+{{ s.rounding_adjustment|floatformat:2 }}</dd>{% endif %}
+      </dl>
+    </details>
+    {% endfor %}
 
-            <th class="px-4 py-4 text-right text-indigo-600">Earned</th>
-            <th class="px-4 py-4 text-right text-indigo-600">Bonus</th>
-            <th class="px-4 py-4 text-right text-emerald-600 font-extrabold bg-emerald-50/50 dark:bg-emerald-900/10">Final Salary</th>
-            <th class="px-4 py-4 text-right text-rose-600 font-extrabold bg-rose-50/50 dark:bg-rose-900/10">Payable Cash</th>
-            
-            <th class="px-4 py-4 text-right bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300">Sal. Diff</th>
+    <div class="card grid grid-cols-2 gap-3 p-4 text-sm">
+      <div><p class="text-xs text-slate-500">Total final</p><p class="text-lg font-bold tabular-nums text-emerald-600 dark:text-emerald-400">৳{{ total_final_salary|floatformat:"0g" }}</p></div>
+      <div class="text-right"><p class="text-xs text-slate-500">Total payable cash</p><p class="text-lg font-bold tabular-nums text-rose-600 dark:text-rose-400">৳{{ total_payable_cash|floatformat:"0g" }}</p></div>
+    </div>
+  </div>
+
+  {# ── ট্যাবলেট/ডেস্কটপ: পূর্ণ টেবিল (ছোট স্ক্রিনে পাশে স্ক্রল, নাম কলাম স্থির) ── #}
+  <div class="card hidden overflow-hidden md:block">
+    <div class="overflow-x-auto">
+      <table class="w-full min-w-[1280px] border-separate border-spacing-0 text-left text-xs">
+        <thead class="text-[10.5px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+          <tr class="[&>th]:whitespace-nowrap [&>th]:border-b [&>th]:border-slate-200 [&>th]:bg-slate-50 [&>th]:px-3 [&>th]:py-3 dark:[&>th]:border-slate-800 dark:[&>th]:bg-slate-800">
+            <th class="sticky left-0 z-20 w-10 text-center">#</th>
+            <th class="sticky left-10 z-20 min-w-[12rem] shadow-[6px_0_8px_-6px_rgba(15,23,42,0.15)]">Employee</th>
+            <th class="text-right">Base</th>
+            <th class="text-right">Bank</th>
+            <th class="text-right">Cash</th>
+            <th class="text-center" title="Present">Pres.</th>
+            <th class="text-center" title="Leave">Leave</th>
+            <th class="text-center" title="Absent">Abs.</th>
+            <th class="text-center" title="Weekly off">Off</th>
+            <th class="text-center" title="Public holiday">Hol.</th>
+            <th class="text-center" title="Late time">Late</th>
+            <th class="text-center" title="Overtime">OT</th>
+            <th class="text-center">Expected</th>
+            <th class="text-center">Worked</th>
+            <th class="text-center">Diff</th>
+            <th class="text-right">Earned</th>
+            <th class="text-right">Bonus</th>
+            <th class="text-right !bg-emerald-50 !text-emerald-700 dark:!bg-emerald-500/10 dark:!text-emerald-300">Final</th>
+            <th class="text-right !bg-rose-50 !text-rose-700 dark:!bg-rose-500/10 dark:!text-rose-300">Payable</th>
+            <th class="text-right">± Base</th>
           </tr>
         </thead>
-        <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
+        <tbody class="tabular-nums text-slate-700 dark:text-slate-300">
           {% for s in summaries %}
-          <tr class="group hover:bg-gray-50/80 dark:hover:bg-gray-900/40 transition-colors">
-            <td class="px-4 py-4 text-center text-gray-400 font-mono sticky left-0 z-10 bg-white dark:bg-gray-800 group-hover:bg-gray-50 dark:group-hover:bg-gray-900">{{ forloop.counter }}</td>
-            <td class="px-4 py-4 font-bold text-gray-800 dark:text-gray-100 sticky left-12 z-10 bg-white dark:bg-gray-800 group-hover:bg-gray-50 dark:group-hover:bg-gray-900 shadow-[4px_0_12px_-4px_rgba(0,0,0,0.05)]">
-                {{ s.employee.name }}
+          <tr class="group [&>td]:whitespace-nowrap [&>td]:border-b [&>td]:border-slate-100 [&>td]:px-3 [&>td]:py-3 [&>td]:transition-colors [&>td]:duration-200 hover:[&>td]:bg-gray-50 dark:[&>td]:border-slate-800 dark:hover:[&>td]:bg-slate-800/60">
+            <td class="sticky left-0 z-10 bg-white text-center text-slate-400 dark:bg-slate-900">{{ forloop.counter }}</td>
+            <td class="sticky left-10 z-10 max-w-[14rem] bg-white shadow-[6px_0_8px_-6px_rgba(15,23,42,0.15)] dark:bg-slate-900" title="{{ s.employee.name }}">
+              <p class="truncate text-sm font-semibold text-slate-900 dark:text-white">{{ s.employee.name }}</p>
+              <p class="truncate text-[11px] text-slate-400">{{ s.employee.department.name|default:"—" }}</p>
             </td>
-
-            <td class="px-4 py-4 text-right font-mono text-gray-600 dark:text-gray-300 bg-blue-50/10">৳ {{ s.base_salary|floatformat:2 }}</td>
-            <td class="px-4 py-4 text-right font-mono text-gray-600 dark:text-gray-300 bg-blue-50/10">৳ {{ s.bank_transfer|floatformat:2 }}</td>
-            <td class="px-4 py-4 text-right font-mono text-gray-600 dark:text-gray-300 bg-blue-50/10">৳ {{ s.cash_amount|floatformat:2 }}</td>
-
-            <td class="px-3 py-4 text-center font-bold text-emerald-600">{{ s.present_days }}</td>
-            <td class="px-3 py-4 text-center text-blue-500">{{ s.leave_days }}</td>
-            <td class="px-3 py-4 text-center font-bold text-rose-500">{{ s.absent_days }}</td>
-            <td class="px-3 py-4 text-center text-gray-400">{{ s.weekly_off_days }}</td>
-            <td class="px-3 py-4 text-center text-gray-400">{{ s.holiday_days }}</td>
-            <td class="px-3 py-4 text-center font-mono text-amber-600">{{ s.late_time }}</td>
-            <td class="px-3 py-4 text-center font-mono text-purple-600">{{ s.over_time|format_timedelta }}</td>
-            
-            <td class="px-4 py-4 text-center font-mono text-sky-600 bg-sky-50/30">{{ s.expected_hours }}</td>
-            <td class="px-4 py-4 text-center font-mono font-bold text-gray-700 dark:text-gray-200">{{ s.total_work_hours }}</td>
-            
-            <td class="px-4 py-4 text-center font-mono font-bold bg-orange-50/30
-                       {% if s.time_difference_val < 0 %} text-rose-600 {% else %} text-emerald-600 {% endif %}">
-                {{ s.time_difference_str }}
+            <td class="text-right">{{ s.base_salary|floatformat:"0g" }}</td>
+            <td class="text-right">{{ s.bank_transfer|floatformat:"0g" }}</td>
+            <td class="text-right">{{ s.cash_amount|floatformat:"0g" }}</td>
+            <td class="text-center font-semibold text-emerald-600 dark:text-emerald-400">{{ s.present_days }}</td>
+            <td class="text-center text-blue-600 dark:text-blue-400">{{ s.leave_days }}</td>
+            <td class="text-center font-semibold {% if s.absent_days %}text-rose-600 dark:text-rose-400{% else %}text-slate-400{% endif %}">{{ s.absent_days }}</td>
+            <td class="text-center text-slate-400">{{ s.weekly_off_days }}</td>
+            <td class="text-center text-slate-400">{{ s.holiday_days }}</td>
+            <td class="text-center font-mono {% if s.late_time != '00:00' %}text-amber-600 dark:text-amber-400{% else %}text-slate-400{% endif %}">{{ s.late_time }}</td>
+            <td class="text-center font-mono {% if s.over_time != '00:00' %}text-violet-600 dark:text-violet-400{% else %}text-slate-400{% endif %}">{{ s.over_time }}</td>
+            <td class="text-center font-mono text-slate-500">{{ s.expected_hours }}</td>
+            <td class="text-center font-mono font-semibold">{{ s.total_work_hours }}</td>
+            <td class="text-center font-mono font-semibold {% if s.time_difference_val < 0 %}text-rose-600 dark:text-rose-400{% else %}text-emerald-600 dark:text-emerald-400{% endif %}">{{ s.time_difference_str }}</td>
+            <td class="text-right">{{ s.earned_salary|floatformat:"0g" }}</td>
+            <td class="text-right">{% if s.bonus_amount %}<span class="badge-warning px-2 py-0.5">{{ s.bonus_amount|floatformat:"0g" }}</span>{% else %}<span class="text-slate-300 dark:text-slate-600">—</span>{% endif %}</td>
+            <td class="bg-emerald-50/50 text-right text-sm font-bold text-emerald-700 dark:bg-emerald-500/5 dark:text-emerald-300">{{ s.final_salary|floatformat:"0g" }}</td>
+            <td class="bg-rose-50/50 text-right text-sm font-bold text-rose-700 dark:bg-rose-500/5 dark:text-rose-300" {% if s.rounding_adjustment %}title="আসল: {{ s.payable_cash_raw|floatformat:2 }}"{% endif %}>
+              {{ s.payable_cash|floatformat:"0g" }}
+              {% if s.rounding_adjustment %}<span class="block text-[10px] font-normal text-slate-400">+{{ s.rounding_adjustment|floatformat:2 }}</span>{% endif %}
             </td>
-
-            <td class="px-4 py-4 text-right font-mono font-semibold text-indigo-600">৳ {{ s.earned_salary|floatformat:2 }}</td>
-            <td class="px-4 py-4 text-right font-mono">
-                {% if s.bonus_amount and s.bonus_amount|floatformat:2 != "0.00" %}
-                    <span class="bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 px-2 py-0.5 rounded font-bold">
-                        ৳ {{ s.bonus_amount|floatformat:2 }}
-                    </span>
-                {% else %}
-                    <span class="text-gray-300">-</span>
-                {% endif %}
-            </td>
-            <td class="px-4 py-4 text-right font-mono font-bold text-emerald-600 bg-emerald-50/30 dark:bg-emerald-900/10">৳ {{ s.final_salary|floatformat:2 }}</td>
-            <td class="px-4 py-4 text-right font-mono font-bold text-rose-600 bg-rose-50/30 dark:bg-rose-900/10">৳ {{ s.payable_cash|floatformat:2 }}</td>
-            
-            <td class="px-4 py-4 text-right font-mono font-bold bg-gray-50 dark:bg-gray-800
-                       {% if s.salary_difference < 0 %} text-rose-600 {% else %} text-emerald-600 {% endif %}">
-                ৳ {{ s.salary_difference|floatformat:2 }}
-            </td>
+            <td class="text-right font-semibold {% if s.salary_difference < 0 %}text-rose-600 dark:text-rose-400{% else %}text-emerald-600 dark:text-emerald-400{% endif %}">{{ s.salary_difference|floatformat:"0g" }}</td>
           </tr>
           {% endfor %}
         </tbody>
-        
-        <tfoot class="bg-gray-100 dark:bg-gray-800 text-xs border-t-2 border-gray-300 dark:border-gray-600 font-bold sticky bottom-0 z-20 shadow-[0_-4px_12px_-4px_rgba(0,0,0,0.1)]">
-            <tr>
-                <td colspan="2" class="px-4 py-4 text-right text-gray-900 dark:text-white uppercase tracking-wider sticky left-0 bg-gray-100 dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700">
-                    Grand Total:
-                </td>
-
-                <td class="px-4 py-4 text-right font-mono text-blue-700 dark:text-blue-400 bg-blue-50/20">
-                    ৳ {{ total_base_salary|floatformat:2 }}
-                </td>
-
-                <td class="px-4 py-4 text-right font-mono text-blue-700 dark:text-blue-400 bg-blue-50/20">
-                    ৳ {{ total_bank_transfer|floatformat:2 }}
-                </td>
-
-                <td class="px-4 py-4 text-right font-mono text-blue-700 dark:text-blue-400 bg-blue-50/20">
-                    ৳ {{ total_payable_cash|floatformat:2 }}
-                </td>
-                
-                <td colspan="10" class="px-4 py-4 text-center text-gray-400 italic font-normal bg-gray-50 dark:bg-gray-800/50">
-                    --
-                </td>
-
-                <td class="px-4 py-4 text-right text-indigo-600">
-                    ৳ {{ total_earned|floatformat:2 }}
-                </td>
-                
-                <td class="px-4 py-4 text-right text-amber-600">
-                    ৳ {{ total_bonus|floatformat:2 }}
-                </td>
-
-                <td class="px-4 py-4 text-right font-mono text-white bg-emerald-600">
-                    ৳ {{ total_final_salary|floatformat:2 }}
-                </td>
-
-                <td class="px-4 py-4 text-right font-mono text-white bg-rose-600">
-                    ৳ {{ total_payable_cash|floatformat:2 }}
-                </td>
-                
-                <td class="px-4 py-4 text-right font-mono font-bold
-                           {% if total_salary_difference < 0 %} text-rose-600 {% else %} text-emerald-600 {% endif %}">
-                    ৳ {{ total_salary_difference|floatformat:2 }}
-                </td>
-            </tr>
+        <tfoot class="tabular-nums text-sm font-bold text-slate-900 dark:text-white">
+          <tr class="[&>td]:whitespace-nowrap [&>td]:bg-slate-50 [&>td]:px-3 [&>td]:py-3.5 dark:[&>td]:bg-slate-800">
+            <td colspan="2" class="sticky left-0 z-10 text-right text-xs uppercase tracking-wider text-slate-500 shadow-[6px_0_8px_-6px_rgba(15,23,42,0.15)]">Total</td>
+            <td class="text-right">{{ total_base_salary|floatformat:"0g" }}</td>
+            <td class="text-right">{{ total_bank_transfer|floatformat:"0g" }}</td>
+            <td class="text-right">{{ total_cash_amount|floatformat:"0g" }}</td>
+            <td colspan="10"></td>
+            <td class="text-right">{{ total_earned|floatformat:"0g" }}</td>
+            <td class="text-right">{{ total_bonus|floatformat:"0g" }}</td>
+            <td class="!bg-emerald-50 text-right text-emerald-700 dark:!bg-emerald-500/10 dark:text-emerald-300">{{ total_final_salary|floatformat:"0g" }}</td>
+            <td class="!bg-rose-50 text-right text-rose-700 dark:!bg-rose-500/10 dark:text-rose-300">
+              {{ total_payable_cash|floatformat:"0g" }}
+              {% if rounding_enabled and total_rounding_adjustment %}<span class="block text-[10px] font-normal text-slate-500">+{{ total_rounding_adjustment|floatformat:2 }}</span>{% endif %}
+            </td>
+            <td class="text-right {% if total_salary_difference < 0 %}text-rose-600 dark:text-rose-400{% else %}text-emerald-600 dark:text-emerald-400{% endif %}">{{ total_salary_difference|floatformat:"0g" }}</td>
+          </tr>
         </tfoot>
       </table>
     </div>
   </div>
+
   {% else %}
-  <div class="flex flex-col items-center justify-center py-20 bg-white dark:bg-gray-800 rounded-2xl shadow border border-gray-100 dark:border-gray-700">
-      <div class="p-4 bg-gray-50 dark:bg-gray-700 rounded-full mb-4">
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-      </div>
-      <h3 class="text-lg font-bold text-gray-800 dark:text-gray-200">No Salary Records Found</h3>
-      <p class="text-sm text-gray-500">Please select a different month or check employee data.</p>
+  <div class="card flex flex-col items-center justify-center gap-2 px-6 py-16 text-center">
+    <span class="stat-icon mb-2 bg-slate-100 text-slate-400 dark:bg-slate-800">{% include "partials/icon.html" with name="money" %}</span>
+    <h3 class="text-base font-semibold text-slate-900 dark:text-white">{% if selected_month %}No salary records for this month{% else %}Select a month to generate the report{% endif %}</h3>
+    <p class="max-w-sm text-sm text-slate-500">{% if selected_month %}Make sure employees have a base salary set, or try a different month or filter.{% else %}Choose a month above and press <span class="font-semibold">Show report</span>.{% endif %}</p>
   </div>
   {% endif %}
 
 </div>
-
-<style>
-    /* Sticky Column Shadow Logic */
-    thead th:nth-child(2), tbody td:nth-child(2) {
-        box-shadow: 4px 0 8px -4px rgba(0,0,0,0.05);
-        clip-path: inset(0px -10px 0px 0px);
-    }
-</style>
-
 {% endblock content %}

@@ -1,0 +1,93 @@
+{% extends "pdf/base.html" %}
+{% block title %}Attendance Register{% endblock %}
+{% block orientation %}landscape{% endblock %}
+{% block footer_title %}Attendance Register {{ start_date|date:"d M" }} – {{ end_date|date:"d M Y" }}{% endblock %}
+{% block eyebrow %}Attendance{% endblock %}
+{% block heading %}Attendance Register{% endblock %}
+{% block extra_css %}
+  table.reg { width: 100%; border-collapse: collapse; table-layout: fixed; margin-bottom: 8pt; }
+  .reg thead { display: table-header-group; }
+  .reg th { background: #f1f5f9; color: #475569; font-size: 6pt; font-weight: 600; padding: 3pt 0; border-bottom: 0.9pt solid #cbd5e1; text-align: center; }
+  .reg th.emp { text-align: left; padding-left: 5pt; width: 42mm; }
+  .reg th .dn { display: block; font-size: 5.2pt; font-weight: 500; color: #94a3b8; text-transform: uppercase; }
+  .reg th.tot { background: #e2e8f0; color: #334155; width: 9.5mm; }
+  .reg th.tot.w { width: 13mm; }
+  .reg td { border-bottom: 0.5pt solid #e5e9f0; border-left: 0.4pt solid #eef1f5; text-align: center; font-size: 6.6pt; font-weight: 700; padding: 3.2pt 0; }
+  .reg td.emp { text-align: left; padding: 2.5pt 5pt; border-left: 0; font-weight: 600; font-size: 7.2pt; color: #0f172a; white-space: nowrap; overflow: hidden; }
+  .reg td.emp .sub { font-weight: 400; font-size: 5.8pt; }
+  .reg tbody tr:nth-child(even) td { background: #fafbfd; }
+  .reg tr { page-break-inside: avoid; }
+  .reg td.tot { background: #f8fafc; font-weight: 700; color: #0f172a; font-size: 7pt; border-left: 0.75pt solid #e2e8f0; }
+  .reg td.tot.w { font-size: 6.6pt; font-weight: 600; }
+  .reg th.off, .reg td.off { background: #f5f3ff !important; }
+  .c-p { color: #047857; } .c-pl { color: #b45309; } .c-ph { color: #7e22ce; }
+  .c-a { color: #be123c; } .c-l { color: #1d4ed8; } .c-h { color: #7e22ce; } .c-w { color: #94a3b8; font-weight: 500; } .c-x { color: #cbd5e1; }
+  .legend { font-size: 6.8pt; color: #64748b; margin: 2pt 0 8pt; }
+  .legend b { display: inline-block; min-width: 8pt; text-align: center; }
+  .legend span { margin-right: 10pt; }
+  .blockhead { font-size: 8pt; font-weight: 700; color: #0f172a; border-left: 2.5pt solid #4f46e5; padding-left: 6pt; margin: 4pt 0 4pt; page-break-after: avoid; }
+{% endblock %}
+
+{% block meta %}
+<table class="meta"><tr>
+  <td><div class="k">Period</div><div class="v">{{ start_date|date:"d M Y" }} – {{ end_date|date:"d M Y" }}</div></td>
+  <td><div class="k">Days</div><div class="v">{{ period_days }}</div></td>
+  <td><div class="k">Branch</div><div class="v">{{ branch_name }}</div></td>
+  <td><div class="k">Department</div><div class="v">{{ department_name|default:"All departments" }}</div></td>
+  <td><div class="k">Employee</div><div class="v">{{ employee_name|default:"All employees" }}</div></td>
+</tr></table>
+{% endblock %}
+
+{% block kpis %}
+<table class="kpis"><tr>
+  <td class="kw"><div class="kpi brand"><div class="k">Employees</div><div class="v">{{ employee_count }}</div></div></td>
+  <td class="kw"><div class="kpi good"><div class="k">Present days</div><div class="v">{{ totals.present|default:0 }}</div></div></td>
+  <td class="kw"><div class="kpi warn"><div class="k">Late days</div><div class="v">{{ totals.late|default:0 }}</div></div></td>
+  <td class="kw"><div class="kpi bad"><div class="k">Absent days</div><div class="v">{{ totals.absent|default:0 }}</div></div></td>
+  <td class="kw"><div class="kpi"><div class="k">Leave days</div><div class="v">{{ totals.leave|default:0 }}</div></div></td>
+  <td class="kw"><div class="kpi {% if attendance_rate < 80 %}warn{% else %}good{% endif %}"><div class="k">Attendance rate</div><div class="v">{{ attendance_rate }}%</div><div class="s">present ÷ (present + absent)</div></div></td>
+</tr></table>
+<div class="legend">
+  <span><b class="c-p">P</b> Present</span><span><b class="c-pl">P</b> Present, late</span><span><b class="c-ph">P</b> Worked on off day / holiday</span>
+  <span><b class="c-a">A</b> Absent</span><span><b class="c-l">L</b> Leave</span><span><b class="c-h">H</b> Public holiday</span>
+  <span><b class="c-w">W</b> Weekly off</span><span><b class="c-x">·</b> In another branch</span>
+</div>
+{% endblock %}
+
+{% block content %}
+{% for block in blocks %}
+{% if blocks|length > 1 %}<div class="blockhead">{{ block.dates.0|date:"d M Y" }} – {{ block.dates|last|date:"d M Y" }}</div>{% endif %}
+<table class="reg">
+  <thead>
+    <tr>
+      <th class="emp">Employee</th>
+      {% for d in block.dates %}<th>{{ d|date:"j" }}<span class="dn">{{ d|date:"D"|slice:":2" }}</span></th>{% endfor %}
+      <th class="tot">P</th><th class="tot">Late</th><th class="tot">A</th><th class="tot">L</th><th class="tot">Off</th><th class="tot w">Worked</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for r in block.rows %}
+    <tr>
+      <td class="emp">{{ r.employee.name }}<div class="sub muted">{{ r.employee.department.name|default:"—" }}</div></td>
+      {% for code, cls in r.cells %}<td class="{{ cls }}">{{ code }}</td>{% endfor %}
+      <td class="tot c-p">{{ r.present }}</td>
+      <td class="tot {% if r.late %}c-pl{% else %}c-x{% endif %}">{{ r.late }}</td>
+      <td class="tot {% if r.absent %}c-a{% else %}c-x{% endif %}">{{ r.absent }}</td>
+      <td class="tot {% if r.leave %}c-l{% else %}c-x{% endif %}">{{ r.leave }}</td>
+      <td class="tot c-w">{{ r.off }}</td>
+      <td class="tot w">{{ r.worked }}</td>
+    </tr>
+    {% empty %}
+    <tr><td class="empty" colspan="{{ block.dates|length|add:7 }}">No employees for this period.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endfor %}
+{% endblock %}
+
+{% block signatures %}
+<table class="sigs"><tr>
+  <td><div class="line">Prepared by<div class="role">HR</div></div></td>
+  <td><div class="line">Approved by<div class="role">Management</div></div></td>
+</tr></table>
+{% endblock %}

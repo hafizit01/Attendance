@@ -3,7 +3,7 @@ from django.conf import settings
 from django.contrib.auth.views import redirect_to_login
 from django.shortcuts import redirect
 from django.urls import reverse
-from .utils import is_subscription_expired_for  # ✅ নতুন utils ব্যবহার
+from .utils import is_subscription_expired  # ✅ একমাত্র সাবস্ক্রিপশন চেক
 
 SAFE_URL_NAMES = {
     "login", "logout",
@@ -31,7 +31,7 @@ def subscription_required(view_func):
             return redirect_to_login(request.get_full_path(), login_url=settings.LOGIN_URL)
 
         # 3) subscription guard (🔑 এক জায়গার truth)
-        if is_subscription_expired_for(user):
+        if is_subscription_expired(user):
             if url_name in {"my_plans", "expired_notice"}:
                 return view_func(request, *args, **kwargs)
             try:

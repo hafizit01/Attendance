@@ -1,158 +1,109 @@
 {% extends "base.html" %}
+{% load custom_filters %}
 {% block title %}Monthly Report{% endblock %}
 {% block content %}
-{% load custom_filters %}
-{% load time_filters %}
-
-<div class="w-full px-2">
-    <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
-        <div class="flex items-center gap-2">
-            <span class="p-1.5 bg-blue-100 dark:bg-blue-900 rounded text-blue-600 text-lg">🕒</span>
-            <h2 class="text-xl font-bold text-gray-800 dark:text-white">Monthly Report</h2>
-        </div>
-
-        <form method="get" action="{% url 'attendance_app:monthly_work_time_pdf' %}" target="_blank">
-            <input type="hidden" name="start_date" value="{{ start_date|date:'Y-m-d' }}">
-            <input type="hidden" name="end_date" value="{{ end_date|date:'Y-m-d' }}">
-            {% if selected_department %}<input type="hidden" name="department" value="{{ selected_department }}">{% endif %}
-            {% if selected_employee %}<input type="hidden" name="employee" value="{{ selected_employee }}">{% endif %}
-            
-            <button type="submit" class="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold py-1.5 px-4 rounded shadow transition-all">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
-                Export PDF
-            </button>
-        </form>
+<div class="space-y-6">
+  <div class="page-header">
+    <div>
+      <p class="eyebrow">Reports</p>
+      <h1 class="page-title">Monthly Work Report</h1>
+      <p class="page-subtitle">{% if branch_name %}<span class="font-semibold text-slate-700 dark:text-slate-200">{{ branch_name }}</span> · {% endif %}{{ start_date|date:"d M Y" }} – {{ end_date|date:"d M Y" }} · {{ report_data|length }} employee{{ report_data|length|pluralize }}</p>
     </div>
+    <form method="get" action="{% url 'attendance_app:monthly_work_time_pdf' %}" target="_blank" class="self-start lg:self-auto">
+      <input type="hidden" name="start_date" value="{{ start_date|date:'Y-m-d' }}">
+      <input type="hidden" name="end_date" value="{{ end_date|date:'Y-m-d' }}">
+      {% if selected_department %}<input type="hidden" name="department" value="{{ selected_department }}">{% endif %}
+      {% if selected_employee %}<input type="hidden" name="employee" value="{{ selected_employee }}">{% endif %}
+      <button type="submit" class="btn-success">{% include "partials/icon.html" with name="download" cls="h-4 w-4" %}Export PDF</button>
+    </form>
+  </div>
 
-    <div class="bg-white dark:bg-gray-800 p-3 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 mb-5">
-        <form method="get" class="flex flex-wrap items-end gap-3">
-            <div class="flex-1 min-w-[140px]">
-                <label class="block text-[10px] font-bold text-gray-400 uppercase mb-1">📅 Start</label>
-                <input type="date" name="start_date" value="{{ start_date|date:'Y-m-d' }}"
-                       class="w-full border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-gray-800 dark:text-gray-200 text-xs px-2 py-1.5 rounded outline-none focus:ring-1 focus:ring-blue-500">
-            </div>
+  <div class="card p-4 sm:p-5">
+    <form method="get" class="grid grid-cols-1 items-end gap-4 sm:grid-cols-2 xl:grid-cols-5">
+      <div>
+        <label class="form-label" for="mr-s">Start date</label>
+        <input id="mr-s" type="date" name="start_date" value="{{ start_date|date:'Y-m-d' }}" class="form-input">
+      </div>
+      <div>
+        <label class="form-label" for="mr-e">End date</label>
+        <input id="mr-e" type="date" name="end_date" value="{{ end_date|date:'Y-m-d' }}" class="form-input">
+      </div>
+      <div>
+        <label class="form-label" for="mr-emp">Employee</label>
+        <select id="mr-emp" name="employee" class="form-select">
+          <option value="">All employees</option>
+          {% for emp in employees %}<option value="{{ emp.id }}" {% if selected_employee == emp.id %}selected{% endif %}>{{ emp.name }}</option>{% endfor %}
+        </select>
+      </div>
+      <div>
+        <label class="form-label" for="mr-dep">Department</label>
+        <select id="mr-dep" name="department" class="form-select">
+          <option value="">All departments</option>
+          {% for dept in departments %}<option value="{{ dept.id }}" {% if selected_department == dept.id %}selected{% endif %}>{{ dept.name }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="flex gap-2 sm:col-span-2 xl:col-span-1">
+        <button type="submit" class="btn-primary flex-1">{% include "partials/icon.html" with name="filter" cls="h-4 w-4" %}Apply</button>
+        <a href="{% url 'attendance_app:monthly_work_time_report' %}" class="btn-secondary px-3" title="Reset" aria-label="Reset filters">{% include "partials/icon.html" with name="x" cls="h-4 w-4" %}</a>
+      </div>
+    </form>
+  </div>
 
-            <div class="flex-1 min-w-[140px]">
-                <label class="block text-[10px] font-bold text-gray-400 uppercase mb-1">📅 End</label>
-                <input type="date" name="end_date" value="{{ end_date|date:'Y-m-d' }}"
-                       class="w-full border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-gray-800 dark:text-gray-200 text-xs px-2 py-1.5 rounded outline-none focus:ring-1 focus:ring-blue-500">
-            </div>
-
-            <div class="flex-1 min-w-[150px]">
-                <label class="block text-[10px] font-bold text-gray-400 uppercase mb-1">🧑‍💼 Employee</label>
-                <select name="employee" class="w-full border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-gray-800 dark:text-gray-200 text-xs px-2 py-1.5 rounded outline-none">
-                    <option value="">All Employees</option>
-                    {% for emp in employees %}
-                        <option value="{{ emp.id }}" {% if selected_employee == emp.id %}selected{% endif %}>{{ emp.name }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-
-            <div class="flex-1 min-w-[150px]">
-                <label class="block text-[10px] font-bold text-gray-400 uppercase mb-1">🏢 Dept</label>
-                <select name="department" class="w-full border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-gray-800 dark:text-gray-200 text-xs px-2 py-1.5 rounded outline-none">
-                    <option value="">All Departments</option>
-                    {% for dept in departments %}
-                        <option value="{{ dept.id }}" {% if selected_department == dept.id %}selected{% endif %}>{{ dept.name }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-
-            <div class="flex gap-1">
-                <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-5 py-2 rounded transition-all">
-                    Filter
-                </button>
-                <a href="{% url 'attendance_app:monthly_work_time_report' %}" class="p-2 bg-gray-100 dark:bg-gray-700 text-gray-500 rounded hover:bg-gray-200" title="Reset">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
-                </a>
-            </div>
-        </form>
+  <div class="card overflow-hidden">
+    <div class="overflow-x-auto">
+      <table class="responsive-table table-modern">
+        <thead>
+          <tr>
+            <th class="w-12">#</th>
+            <th>Employee</th>
+            <th class="text-center">Present</th>
+            <th class="text-center">Absent</th>
+            <th class="text-center">Off</th>
+            <th class="text-center">Leave</th>
+            <th class="text-center">Late</th>
+            <th class="text-center">Overtime</th>
+            <th class="text-center">Worked</th>
+            <th class="text-center">Expected</th>
+            <th class="text-right">Difference</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for data in report_data %}
+          <tr>
+            <td class="rt-hide text-xs tabular-nums text-slate-400">{{ forloop.counter }}</td>
+            <td class="rt-title">
+              <div class="flex items-center gap-3">
+                <span class="avatar">{{ data.employee.name|slice:":1" }}</span>
+                <div class="min-w-0">
+                  <a href="{% url 'attendance_app:employee_attendance_detail' data.employee.id %}?start_date={{ start_date|date:'Y-m-d' }}&end_date={{ end_date|date:'Y-m-d' }}" class="block truncate font-semibold text-slate-900 transition hover:text-primary-600 dark:text-white dark:hover:text-primary-400">{{ data.employee.name }}</a>
+                  <p class="truncate text-xs font-normal text-slate-500">{{ data.employee.department.name|default:"General" }}</p>
+                </div>
+              </div>
+            </td>
+            <td class="text-center font-semibold tabular-nums text-emerald-600 dark:text-emerald-400">{{ data.present_days }}</td>
+            <td class="text-center font-semibold tabular-nums {% if data.absent_days %}text-rose-600 dark:text-rose-400{% else %}text-slate-400{% endif %}">{{ data.absent_days }}</td>
+            <td class="text-center tabular-nums text-slate-500">{{ data.weekly_off_days }}</td>
+            <td class="text-center tabular-nums {% if data.leave_days %}text-blue-600 dark:text-blue-400{% else %}text-slate-400{% endif %}">{{ data.leave_days }}</td>
+            <td class="whitespace-nowrap text-center font-mono text-xs {% if data.late_time != '00:00:00' %}text-amber-600 dark:text-amber-400{% else %}text-slate-400{% endif %}">{{ data.late_time }}</td>
+            <td class="whitespace-nowrap text-center font-mono text-xs {% if data.over_time != '00:00:00' %}text-violet-600 dark:text-violet-400{% else %}text-slate-400{% endif %}">{{ data.over_time }}</td>
+            <td class="whitespace-nowrap text-center font-mono text-xs font-semibold text-slate-800 dark:text-slate-100">{{ data.total_work_hours }}</td>
+            <td class="whitespace-nowrap text-center font-mono text-xs text-slate-500">{{ data.expected_work_time_excl_off|format_timedelta }}</td>
+            <td class="whitespace-nowrap text-right">
+              {% if data.work_time_difference.total_seconds < 0 %}
+                <span class="badge-success font-mono">+{{ data.work_time_difference|abs_timedelta|format_timedelta }}</span>
+              {% elif data.work_time_difference.total_seconds > 0 %}
+                <span class="badge-danger font-mono">−{{ data.work_time_difference|format_timedelta }}</span>
+              {% else %}
+                <span class="badge-neutral font-mono">00:00:00</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="11">{% include "partials/empty_state.html" with icon="chart" title="No records for this period" text="Pick a different date range, department or employee." %}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
     </div>
-
-    <div class="relative bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
-        <div class="overflow-x-auto min-h-[500px]">
-            <table class="w-full text-xs text-left border-collapse">
-                <thead class="sticky top-0 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-100 z-10">
-                    <tr class="uppercase font-bold border-b border-gray-200 dark:border-gray-600">
-                        <th class="px-4 py-4">ID</th>
-                        <th class="px-4 py-4 min-w-[180px]">Employee Details</th>
-                        <th class="px-3 py-4 text-center">✅ Pres</th>
-                        <th class="px-3 py-4 text-center">❌ Abs</th>
-                        <th class="px-3 py-4 text-center">🛌 Off</th>
-                        <th class="px-3 py-4 text-center">📅 Leave</th>
-                        <th class="px-3 py-4 text-center">🕒 Late</th>
-                        <th class="px-3 py-4 text-center">📈 Over</th>
-                        <th class="px-4 py-4 text-center text-blue-600 bg-blue-50/50 dark:bg-blue-900/20">🧮 Work Hours</th>
-                        <th class="px-4 py-4 text-center">🧭 Expected</th>
-                        <th class="px-4 py-4 text-center">🔄 Difference</th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
-                    {% for data in report_data %}
-                        <tr class="hover:bg-gray-50 dark:hover:bg-gray-900/40 transition-colors">
-                            <td class="px-4 py-4 text-gray-400 font-mono font-medium">{{ forloop.counter }}</td>
-                            <td class="px-4 py-4">
-                                <div class="font-bold text-gray-900 dark:text-gray-100 text-sm mb-0.5">{{ data.employee.name }}</div>
-                                <div class="inline-block bg-gray-100 dark:bg-gray-700 px-1.5 py-0.5 rounded text-[10px] text-gray-500 dark:text-gray-400 font-semibold uppercase tracking-tight">
-                                    {{ data.employee.department.name|default:"General" }}
-                                </div>
-                            </td>
-                            <td class="px-3 py-4 text-center">
-                                <span class="font-bold text-emerald-600 text-sm">{{ data.present_days }}</span>
-                            </td>
-                            <td class="px-3 py-4 text-center">
-                                <span class="font-bold text-rose-500 text-sm">{{ data.absent_days }}</span>
-                            </td>
-                            <td class="px-3 py-4 text-center text-gray-500 font-medium">{{ data.weekly_off_days }}</td>
-                            <td class="px-3 py-4 text-center">
-                                <span class="bg-blue-50 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 px-2 py-1 rounded-md text-[11px] font-bold">
-                                    {{ data.leave_days }}
-                                </span>
-                            </td>
-                            <td class="px-3 py-4 text-center font-mono text-amber-600 font-semibold">{{ data.late_time }}</td>
-                            <td class="px-3 py-4 text-center font-mono text-purple-600 font-semibold">{{ data.over_time }}</td>
-                            <td class="px-4 py-4 text-center font-bold font-mono text-blue-600 dark:text-blue-400 bg-blue-50/30 dark:bg-blue-900/10 text-sm">
-                                {{ data.total_work_hours }}
-                            </td>
-                            <td class="px-4 py-4 text-center font-mono text-gray-400">
-                                {{ data.expected_work_time_excl_off|format_timedelta }}
-                            </td>
-                            <td class="px-4 py-4 text-center">
-                                {% if data.work_time_difference.total_seconds < 0 %}
-                                    <div class="inline-flex items-center px-2.5 py-1 rounded-full bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 font-bold text-[11px]">
-                                        +{{ data.work_time_difference|abs_timedelta|format_timedelta }}
-                                    </div>
-                                {% elif data.work_time_difference.total_seconds > 0 %}
-                                    <div class="inline-flex items-center px-2.5 py-1 rounded-full bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 font-bold text-[11px]">
-                                        -{{ data.work_time_difference|format_timedelta }}
-                                    </div>
-                                {% else %}
-                                    <span class="text-gray-300 font-mono">00:00:00</span>
-                                {% endif %}
-                            </td>
-                        </tr>
-                    {% empty %}
-                        <tr>
-                            <td colspan="11" class="px-4 py-20 text-center">
-                                <div class="text-gray-300 mb-2">
-                                    <svg class="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-                                </div>
-                                <p class="text-gray-500 font-medium">No records found for the selected filter.</p>
-                            </td>
-                        </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-    </div>
+  </div>
 </div>
-
-<style>
-    /* Table scrollbar customization */
-    .overflow-x-auto::-webkit-scrollbar { height: 8px; width: 8px; }
-    .overflow-x-auto::-webkit-scrollbar-track { background: #f8fafc; }
-    .dark .overflow-x-auto::-webkit-scrollbar-track { background: #1e293b; }
-    .overflow-x-auto::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
-    .dark .overflow-x-auto::-webkit-scrollbar-thumb { background: #475569; }
-</style>
 {% endblock content %}

@@ -1,117 +1,90 @@
 {% extends 'base.html' %}
-
+{% block title %}Sync Device Data{% endblock %}
 {% block content %}
-<div class="max-w-md mx-auto mt-12 p-6 bg-white dark:bg-gray-900 rounded shadow-md transition-colors duration-300">
-  <h2 class="text-2xl font-semibold mb-6 text-center text-gray-800 dark:text-gray-100">
-    Attendance Sync
-  </h2>
+<div class="mx-auto max-w-2xl space-y-6">
+  <div>
+    <p class="eyebrow">ZKTeco</p>
+    <h1 class="page-title">Sync Device Data</h1>
+    <p class="page-subtitle">হাজিরা মেশিন থেকে নতুন পাঞ্চ ও ইউজার আনুন। মেশিন আর সার্ভার একই নেটওয়ার্কে থাকতে হবে।</p>
+  </div>
 
-  <form id="syncForm" method="post" action="{% url 'attendance_app:sync_attendance' %}" class="space-y-6">
+  <form id="syncForm" method="post" action="{% url 'attendance_app:sync_attendance' %}" class="card overflow-hidden">
     {% csrf_token %}
-    <div>
-      <label for="department_id" class="block mb-2 font-medium text-gray-700 dark:text-gray-300">
-        Select Department:
-      </label>
-      <select name="department_id" id="department_id" required
-        class="w-full border border-gray-300 dark:border-gray-700 
-               bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-200 
-               rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
-        <option value="">-- Select --</option>
-        {% for dept in departments %}
-          <option value="{{ dept.id }}">{{ dept.name }}</option>
-        {% endfor %}
-      </select>
-    </div>
-
-    <button type="submit"
-      class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 rounded transition duration-300">
-      🔁 Sync Attendance
-    </button>
-
-    <!-- Progress Bar -->
-    <div id="progressContainer" class="mt-6 hidden">
-      <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-4">
-        <div id="progressBar" 
-             class="bg-green-500 h-4 rounded-full w-0 transition-all duration-300"></div>
+    <div class="space-y-5 p-5 sm:p-6">
+      <div>
+        <label for="department_id" class="form-label">Department / device <span class="text-rose-500">*</span></label>
+        <select name="department_id" id="department_id" required class="form-select">
+          <option value="">Select a department…</option>
+          {% for dept in departments %}
+            <option value="{{ dept.id }}" {% if not dept.device_ip %}disabled{% endif %}>{{ dept.name }}{% if not dept.device_ip %} — no device set{% endif %}</option>
+          {% endfor %}
+        </select>
+        <p class="form-help">শুধু যেসব ডিপার্টমেন্টে ডিভাইসের IP সেট করা আছে সেগুলো সিঙ্ক করা যাবে।</p>
       </div>
-      <p id="progressText" class="text-sm text-gray-600 dark:text-gray-300 text-center mt-2">Starting...</p>
-    </div>
 
-    <!-- Result Messages -->
-    <div id="resultMessages" class="mt-4 space-y-2"></div>
+      <div id="progressContainer" class="hidden space-y-2" aria-live="polite">
+        <div class="h-2.5 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
+          <div id="progressBar" class="h-full w-0 rounded-full bg-primary-600 transition-all duration-300"></div>
+        </div>
+        <p id="progressText" class="text-sm font-medium text-slate-600 dark:text-slate-300">Starting…</p>
+      </div>
+      <div id="resultMessages" class="space-y-2" aria-live="polite"></div>
+    </div>
+    <div class="flex justify-end border-t border-slate-100 bg-slate-50/60 px-5 py-4 sm:px-6 dark:border-slate-800 dark:bg-slate-800/40">
+      <button type="submit" id="syncBtn" class="btn-primary w-full sm:w-auto">{% include "partials/icon.html" with name="sync" cls="h-4 w-4" %}Start sync</button>
+    </div>
   </form>
 </div>
 
-<!-- JavaScript -->
 <script>
-document.getElementById('syncForm').addEventListener('submit', async function(e) {
-    e.preventDefault();
+document.getElementById('syncForm').addEventListener('submit', async function (e) {
+  e.preventDefault();
+  const box = document.getElementById('progressContainer');
+  const bar = document.getElementById('progressBar');
+  const text = document.getElementById('progressText');
+  const results = document.getElementById('resultMessages');
+  const btn = document.getElementById('syncBtn');
+  const setBar = (pct, cls) => { bar.style.width = pct + '%'; bar.className = 'h-full rounded-full transition-all duration-300 ' + cls; };
+  const note = (ok, msg) => {
+    const div = document.createElement('div');
+    div.className = 'flex items-start gap-2 rounded-xl p-3 text-sm ' + (ok
+      ? 'bg-emerald-50 text-emerald-800 dark:bg-emerald-500/10 dark:text-emerald-300'
+      : 'bg-rose-50 text-rose-800 dark:bg-rose-500/10 dark:text-rose-300');
+    div.textContent = msg;
+    results.appendChild(div);
+  };
 
-    const progressContainer = document.getElementById('progressContainer');
-    const progressBar = document.getElementById('progressBar');
-    const progressText = document.getElementById('progressText');
-    const resultDiv = document.getElementById('resultMessages');
+  box.classList.remove('hidden');
+  results.innerHTML = '';
+  btn.disabled = true;
+  let progress = 0;
+  setBar(0, 'bg-primary-600');
+  text.textContent = 'Connecting to device…';
+  // মেশিন থেকে কতক্ষণ লাগবে জানা নেই, তাই আনুমানিক অগ্রগতি
+  const timer = setInterval(() => { if (progress < 92) { progress += 2; setBar(progress, 'bg-primary-600'); text.textContent = `Syncing… ${progress}%`; } }, 250);
 
-    progressContainer.classList.remove('hidden');
-    progressBar.style.width = '0%';
-    progressBar.style.backgroundColor = 'rgb(34 197 94)'; // green
-    progressText.textContent = '⏳ Syncing... 0%';
-    resultDiv.innerHTML = '';
-
-    let progress = 0;
-    let isSyncComplete = false;
-
-    // Fake progress bar animation
-    const interval = setInterval(() => {
-        if (progress < 95) {
-            progress += 2;
-            progressBar.style.width = progress + '%';
-            progressText.textContent = `⏳ Syncing... ${progress}%`;
-        }
-    }, 200);
-
-    const formData = new FormData(this);
-
-    try {
-        const response = await fetch(this.action, {
-            method: 'POST',
-            body: formData,
-            headers: { 'X-Requested-With': 'XMLHttpRequest' }
-        });
-
-        if (!response.ok) throw new Error('Server error');
-
-        const data = await response.json();
-        isSyncComplete = true;
-
-        clearInterval(interval);
-        progressBar.style.width = '100%';
-        progressText.textContent = `⏳ Syncing... 100%`;
-
-        if (data.status === 'success') {
-            setTimeout(() => {
-                progressText.textContent = '✅ Sync Complete!';
-            }, 500);
-
-            data.messages.forEach(msg => {
-                const div = document.createElement('div');
-                div.className = (msg.type === 'success' 
-                                ? 'text-green-700 dark:text-green-400' 
-                                : 'text-red-700 dark:text-red-400') + ' font-medium';
-                div.textContent = msg.text;
-                resultDiv.appendChild(div);
-            });
-        } else {
-            progressBar.style.backgroundColor = 'red';
-            progressText.textContent = data.message || '❌ Sync failed';
-        }
-
-    } catch (err) {
-        clearInterval(interval);
-        progressBar.style.width = '100%';
-        progressBar.style.backgroundColor = 'red';
-        progressText.textContent = '❌ Error: ' + err.message;
+  try {
+    const res = await fetch(this.action, { method: 'POST', body: new FormData(this), headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+    if (!res.ok) throw new Error('Server error (' + res.status + ')');
+    const data = await res.json();
+    clearInterval(timer);
+    if (data.status === 'success') {
+      setBar(100, 'bg-emerald-500');
+      text.textContent = 'Sync complete';
+      (data.messages || []).forEach(m => note(m.type === 'success', m.text));
+    } else {
+      setBar(100, 'bg-rose-500');
+      text.textContent = 'Sync failed';
+      note(false, data.message || 'Sync failed');
     }
+  } catch (err) {
+    clearInterval(timer);
+    setBar(100, 'bg-rose-500');
+    text.textContent = 'Sync failed';
+    note(false, err.message);
+  } finally {
+    btn.disabled = false;
+  }
 });
 </script>
 {% endblock %}

@@ -1,14 +1,16 @@
-<!-- templates/payroll/generate_salary.html -->
-
 {% extends 'base.html' %}
-
+{# এখন কোনো URL এই টেমপ্লেট ব্যবহার করে না (payroll/urls.py তে generate_salary কমেন্ট করা) #}
+{% block title %}Generate Salary{% endblock %}
 {% block content %}
-<h2 class="text-xl font-bold mb-4">📆 Generate Salary for Month</h2>
-
-<form method="POST">
-  {% csrf_token %}
-  <label for="month">Select Month:</label>
-  <input type="month" name="month" required class="border px-2 py-1" />
-  <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded ml-2">Generate</button>
-</form>
+<div class="mx-auto max-w-md">
+  <form method="post" class="card space-y-5 p-6">
+    {% csrf_token %}
+    <h1 class="text-xl font-bold text-slate-900 dark:text-white">Generate salary for a month</h1>
+    <div>
+      <label for="gs-month" class="form-label">Month</label>
+      <input id="gs-month" type="month" name="month" required class="form-input">
+    </div>
+    <button type="submit" class="btn-primary w-full">Generate</button>
+  </form>
+</div>
 {% endblock %}

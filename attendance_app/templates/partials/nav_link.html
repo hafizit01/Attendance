@@ -1,0 +1,6 @@
+{# সাইডবারের লিংক — {% include "partials/nav_link.html" with href=u label="..." icon="home" name="dashboard" %} #}
+{# name: এই লিংকের url_name; context এর `current` (বর্তমান url_name) এর সাথে মিললে active #}
+<a href="{{ href }}" class="nav-link {% if name and current == name %}is-active{% endif %}" title="{{ label }}" {% if name and current == name %}aria-current="page"{% endif %}>
+  {% include "partials/icon.html" with name=icon cls="h-5 w-5" %}
+  <span class="nav-label">{{ label }}</span>
+</a>

@@ -1,215 +1,116 @@
 {% extends "base.html" %}
-{% load static %}
-
-{% block title %}Support — Attendance{% endblock %}
-
+{% block title %}Help & Support{% endblock %}
 {% block content %}
-<div class="max-w-5xl mx-auto">
-  <div class="bg-white dark:bg-gray-800 shadow-sm border border-gray-100 dark:border-gray-700 rounded-xl p-6 md:p-8">
-    <header class="mb-6 border-b border-gray-100 dark:border-gray-700 pb-4 flex items-start justify-between gap-4">
-      <div>
-        <h2 class="text-2xl font-semibold tracking-tight">Attendance Support Center</h2>
-        <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-          কোনো সমস্যা, প্রশ্ন বা ফিচার রিকোয়েস্ট থাকলে নিচের ফর্ম ব্যবহার করে টিকিট সাবমিট করুন।
-          আমাদের টিম যত দ্রুত সম্ভব আপনার সাথে যোগাযোগ করবে।
-        </p>
-      </div>
-      <span class="inline-flex items-center rounded-full px-3 py-1 text-xs font-medium bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">
-        ⏱ Avg. response: within 24 hours
-      </span>
-    </header>
+<div class="space-y-6">
+  <div class="page-header">
+    <div>
+      <p class="eyebrow">Support</p>
+      <h1 class="page-title">Help & Support</h1>
+      <p class="page-subtitle">কোনো সমস্যা, প্রশ্ন বা ফিচার রিকোয়েস্ট থাকলে টিকিট দিন — আমরা দ্রুত যোগাযোগ করবো।</p>
+    </div>
+    <span class="badge-success self-start lg:self-auto">{% include "partials/icon.html" with name="clock" cls="h-3.5 w-3.5" %}সাধারণত ২৪ ঘণ্টার মধ্যে উত্তর</span>
+  </div>
 
-    {% if messages %}
-      <div class="mb-5 space-y-2">
-        {% for message in messages %}
-          <div class="px-4 py-3 rounded-lg text-sm flex items-start gap-2
-            {% if 'success' in message.tags %}
-              bg-green-50 text-green-800 border border-green-200 dark:bg-green-900/20 dark:text-green-200 dark:border-green-800
-            {% elif 'error' in message.tags %}
-              bg-red-50 text-red-800 border border-red-200 dark:bg-red-900/20 dark:text-red-200 dark:border-red-800
-            {% else %}
-              bg-gray-50 text-gray-800 border border-gray-200 dark:bg-gray-900/40 dark:text-gray-200 dark:border-gray-700
-            {% endif %}">
-            <span class="mt-0.5 text-lg">
-              {% if 'success' in message.tags %}✔{% elif 'error' in message.tags %}⚠{% else %}ℹ{% endif %}
-            </span>
-            <span>{{ message }}</span>
-          </div>
-        {% endfor %}
-      </div>
-    {% endif %}
-
-    <div class="grid gap-6 md:grid-cols-3">
-      <!-- Left card: contact -->
-      <aside class="md:col-span-1">
-        <div class="p-4 rounded-xl bg-gray-50 dark:bg-gray-900/40 border border-gray-100 dark:border-gray-700">
-          <h3 class="font-semibold mb-2 text-sm uppercase tracking-wide text-gray-500 dark:text-gray-400">
-            Direct contact
-          </h3>
-          <div class="space-y-1 text-sm text-gray-700 dark:text-gray-200">
-            <p>📞 <span class="font-medium">01822755994</span> <span class="text-xs text-gray-500">(WhatsApp)</span></p>
-            <p>✉ <span class="font-medium">info@easycodingbd.com</span></p>
-          </div>
-
-          <hr class="my-4 border-gray-200 dark:border-gray-700">
-
-          <h4 class="text-sm font-semibold mb-2">Quick checks (দ্রুত সমাধান)</h4>
-          <ol class="text-sm text-gray-600 dark:text-gray-300 list-decimal pl-5 space-y-1">
-            <li>অ্যাপ / ব্রাউজারটি রিস্টার্ট করে আবার চেষ্টা করুন</li>
-            <li>ইন্টারনেট কানেকশন স্টেবল আছে কিনা নিশ্চিত করুন</li>
-            <li>যদি এরর দেখায়, স্ক্রিনশট ও টাইম নোট করুন</li>
-          </ol>
-
-          <p class="mt-4 text-xs text-gray-500 dark:text-gray-400">
-            জরুরি সমস্যার ক্ষেত্রে সরাসরি ফোন বা WhatsApp এ যোগাযোগ করলে দ্রুত রেসপন্স পাবেন।
-          </p>
+  <div class="grid grid-cols-1 gap-6 lg:grid-cols-3">
+    {# ── টিকিট ফর্ম ── #}
+    <form id="supportForm" action="{% url 'attendance_app:support_page' %}" method="post" class="card overflow-hidden lg:col-span-2">
+      {% csrf_token %}
+      <div class="card-header"><h2 class="card-title">{% include "partials/icon.html" with name="ticket" cls="h-5 w-5 text-primary-500" %}Submit a ticket</h2></div>
+      <div class="grid grid-cols-1 gap-5 p-5 sm:grid-cols-2 sm:p-6">
+        <div>
+          <label class="form-label" for="sp-name">নাম <span class="text-rose-500">*</span></label>
+          <input id="sp-name" name="name" required value="{{ request.user.get_full_name|default:request.user.username }}" placeholder="আপনার পূর্ণ নাম" class="form-input">
         </div>
-      </aside>
-
-      <!-- Form -->
-      <div class="md:col-span-2">
-        <form id="supportForm"
-              action="{% url 'attendance_app:support_page' %}"
-              method="post"
-              enctype="multipart/form-data"
-              class="space-y-4">
-          {% csrf_token %}
-
-          <div class="grid gap-4 md:grid-cols-2">
-            <div>
-              <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">
-                নাম <span class="text-red-500">*</span>
-              </label>
-              <input
-                name="name"
-                required
-                placeholder="আপনার পূর্ণ নাম"
-                class="w-full mt-1 px-3 py-2 border rounded-lg text-sm bg-white dark:bg-gray-700/70 border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500">
-            </div>
-            <div>
-              <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">
-                ইমেইল <span class="text-red-500">*</span>
-              </label>
-              <input
-                type="email"
-                name="email"
-                required
-                placeholder="you@example.com"
-                class="w-full mt-1 px-3 py-2 border rounded-lg text-sm bg-white dark:bg-gray-700/70 border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500">
-            </div>
-          </div>
-
-          <div>
-            <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">
-              বিষয় (Subject) <span class="text-red-500">*</span>
+        <div>
+          <label class="form-label" for="sp-email">ইমেইল <span class="text-rose-500">*</span></label>
+          <input id="sp-email" type="email" name="email" required value="{{ request.user.email }}" placeholder="you@example.com" class="form-input">
+        </div>
+        <div class="sm:col-span-2">
+          <label class="form-label" for="sp-subject">বিষয় <span class="text-rose-500">*</span></label>
+          <input id="sp-subject" name="subject" required placeholder="যেমন: অ্যাটেনডেন্স রিপোর্ট ঠিকমতো দেখাচ্ছে না" class="form-input">
+        </div>
+        <div class="sm:col-span-2">
+          <label class="form-label" for="sp-message">বিবরণ <span class="text-rose-500">*</span></label>
+          <textarea id="sp-message" name="message" rows="6" required class="form-input"
+                    placeholder="সমস্যাটি কখন হচ্ছে, কী এরর দেখাচ্ছে, কোন ডিভাইসে — যত বিস্তারিত দেবেন, তত দ্রুত সমাধান দিতে পারবো।"></textarea>
+        </div>
+        <div class="sm:col-span-2">
+          <span class="form-label">গুরুত্ব</span>
+          <div class="grid grid-cols-1 gap-2 sm:grid-cols-3">
+            <label class="flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 bg-white p-3.5 transition-all duration-300 hover:border-primary-200 has-[:checked]:border-primary-300 has-[:checked]:bg-primary-50/60 dark:border-slate-700 dark:bg-slate-800 dark:has-[:checked]:border-primary-500/40 dark:has-[:checked]:bg-primary-500/10">
+              <input type="radio" name="priority" value="low" class="mt-0.5 h-4 w-4 accent-primary-600">
+              <span><span class="block text-sm font-semibold text-slate-800 dark:text-slate-100">Low</span><span class="text-xs text-slate-500">সাধারণ প্রশ্ন</span></span>
             </label>
-            <input
-              name="subject"
-              required
-              placeholder="যেমন: অ্যাটেনডেন্স রিপোর্ট ঠিকমতো দেখাচ্ছে না"
-              class="w-full mt-1 px-3 py-2 border rounded-lg text-sm bg-white dark:bg-gray-700/70 border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500">
-          </div>
-
-          <div>
-            <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">
-              বিবরণ (Details) <span class="text-red-500">*</span>
+            <label class="flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 bg-white p-3.5 transition-all duration-300 hover:border-primary-200 has-[:checked]:border-primary-300 has-[:checked]:bg-primary-50/60 dark:border-slate-700 dark:bg-slate-800 dark:has-[:checked]:border-primary-500/40 dark:has-[:checked]:bg-primary-500/10">
+              <input type="radio" name="priority" value="medium" checked class="mt-0.5 h-4 w-4 accent-primary-600">
+              <span><span class="block text-sm font-semibold text-slate-800 dark:text-slate-100">Medium</span><span class="text-xs text-slate-500">কাজে সমস্যা</span></span>
             </label>
-            <textarea
-              name="message"
-              rows="6"
-              required
-              placeholder="সমস্যাটি কখন হচ্ছে, কী এরর দেখাচ্ছে, কোন ডিভাইসে ব্যবহার করছেন— যত বিস্তারিত দেবেন, আমরা তত দ্রুত সমাধান দিতে পারবো।"
-              class="w-full mt-1 px-3 py-2 border rounded-lg text-sm bg-white dark:bg-gray-700/70 border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500 resize-y"></textarea>
+            <label class="flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 bg-white p-3.5 transition-all duration-300 hover:border-rose-200 has-[:checked]:border-rose-300 has-[:checked]:bg-rose-50/60 dark:border-slate-700 dark:bg-slate-800 dark:has-[:checked]:border-rose-500/40 dark:has-[:checked]:bg-rose-500/10">
+              <input type="radio" name="priority" value="high" class="mt-0.5 h-4 w-4 accent-rose-600">
+              <span><span class="block text-sm font-semibold text-slate-800 dark:text-slate-100">High</span><span class="text-xs text-slate-500">জরুরি / কাজ বন্ধ</span></span>
+            </label>
           </div>
+          <p class="form-help">জরুরি হলে High দিন এবং সম্ভব হলে ফোনে একবার জানিয়ে দিন।</p>
+        </div>
+      </div>
+      <div class="flex flex-col-reverse gap-3 border-t border-slate-100 bg-slate-50/60 px-5 py-4 sm:flex-row sm:justify-end sm:px-6 dark:border-slate-800 dark:bg-slate-800/40">
+        <button type="reset" class="btn-secondary">Clear</button>
+        <button type="submit" class="btn-primary">{% include "partials/icon.html" with name="arrow-right" cls="h-4 w-4" %}Submit ticket</button>
+      </div>
+    </form>
 
-          <div class="grid gap-4 md:grid-cols-2 items-start">
-            <div>
-              <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">
-                গুরুত্ব (Priority)
-              </label>
-              <select
-                name="priority"
-                class="w-full mt-1 px-3 py-2 border rounded-lg text-sm bg-white dark:bg-gray-700/70 border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500">
-                <option value="low">Low – General query</option>
-                <option value="medium" selected>Medium – কাজের সমস্যা</option>
-                <option value="high">High – জরুরি / কাজ বন্ধ</option>
-              </select>
-              <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                জরুরি হলে <strong>High</strong> সিলেক্ট করুন এবং সম্ভব হলে ফোনে একবার জানিয়ে দিন।
-              </p>
-            </div>
+    {# ── যোগাযোগ + দ্রুত সমাধান ── #}
+    <div class="space-y-6">
+      <div class="card p-5 sm:p-6">
+        <h2 class="section-title mb-4">{% include "partials/icon.html" with name="chat" cls="h-4 w-4 text-primary-500" %}Direct contact</h2>
+        <div class="space-y-2">
+          <a href="https://wa.me/8801822755994" target="_blank" rel="noopener" class="flex items-center gap-3 rounded-xl border border-slate-200 p-3 transition-all duration-300 hover:border-emerald-300 hover:bg-emerald-50 dark:border-slate-700 dark:hover:bg-emerald-500/10">
+            <span class="stat-icon h-9 w-9 bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400">{% include "partials/icon.html" with name="chat" cls="h-4 w-4" %}</span>
+            <span><span class="block text-sm font-semibold text-slate-900 dark:text-white">01822755994</span><span class="text-xs text-slate-500">WhatsApp / Phone</span></span>
+          </a>
+          <a href="mailto:info@easycodingbd.com" class="flex items-center gap-3 rounded-xl border border-slate-200 p-3 transition-all duration-300 hover:border-primary-300 hover:bg-primary-50 dark:border-slate-700 dark:hover:bg-primary-500/10">
+            <span class="stat-icon h-9 w-9 bg-primary-50 text-primary-600 dark:bg-primary-500/10 dark:text-primary-400">{% include "partials/icon.html" with name="mail" cls="h-4 w-4" %}</span>
+            <span><span class="block text-sm font-semibold text-slate-900 dark:text-white">info@easycodingbd.com</span><span class="text-xs text-slate-500">Email</span></span>
+          </a>
+        </div>
+      </div>
 
-            <div>
-              <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">
-                সংযুক্তি (Attachment) <span class="text-xs text-gray-500 dark:text-gray-400">(ঐচ্ছিক)</span>
-              </label>
-              <input
-                type="file"
-                name="attachment"
-                class="w-full mt-1 text-sm file:mr-3 file:px-3 file:py-1.5 file:border-0 file:rounded-md file:bg-amber-50 file:text-amber-700 hover:file:bg-amber-100 dark:file:bg-amber-900/30 dark:file:text-amber-200">
-              <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                স্ক্রিনশট, এরর মেসেজ বা লগ ফাইল যুক্ত করলে সমস্যা বুঝতে আমাদের সুবিধা হবে।
-              </p>
-            </div>
-          </div>
-
-          <div class="flex justify-end gap-2 pt-2">
-            <button
-              type="reset"
-              class="px-4 py-2 rounded-lg text-sm bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600 border border-gray-200 dark:border-gray-600">
-              ফর্ম ক্লিয়ার
-            </button>
-            <button
-              type="submit"
-              class="px-4 py-2 rounded-lg text-sm font-medium bg-amber-600 text-white hover:bg-amber-700 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-1 focus:ring-offset-white dark:focus:ring-offset-gray-800">
-              Submit Support Ticket
-            </button>
-          </div>
-        </form>
+      <div class="card p-5 sm:p-6">
+        <h2 class="section-title mb-3">{% include "partials/icon.html" with name="check-circle" cls="h-4 w-4 text-primary-500" %}দ্রুত সমাধান</h2>
+        <ol class="list-decimal space-y-1.5 pl-5 text-sm text-slate-600 dark:text-slate-300">
+          <li>ব্রাউজার রিফ্রেশ বা রিস্টার্ট করে আবার চেষ্টা করুন</li>
+          <li>ইন্টারনেট কানেকশন ঠিক আছে কিনা দেখুন</li>
+          <li>এরর দেখালে স্ক্রিনশট ও সময় নোট করে টিকিটে লিখুন</li>
+        </ol>
       </div>
     </div>
+  </div>
 
-    <!-- FAQ -->
-    <div class="mt-8">
-      <h4 class="font-semibold mb-3 text-sm uppercase tracking-wide text-gray-500 dark:text-gray-400">FAQ</h4>
-
-      <div class="space-y-2">
-        <details class="group rounded-lg border border-gray-200 dark:border-gray-700 px-4 py-3">
-          <summary class="cursor-pointer text-sm font-medium flex justify-between items-center">
-            <span>কিভাবে অ্যাকাউন্ট রিকভারি করবো?</span>
-            <span class="text-xs text-gray-400 group-open:hidden">▼</span>
-            <span class="text-xs text-gray-400 hidden group-open:inline">▲</span>
-          </summary>
-          <p class="mt-2 text-sm text-gray-600 dark:text-gray-300">
-            লগইন পেইজ থেকে “Forgot password” অপশন ব্যবহার করে ইমেইল দিয়ে পাসওয়ার্ড রিসেট করতে পারবেন।
-            যদি ইমেইল অ্যাক্সেস না থাকে, তাহলে সাপোর্ট টিকিট সাবমিট করুন বা সরাসরি যোগাযোগ করুন।
-          </p>
-        </details>
-
-        <details class="group rounded-lg border border-gray-200 dark:border-gray-700 px-4 py-3">
-          <summary class="cursor-pointer text-sm font-medium flex justify-between items-center">
-            <span>অ্যাটেনডেন্স মিসিং দেখাচ্ছে, কাকে জানাবো?</span>
-            <span class="text-xs text-gray-400 group-open:hidden">▼</span>
-            <span class="text-xs text-gray-400 hidden group-open:inline">▲</span>
-          </summary>
-          <p class="mt-2 text-sm text-gray-600 dark:text-gray-300">
-            যে তারিখে সমস্যা হয়েছে সেই ডেট, এমপ্লয়ি আইডি এবং স্ক্রিনশটসহ টিকিট সাবমিট করুন।
-            আমরা সার্ভার লগ চেক করে আপডেট জানিয়ে দেবো।
-          </p>
-        </details>
-
-        <details class="group rounded-lg border border-gray-200 dark:border-gray-700 px-4 py-3">
-          <summary class="cursor-pointer text-sm font-medium flex justify-between items-center">
-            <span>নতুন ফিচার রিকোয়েস্ট করতে চাই</span>
-            <span class="text-xs text-gray-400 group-open:hidden">▼</span>
-            <span class="text-xs text-gray-400 hidden group-open:inline">▲</span>
-          </summary>
-          <p class="mt-2 text-sm text-gray-600 dark:text-gray-300">
-            Subject এ “Feature request” লিখে কী ধরনের ফিচার চান তা বিস্তারিত লিখে টিকিট করুন।
-            আমরা রোডম্যাপে যুক্ত করে সম্ভাব্য সময় আপনাকে জানাবো।
-          </p>
-        </details>
-      </div>
+  {# ── FAQ ── #}
+  <div class="card overflow-hidden">
+    <div class="card-header"><h2 class="card-title">{% include "partials/icon.html" with name="info" cls="h-5 w-5 text-primary-500" %}সাধারণ প্রশ্ন</h2></div>
+    <div class="divide-y divide-slate-100 dark:divide-slate-800">
+      <details class="group px-5 py-4 sm:px-6">
+        <summary class="flex cursor-pointer list-none items-center justify-between gap-4 text-sm font-semibold text-slate-800 dark:text-slate-100 [&::-webkit-details-marker]:hidden">
+          পাসওয়ার্ড ভুলে গেলে কী করবো?
+          <span class="text-slate-400 transition-transform duration-300 group-open:rotate-180">{% include "partials/icon.html" with name="chevron-down" cls="h-4 w-4" %}</span>
+        </summary>
+        <p class="mt-3 text-sm leading-relaxed text-slate-600 dark:text-slate-300">আপনার কোম্পানির অ্যাডমিনকে বলুন, অথবা টিকিট দিন বা সরাসরি যোগাযোগ করুন — আমরা পাসওয়ার্ড রিসেট করে দেবো।</p>
+      </details>
+      <details class="group px-5 py-4 sm:px-6">
+        <summary class="flex cursor-pointer list-none items-center justify-between gap-4 text-sm font-semibold text-slate-800 dark:text-slate-100 [&::-webkit-details-marker]:hidden">
+          হাজিরা মিসিং দেখাচ্ছে, কী করবো?
+          <span class="text-slate-400 transition-transform duration-300 group-open:rotate-180">{% include "partials/icon.html" with name="chevron-down" cls="h-4 w-4" %}</span>
+        </summary>
+        <p class="mt-3 text-sm leading-relaxed text-slate-600 dark:text-slate-300">প্রথমে "Sync Device Data" থেকে মেশিন সিঙ্ক করুন। তারপরও না এলে তারিখ, এমপ্লয়ি আইডি ও স্ক্রিনশটসহ টিকিট দিন।</p>
+      </details>
+      <details class="group px-5 py-4 sm:px-6">
+        <summary class="flex cursor-pointer list-none items-center justify-between gap-4 text-sm font-semibold text-slate-800 dark:text-slate-100 [&::-webkit-details-marker]:hidden">
+          নতুন ফিচার চাই
+          <span class="text-slate-400 transition-transform duration-300 group-open:rotate-180">{% include "partials/icon.html" with name="chevron-down" cls="h-4 w-4" %}</span>
+        </summary>
+        <p class="mt-3 text-sm leading-relaxed text-slate-600 dark:text-slate-300">বিষয়ে "Feature request" লিখে কী চান তা বিস্তারিত লিখুন। আমরা রোডম্যাপে যুক্ত করে সম্ভাব্য সময় জানাবো।</p>
+      </details>
     </div>
   </div>
 </div>

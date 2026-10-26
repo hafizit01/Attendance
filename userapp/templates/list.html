@@ -1,97 +1,77 @@
 {% extends 'base.html' %}
 {% block title %}Employee Profiles{% endblock %}
-
 {% block content %}
-<div class="bg-white dark:bg-gray-800 shadow-xl rounded-lg p-6">
-  <div class="flex justify-between items-center mb-6">
-    <h2 class="text-2xl font-bold">👥 Employee Profiles</h2>
-
-    <!-- 🔍 Search Bar -->
-    <form method="get" class="flex gap-2">
-      <input type="text" name="q" value="{{ search_query }}"
-             placeholder="Search..."
-             class="px-3 py-2 border rounded-lg dark:bg-gray-700 dark:text-gray-200 focus:outline-none">
-      <button type="submit" 
-              class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
-        Search
-      </button>
-    </form>
-
-
-    <a href="{% url 'userapp:employee_profile_list_pdf' %}?q={{ search_query }}"
-     class="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700">
-    📄 Export PDF
-  </a>
+<div class="space-y-6">
+  <div class="page-header">
+    <div>
+      <p class="eyebrow">People</p>
+      <h1 class="page-title">Employee Profiles</h1>
+      <p class="page-subtitle">Personal, job and bank details of your employees.</p>
+    </div>
+    <div class="flex w-full flex-col gap-2 sm:flex-row lg:w-auto">
+      <form method="get" class="relative sm:flex-1 lg:w-64 lg:flex-none" role="search">
+        <span class="pointer-events-none absolute inset-y-0 left-3 flex items-center text-slate-400">{% include "partials/icon.html" with name="filter" cls="h-4 w-4" %}</span>
+        <label for="pf-q" class="sr-only">Search profiles</label>
+        <input id="pf-q" type="search" name="q" value="{{ search_query }}" placeholder="Name, mobile, designation…" class="form-input pl-9">
+      </form>
+      <div class="grid grid-cols-2 gap-2 sm:flex">
+        <a href="{% url 'userapp:employee_profile_list_pdf' %}?q={{ search_query|urlencode }}" target="_blank" rel="noopener" class="btn-secondary">{% include "partials/icon.html" with name="download" cls="h-4 w-4" %}PDF</a>
+        <a href="{% url 'userapp:employee_profile_create' %}" class="btn-primary">{% include "partials/icon.html" with name="plus" cls="h-4 w-4" %}Add profile</a>
+      </div>
+    </div>
   </div>
 
-  <a href="{% url 'userapp:employee_profile_create' %}" 
-     class="mb-4 inline-block px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">
-    ➕ Add Profile
-  </a>
-
-  <!-- Employee Table -->
-  <div class="overflow-x-auto">
-    <table class="min-w-full border border-gray-300 dark:border-gray-700 rounded-lg">
-      <thead class="bg-gray-100 dark:bg-gray-700">
-        <tr>
-          <th class="px-4 py-2 text-left">Image</th>
-          <th class="px-4 py-2 text-left">Name</th>
-          <th class="px-4 py-2 text-left">Designation</th>
-          <th class="px-4 py-2 text-left">Mobile</th>
-          <th class="px-4 py-2 text-left">Join Date</th>
-          <th class="px-4 py-2 text-left">Status</th>
-          <th class="px-4 py-2 text-left">Actions</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for profile in profiles %}
-        <tr class="border-t dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700">
-          <td class="px-4 py-2">
-            {% if profile.image %}
-              <img src="{{ profile.image.url }}" class="w-12 h-12 rounded-full object-cover">
-            {% else %}
-              <span class="text-gray-400">No Image</span>
-            {% endif %}
-          </td>
-          <td class="px-4 py-2">{{ profile.employee.name }}</td>
-          <td class="px-4 py-2">{{ profile.designation|default:"-" }}</td>
-          <td class="px-4 py-2">{{ profile.mobile_number|default:"-" }}</td>
-          <td class="px-4 py-2">{{ profile.join_date|default:"-" }}</td>
-          <td class="px-4 py-2">
-            {% if profile.status == "Active" %}
-              <span class="text-green-600 font-semibold">Active</span>
-            {% else %}
-              <span class="text-red-600 font-semibold">Inactive</span>
-            {% endif %}
-          </td>
-          <td class="px-4 py-2 space-x-2">
-            <a href="{% url 'userapp:employee_profile_detail' profile.id %}" class="text-blue-600 hover:underline">🔍 View</a>
-            <a href="{% url 'userapp:employee_profile_update' profile.id %}" class="text-yellow-600 hover:underline">✏️ Edit</a>
-            <a href="{% url 'userapp:employee_profile_delete' profile.id %}" class="text-red-600 hover:underline">🗑 Delete</a>
-          </td>
-        </tr>
-        {% empty %}
-        <tr><td colspan="7" class="text-center py-4">No profiles found</td></tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
-
-  <!-- 📄 Pagination -->
-  <div class="mt-6 flex justify-center gap-2">
-    {% if profiles.has_previous %}
-      <a href="?q={{ search_query }}&page=1" class="px-3 py-1 border rounded">⏮ First</a>
-      <a href="?q={{ search_query }}&page={{ profiles.previous_page_number }}" class="px-3 py-1 border rounded">⬅ Prev</a>
-    {% endif %}
-
-    <span class="px-3 py-1 bg-blue-600 text-white rounded">
-      Page {{ profiles.number }} of {{ profiles.paginator.num_pages }}
-    </span>
-
-    {% if profiles.has_next %}
-      <a href="?q={{ search_query }}&page={{ profiles.next_page_number }}" class="px-3 py-1 border rounded">Next ➡</a>
-      <a href="?q={{ search_query }}&page={{ profiles.paginator.num_pages }}" class="px-3 py-1 border rounded">Last ⏭</a>
-    {% endif %}
+  <div class="card overflow-hidden">
+    <div class="overflow-x-auto">
+      <table class="responsive-table table-modern">
+        <thead>
+          <tr>
+            <th>Employee</th>
+            <th>Designation</th>
+            <th>Mobile</th>
+            <th>Joined</th>
+            <th>Status</th>
+            <th class="text-right">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for profile in profiles %}
+          <tr>
+            <td class="rt-title">
+              <div class="flex items-center gap-3">
+                {% if profile.image %}
+                  <img src="{{ profile.image.url }}" alt="" class="h-10 w-10 shrink-0 rounded-full object-cover ring-2 ring-white dark:ring-slate-800">
+                {% else %}
+                  <span class="avatar h-10 w-10 text-sm">{{ profile.employee.name|slice:":1" }}</span>
+                {% endif %}
+                <div class="min-w-0">
+                  <a href="{% url 'userapp:employee_profile_detail' profile.id %}" class="block truncate font-semibold text-slate-900 transition hover:text-primary-600 dark:text-white dark:hover:text-primary-400">{{ profile.employee.name }}</a>
+                  <p class="truncate text-xs font-normal text-slate-500">{{ profile.employee_code|default:profile.employee.department.name|default:"—" }}</p>
+                </div>
+              </div>
+            </td>
+            <td class="text-slate-700 dark:text-slate-200">{{ profile.designation|default:"—" }}</td>
+            <td class="whitespace-nowrap tabular-nums text-slate-600 dark:text-slate-300">{{ profile.mobile_number|default:"—" }}</td>
+            <td class="whitespace-nowrap text-slate-600 dark:text-slate-300">{{ profile.join_date|date:"d M Y"|default:"—" }}</td>
+            <td>{% if profile.status == "Active" %}<span class="badge-success"><span class="badge-dot"></span>Active</span>{% else %}<span class="badge-neutral"><span class="badge-dot"></span>Inactive</span>{% endif %}</td>
+            <td class="text-right">
+              <div class="flex items-center justify-end gap-1">
+                <a href="{% url 'userapp:employee_profile_detail' profile.id %}" class="btn-icon h-9 w-9 hover:bg-primary-50 hover:text-primary-600 dark:hover:bg-primary-500/10" title="View" aria-label="View {{ profile.employee.name }}">{% include "partials/icon.html" with name="user" cls="h-4 w-4" %}</a>
+                <a href="{% url 'userapp:employee_profile_update' profile.id %}" class="btn-icon h-9 w-9 hover:bg-amber-50 hover:text-amber-600 dark:hover:bg-amber-500/10" title="Edit" aria-label="Edit {{ profile.employee.name }}">{% include "partials/icon.html" with name="pencil" cls="h-4 w-4" %}</a>
+                <a href="{% url 'userapp:employee_profile_delete' profile.id %}" class="btn-icon h-9 w-9 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-500/10" title="Delete" aria-label="Delete {{ profile.employee.name }}">{% include "partials/icon.html" with name="trash" cls="h-4 w-4" %}</a>
+              </div>
+            </td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="6">
+            {% url 'userapp:employee_profile_create' as add_url %}
+            {% include "partials/empty_state.html" with icon="user" title="No profiles found" text="Add a profile to keep personal, job and bank details in one place." action_url=add_url action_label="Add profile" %}
+          </td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% include "partials/pagination.html" with page=profiles %}
   </div>
 </div>
 {% endblock %}

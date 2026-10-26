@@ -1,27 +1,8 @@
 {% extends "base.html" %}
+{% block title %}Delete Holiday{% endblock %}
 {% block content %}
-<div class="max-w-md mx-auto bg-white dark:bg-gray-800 p-6 rounded shadow text-center 
-            text-gray-900 dark:text-gray-200 transition-colors duration-300">
-  
-  <h2 class="text-xl font-bold mb-4">Are you sure you want to delete this holiday?</h2>
-  <p class="mb-6">{{ holiday.title }} ({{ holiday.start_date }} - {{ holiday.end_date }})</p>
-  
-  <form method="post">
-    {% csrf_token %}
-    <div class="flex justify-center gap-3">
-      <!-- Cancel -->
-      <a href="{% url 'attendance_app:holiday_list' %}" 
-         class="bg-gray-500 dark:bg-gray-600 text-white px-4 py-2 rounded 
-                hover:bg-gray-600 dark:hover:bg-gray-700 transition">
-        Cancel
-      </a>
-      <!-- Delete -->
-      <button type="submit" 
-              class="bg-red-600 dark:bg-red-700 text-white px-4 py-2 rounded 
-                     hover:bg-red-700 dark:hover:bg-red-800 transition">
-        Delete
-      </button>
-    </div>
-  </form>
-</div>
+{% url 'attendance_app:holiday_list' as cancel_url %}
+{% with start=holiday.start_date|date:"d M Y" end=holiday.end_date|date:"d M Y" %}
+{% include "partials/confirm_delete.html" with title="Delete holiday" subject=holiday.title detail=start detail2=end cancel_url=cancel_url %}
+{% endwith %}
 {% endblock %}

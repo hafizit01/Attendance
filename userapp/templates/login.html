@@ -1,143 +1,103 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="preload">
 <head>
   {% load static %}
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Login - Attendance System</title>
-  
-  <script src="https://cdn.tailwindcss.com"></script>
-  
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <style>
-    body { font-family: 'Inter', sans-serif; }
-    .glass-effect {
-        background: rgba(255, 255, 255, 0.95);
-        backdrop-filter: blur(10px);
-    }
-    .animate-float {
-        animation: float 6s ease-in-out infinite;
-    }
-    @keyframes float {
-        0% { transform: translateY(0px); }
-        50% { transform: translateY(-20px); }
-        100% { transform: translateY(0px); }
-    }
-  </style>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#4f46e5">
+  <title>Sign in · SmartAttendance</title>
+  {% include "partials/head_assets.html" %}
 </head>
-<body class="bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 min-h-screen flex items-center justify-center p-4">
+<body class="min-h-screen">
+  <div class="grid min-h-screen lg:grid-cols-2">
 
-  <div class="w-full max-w-5xl bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col md:flex-row min-h-[600px] border border-white/50">
-    
-    <div class="w-full md:w-1/2 bg-indigo-600 relative overflow-hidden flex flex-col items-center justify-center p-12 text-center text-white">
-        <div class="absolute inset-0 opacity-10">
-            <svg class="h-full w-full" viewBox="0 0 100 100" preserveAspectRatio="none">
-                <path d="M0 100 C 20 0 50 0 100 100 Z" fill="white" />
-            </svg>
-        </div>
+    {# ── বাঁ দিক: ব্র্যান্ড প্যানেল (ডেস্কটপ) ── #}
+    <aside class="relative hidden overflow-hidden bg-slate-900 p-12 text-white lg:flex lg:flex-col lg:justify-between">
+      <div class="pointer-events-none absolute -right-32 -top-32 h-[28rem] w-[28rem] rounded-full bg-primary-500/20 blur-3xl"></div>
+      <div class="pointer-events-none absolute -bottom-40 -left-24 h-96 w-96 rounded-full bg-indigo-400/10 blur-3xl"></div>
+      <div class="pointer-events-none absolute inset-0 opacity-[0.04]" style="background-image: linear-gradient(#fff 1px, transparent 1px), linear-gradient(90deg, #fff 1px, transparent 1px); background-size: 40px 40px;"></div>
 
-        <div class="relative z-10 space-y-6">
-            <div class="animate-float bg-white/20 p-6 rounded-full inline-block backdrop-blur-sm border border-white/10">
-                <img src="{% static 'images/logo.png' %}" onerror="this.src='https://cdn-icons-png.flaticon.com/512/2942/2942813.png'" alt="Logo" class="w-24 h-24 object-contain">
-            </div>
-            
-            <div>
-                <h1 class="text-4xl font-bold mb-2">Easy Coding IT</h1>
-                <p class="text-indigo-200 text-lg">Attendance Management System</p>
-            </div>
-
-            <div class="pt-8">
-                <p class="text-sm text-indigo-200 opacity-80">"Efficiency is doing things right; effectiveness is doing the right things."</p>
-            </div>
-        </div>
-    </div>
-
-    <div class="w-full md:w-1/2 p-8 md:p-12 bg-white flex flex-col justify-center">
-      
-      <div class="mb-8">
-        <h2 class="text-3xl font-bold text-gray-800">Welcome Back! 👋</h2>
-        <p class="text-gray-500 mt-2">Please sign in to your account</p>
+      <div class="relative flex items-center gap-3">
+        <span class="flex h-10 w-10 items-center justify-center rounded-lg bg-primary-500">{% include "partials/icon.html" with name="check-circle" cls="h-5 w-5" %}</span>
+        <span class="text-xl font-semibold tracking-tight">Smart<span class="text-primary-400">Attendance</span></span>
       </div>
 
-      {% if messages %}
-        {% for message in messages %}
-          <div class="mb-6 flex items-center gap-3 p-4 rounded-lg border-l-4 {% if message.tags == 'error' %}border-red-500 bg-red-50 text-red-700{% else %}border-green-500 bg-green-50 text-green-700{% endif %}">
-            {% if message.tags == 'error' %}
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd" /></svg>
-            {% else %}
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" /></svg>
-            {% endif %}
-            <span class="text-sm font-medium">{{ message }}</span>
+      <div class="relative max-w-md">
+        <h1 class="text-4xl font-semibold leading-tight tracking-tight">Attendance & payroll,<br>without the paperwork.</h1>
+        <p class="mt-4 text-base text-slate-400">ZKTeco মেশিন থেকে হাজিরা, ছুটি, ওভারটাইম আর বেতন — এক জায়গায়।</p>
+        <ul class="mt-8 space-y-3 text-sm text-slate-300">
+          <li class="flex items-center gap-3">{% include "partials/icon.html" with name="sync" cls="h-5 w-5 text-primary-400" %}Automatic device sync</li>
+          <li class="flex items-center gap-3">{% include "partials/icon.html" with name="chart" cls="h-5 w-5 text-primary-400" %}Late, overtime & monthly reports</li>
+          <li class="flex items-center gap-3">{% include "partials/icon.html" with name="money" cls="h-5 w-5 text-primary-400" %}Payroll with bank / cash split</li>
+        </ul>
+      </div>
+
+      <p class="relative text-xs text-slate-500">© {% now "Y" %} Easy Coding IT Solutions</p>
+    </aside>
+
+    {# ── ডান দিক: লগইন ফর্ম ── #}
+    <main class="flex items-center justify-center px-4 py-12 sm:px-6">
+      <div class="w-full max-w-sm">
+        <div class="mb-8 flex items-center gap-2.5 lg:hidden">
+          <span class="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-900 text-primary-400 dark:bg-primary-500 dark:text-white">{% include "partials/icon.html" with name="check-circle" cls="h-5 w-5" %}</span>
+          <span class="text-lg font-semibold tracking-tight text-slate-900 dark:text-white">Smart<span class="text-primary-600 dark:text-primary-400">Attendance</span></span>
+        </div>
+
+        <h2 class="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">Welcome back</h2>
+        <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Sign in to your account to continue.</p>
+
+        {% if messages %}
+          <div class="mt-6 space-y-2">
+            {% for message in messages %}
+              <div role="alert" class="flex items-start gap-2 rounded-xl border p-3 text-sm
+                {% if message.tags == 'error' %}border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-500/20 dark:bg-rose-500/10 dark:text-rose-300
+                {% elif message.tags == 'warning' %}border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-300
+                {% else %}border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-300{% endif %}">
+                {% if message.tags == 'error' %}{% include "partials/icon.html" with name="x-circle" cls="h-4 w-4 mt-0.5" %}{% else %}{% include "partials/icon.html" with name="info" cls="h-4 w-4 mt-0.5" %}{% endif %}
+                <span>{{ message }}</span>
+              </div>
+            {% endfor %}
           </div>
-        {% endfor %}
-      {% endif %}
+        {% endif %}
 
-      <form method="post" action="{% url 'userapp:login' %}" class="space-y-6">
-        {% csrf_token %}
-        
-        <div>
-            <label for="username" class="block text-sm font-medium text-gray-700 mb-2">Username or ID</label>
+        <form method="post" action="{% url 'userapp:login' %}" class="mt-8 space-y-5">
+          {% csrf_token %}
+          {# লগইনের পর আগের পেজে ফেরার জন্য #}
+          <input type="hidden" name="next" value="{{ next }}">
+          <div>
+            <label for="username" class="form-label">Username</label>
+            <input type="text" name="username" id="username" required autofocus autocomplete="username"
+                   placeholder="Your username" class="form-input py-3">
+          </div>
+          <div>
+            <label for="password" class="form-label">Password</label>
             <div class="relative">
-                <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <svg class="h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
-                </div>
-                <input type="text" name="username" id="username" required 
-                       class="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all outline-none"
-                       placeholder="Enter your username">
+              <input type="password" name="password" id="password" required autocomplete="current-password" placeholder="••••••••" class="form-input py-3 pr-12">
+              <button type="button" id="pw-toggle" class="btn-icon absolute inset-y-0 right-1 my-auto h-9 w-9" aria-label="Show password" aria-pressed="false">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.7" stroke="currentColor" class="h-5 w-5"><path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 0 1 0-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178Z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z"/></svg>
+              </button>
             </div>
-        </div>
+          </div>
+          <button type="submit" class="btn-primary w-full py-3">Sign in {% include "partials/icon.html" with name="arrow-right" cls="h-4 w-4" %}</button>
+        </form>
 
-        <div>
-            <label for="password" class="block text-sm font-medium text-gray-700 mb-2">Password</label>
-            <div class="relative">
-                <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <svg class="h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
-                </div>
-                <input type="password" name="password" id="password" required 
-                       class="w-full pl-10 pr-12 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all outline-none"
-                       placeholder="••••••••">
-                
-                <button type="button" onclick="togglePassword()" class="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-indigo-600 transition-colors">
-                    <svg id="eye-icon" class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                    </svg>
-                    <svg id="eye-off-icon" class="h-5 w-5 hidden" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.542-7a10.05 10.05 0 011.574-2.59M5.7 5.7l1.414 1.414m0 0a3 3 0 014.243 4.243M9.828 9.828l4.242 4.242M19.828 19.828l-14.142-14.142" />
-                    </svg>
-                </button>
-            </div>
-        </div>
-
-        <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3.5 px-4 rounded-xl shadow-lg shadow-indigo-500/30 transition-all hover:-translate-y-0.5 active:scale-95 flex items-center justify-center gap-2">
-            <span>Sign In</span>
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clip-rule="evenodd" /></svg>
-        </button>
-
-      </form>
-
-      <div class="mt-8 text-center text-sm text-gray-500">
-        &copy; {% now "Y" %} Easy Coding IT Solutions. All rights reserved.
+        <p class="mt-8 text-center text-xs text-slate-500 dark:text-slate-400">
+          Need help? <a href="https://wa.me/8801822755994" target="_blank" rel="noopener" class="link">Contact support</a>
+        </p>
       </div>
-    </div>
+    </main>
   </div>
 
   <script>
-    function togglePassword() {
-      const passwordInput = document.getElementById('password');
-      const eyeIcon = document.getElementById('eye-icon');
-      const eyeOffIcon = document.getElementById('eye-off-icon');
-
-      if (passwordInput.type === 'password') {
-        passwordInput.type = 'text';
-        eyeIcon.classList.add('hidden');
-        eyeOffIcon.classList.remove('hidden');
-      } else {
-        passwordInput.type = 'password';
-        eyeIcon.classList.remove('hidden');
-        eyeOffIcon.classList.add('hidden');
-      }
-    }
+    document.getElementById('pw-toggle').addEventListener('click', function () {
+      const input = document.getElementById('password');
+      const show = input.type === 'password';
+      input.type = show ? 'text' : 'password';
+      this.setAttribute('aria-pressed', show);
+      this.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
+      this.classList.toggle('text-primary-600', show);
+    });
+    window.addEventListener('load', function () { setTimeout(function () { document.documentElement.classList.remove('preload'); }, 150); });
   </script>
 </body>
 </html>

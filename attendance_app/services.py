@@ -21,6 +21,9 @@ def create_employee_with_limit(*, company, name, device_user_id,
     if limit is not None and current >= limit:
         raise ValidationError(f"Employee limit reached ({current}/{limit}).")
 
+    if department is not None and Employee.id_scope(department).filter(device_user_id=device_user_id).exists():
+        raise ValidationError(f"Device User ID {device_user_id} already exists in this branch.")
+
     return Employee.objects.create(
         company=company, name=name, device_user_id=device_user_id,
         department=department, user=user

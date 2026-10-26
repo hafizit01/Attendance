@@ -1,229 +1,88 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    {% load static %}
-    {% load time_filters %}
-    {% load custom_filters %}
-    <meta charset="UTF-8">
-    <title>Monthly Attendance Report - {{ company_name }}</title>
-    <style>
-        /* -----------------------------------------------------------
-           1. Google Font Import (CDN)
-           এটি একদম ফাইলের শুরুতে থাকতে হবে
-           ----------------------------------------------------------- */
-        @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap');
+{% extends "pdf/base.html" %}
+{% load custom_filters %}
+{% block title %}Monthly Work Report{% endblock %}
+{% block orientation %}landscape{% endblock %}
+{% block footer_title %}Monthly Work Report {{ start_date|date:"d M" }} – {{ end_date|date:"d M Y" }}{% endblock %}
+{% block eyebrow %}Attendance{% endblock %}
+{% block heading %}Monthly Work Report{% endblock %}
 
-        @page {
-            size: A4 landscape;
-            margin: 15mm 10mm;
-        }
+{% block meta %}
+<table class="meta"><tr>
+  <td><div class="k">Period</div><div class="v">{{ start_date|date:"d M Y" }} – {{ end_date|date:"d M Y" }}</div></td>
+  <td><div class="k">Days</div><div class="v">{{ period_days }}</div></td>
+  <td><div class="k">Branch</div><div class="v">{{ branch_name }}</div></td>
+  <td><div class="k">Department</div><div class="v">{{ department_name|default:"All departments" }}</div></td>
+  <td><div class="k">Employee</div><div class="v">{{ employee_name|default:"All employees" }}</div></td>
+</tr></table>
+{% endblock %}
 
-        body {
-            /* 2. Font Family Update */
-            font-family: 'Roboto', sans-serif;
-            font-size: 11px;
-            margin: 0;
-            color: #333;
-            line-height: 1.3;
-        }
+{% block kpis %}
+<table class="kpis"><tr>
+  <td class="kw"><div class="kpi brand"><div class="k">Employees</div><div class="v">{{ report_data|length }}</div></div></td>
+  <td class="kw"><div class="kpi good"><div class="k">Present days</div><div class="v">{{ totals.present }}</div><div class="s">all employees together</div></div></td>
+  <td class="kw"><div class="kpi bad"><div class="k">Absent days</div><div class="v">{{ totals.absent }}</div></div></td>
+  <td class="kw"><div class="kpi"><div class="k">Leave days</div><div class="v">{{ totals.leave }}</div></div></td>
+  <td class="kw"><div class="kpi"><div class="k">Off + holiday</div><div class="v">{{ totals.off }}</div></div></td>
+  <td class="kw"><div class="kpi {% if totals.attendance_rate < 80 %}warn{% else %}good{% endif %}"><div class="k">Attendance rate</div><div class="v">{{ totals.attendance_rate }}%</div><div class="s">present ÷ (present + absent)</div></div></td>
+</tr></table>
+{% endblock %}
 
-        /* Header Styles */
-        .header-container {
-            border-bottom: 2px solid #374151;
-            padding-bottom: 10px;
-            margin-bottom: 15px;
-            overflow: hidden;
-        }
-        
-        .logo-section {
-            float: left;
-            width: 70px;
-        }
-
-        .logo {
-            width: 60px;
-            height: 60px;
-            border-radius: 50%;
-            object-fit: cover;
-            border: 1px solid #ddd;
-        }
-
-        .company-info {
-            float: left;
-            margin-left: 10px;
-            padding-top: 5px;
-        }
-
-        .company-name {
-            font-size: 20px;
-            font-weight: bold;
-            margin: 0 0 5px 0;
-            color: #1a56db;
-        }
-
-        .report-title-section {
-            float: right;
-            text-align: right;
-            padding-top: 5px;
-        }
-
-        .report-name {
-            font-size: 16px;
-            font-weight: bold;
-            margin: 0 0 5px 0;
-            color: #374151;
-            text-transform: uppercase;
-        }
-
-        .meta-info {
-            font-size: 11px;
-            color: #6b7280;
-        }
-
-        /* Table Styles */
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 5px;
-        }
-
-        th {
-            background-color: #e5e7eb;
-            color: #111827;
-            font-weight: bold;
-            text-transform: uppercase;
-            font-size: 9px;
-            border: 1px solid #9ca3af;
-            padding: 8px 4px;
-            vertical-align: middle;
-        }
-
-        td {
-            border: 1px solid #d1d5db;
-            padding: 5px 4px;
-            text-align: center;
-            font-size: 10px;
-            vertical-align: middle;
-        }
-
-        tr:nth-child(even) {
-            background-color: #f9fafb;
-        }
-
-        /* Status Colors */
-        .late { color: #dc2626; font-weight: bold; }
-        .overtime { color: #059669; font-weight: bold; }
-        .work-hours { font-weight: bold; color: #1e40af; }
-        
-        .diff-plus { color: #059669; font-weight: bold; }
-        .diff-minus { color: #dc2626; font-weight: bold; }
-        .diff-neutral { color: #9ca3af; }
-
-        /* Footer */
-        .footer {
-            position: fixed;
-            bottom: -10mm;
-            left: 0;
-            right: 0;
-            text-align: center;
-            font-size: 9px;
-            color: #9ca3af;
-            border-top: 1px solid #e5e7eb;
-            padding-top: 5px;
-        }
-    </style>
-</head>
-<body>
-
-<div class="header-container">
-    <div class="logo-section">
-        {% if logo_url %}
-            <img src="{{ logo_url }}" alt="Logo" class="logo">
-        {% else %}
-            <div style="width:60px; height:60px; background:#f3f4f6; border-radius:50%; text-align:center; line-height:60px; color:#9ca3af; font-size: 10px; border: 1px solid #e5e7eb;">LOGO</div>
-        {% endif %}
-    </div>
-    
-    <div class="company-info">
-        <h1 class="company-name">{{ company_name|default:"Riya Jewellers" }}</h1>
-        <div class="meta-info">
-            {% if selected_department %}<strong>Dept:</strong> {{ selected_department }} &nbsp;|&nbsp; {% endif %}
-            <strong>Period:</strong> {{ start_date|date:"d M, Y" }} - {{ end_date|date:"d M, Y" }}
-        </div>
-    </div>
-
-    <div class="report-title-section">
-        <div class="report-name">Attendance Summary</div>
-        <div class="meta-info">Generated: {{ today|date:"d M Y, h:i A" }}</div>
-    </div>
-</div>
-
-<table>
-    <thead>
-        <tr>
-            <th width="3%">SL</th>
-            <th width="16%" style="text-align: left; padding-left: 8px;">Employee Name</th>
-            <th width="5%">Pres.</th>
-            <th width="5%">Abs.</th>
-            <th width="5%">Leave</th>
-            <th width="5%">Off</th>
-            {% if report_data.0.holiday_days > 0 %}
-                <th width="5%">Holi.</th>
-            {% endif %}
-            <th width="8%">Late Time</th>
-            <th width="8%">Overtime</th>
-            <th width="9%">Total Work</th>
-            <th width="9%">Expected</th>
-            <th width="10%">Difference</th>
-        </tr>
-    </thead>
-    <tbody>
-        {% for row in report_data %}
-        <tr>
-            <td>{{ forloop.counter }}</td>
-            <td style="text-align: left; padding-left: 8px; font-weight: bold;">{{ row.employee.name }}</td>
-            <td>{{ row.present_days }}</td>
-            <td>{{ row.absent_days }}</td>
-            <td>{{ row.leave_days }}</td>
-            <td>{{ row.weekly_off_days }}</td>
-            {% if row.holiday_days > 0 or report_data.0.holiday_days > 0 %}
-                <td>{{ row.holiday_days }}</td>
-            {% endif %}
-            
-            <td class="{% if row.late_time != '00:00:00' %}late{% endif %}">
-                {{ row.late_time }}
-            </td>
-            
-            <td class="{% if row.over_time != '00:00:00' %}overtime{% endif %}">
-                {{ row.over_time }}
-            </td>
-            
-            <td class="work-hours">{{ row.total_work_hours }}</td>
-            <td style="color: #6b7280;">{{ row.expected_work_time_excl_off|format_timedelta }}</td>
-            
-            <td>
-                {% if row.work_time_difference.total_seconds < 0 %}
-                    <span class="diff-plus">+{{ row.work_time_difference|abs_timedelta|format_timedelta }}</span>
-                {% elif row.work_time_difference.total_seconds > 0 %}
-                    <span class="diff-minus">-{{ row.work_time_difference|format_timedelta }}</span>
-                {% else %}
-                    <span class="diff-neutral">--</span>
-                {% endif %}
-            </td>
-        </tr>
-        {% empty %}
-        <tr>
-            <td colspan="12" style="padding: 30px; color: #9ca3af; font-style: italic;">
-                No attendance records found for the selected dates.
-            </td>
-        </tr>
-        {% endfor %}
-    </tbody>
+{% block content %}
+<table class="tbl">
+  <thead>
+    <tr>
+      <th colspan="2"></th>
+      <th class="grp" colspan="5">Days</th>
+      <th class="grp" colspan="5">Time (hh:mm:ss)</th>
+    </tr>
+    <tr>
+      <th style="width:3%">#</th>
+      <th style="width:21%">Employee</th>
+      <th class="ctr sep" style="width:6.5%">Present</th><th class="ctr" style="width:6%">Absent</th><th class="ctr" style="width:6%">Leave</th><th class="ctr" style="width:5%">Off</th><th class="ctr" style="width:6%">Holiday</th>
+      <th class="num sep" style="width:8.5%">Late</th><th class="num" style="width:8.5%">Overtime</th><th class="num" style="width:8.5%">Worked</th><th class="num" style="width:8.5%">Expected</th><th class="num">Difference</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for row in report_data %}
+    <tr>
+      <td class="sl">{{ forloop.counter }}</td>
+      <td><div class="name">{{ row.employee.name }}</div><div class="sub">{% if row.employee.department.branch %}{{ row.employee.department.branch.name }} · {% endif %}{{ row.employee.department.name|default:"—" }}</div></td>
+      <td class="ctr sep pos">{{ row.present_days }}</td>
+      <td class="ctr {% if row.absent_days %}neg{% else %}muted{% endif %}">{{ row.absent_days }}</td>
+      <td class="ctr {% if not row.leave_days %}muted{% endif %}">{{ row.leave_days }}</td>
+      <td class="ctr muted">{{ row.weekly_off_days }}</td>
+      <td class="ctr muted">{{ row.holiday_days }}</td>
+      <td class="num sep {% if row.late_time != '00:00:00' %}neg{% else %}muted{% endif %}">{{ row.late_time }}</td>
+      <td class="num {% if row.over_time != '00:00:00' %}pos{% else %}muted{% endif %}">{{ row.over_time }}</td>
+      <td class="num name">{{ row.total_work_hours }}</td>
+      <td class="num muted">{{ row.expected_work_time_excl_off|format_timedelta }}</td>
+      <td class="num">
+        {% if row.work_time_difference.total_seconds < 0 %}<span class="pos">+{{ row.work_time_difference|abs_timedelta|format_timedelta }}</span>
+        {% elif row.work_time_difference.total_seconds > 0 %}<span class="neg">−{{ row.work_time_difference|format_timedelta }}</span>
+        {% else %}<span class="muted">00:00:00</span>{% endif %}
+      </td>
+    </tr>
+    {% empty %}
+    <tr><td colspan="12" class="empty">No attendance records for the selected period.</td></tr>
+    {% endfor %}
+  </tbody>
+  {% if report_data %}
+  <tfoot>
+    <tr>
+      <td colspan="2">Total</td>
+      <td class="ctr sep">{{ totals.present }}</td><td class="ctr">{{ totals.absent }}</td><td class="ctr">{{ totals.leave }}</td>
+      <td class="ctr">{{ totals.weekly_off }}</td><td class="ctr">{{ totals.holiday }}</td>
+      <td colspan="5" class="sep"></td>
+    </tr>
+  </tfoot>
+  {% endif %}
 </table>
+<p class="note">Difference = worked − expected. <span class="pos">+</span> means extra time, <span class="neg">−</span> means short time. Leave days count as full working time.</p>
+{% endblock %}
 
-<div class="footer">
-    Software Developed by: <strong>Easy Coding</strong> | Page <pdf:pagenumber /> of <pdf:pagecount />
-</div>
-
-</body>
-</html>
+{% block signatures %}
+<table class="sigs"><tr>
+  <td><div class="line">Prepared by<div class="role">HR</div></div></td>
+  <td><div class="line">Approved by<div class="role">Management</div></div></td>
+</tr></table>
+{% endblock %}

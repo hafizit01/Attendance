@@ -1,39 +1,31 @@
 {% extends "base.html" %}
-
+{% block title %}{{ title }}{% endblock %}
 {% block content %}
-<div class="p-6 bg-white dark:bg-gray-800 rounded shadow max-w-md mx-auto transition-colors duration-300">
-  <h1 class="text-2xl font-bold mb-4 text-gray-900 dark:text-gray-100">{{ title }}</h1>
-  
-  <form method="post" class="space-y-4">
-    {% csrf_token %}
-    <div class="space-y-3">
-      {{ form.as_p }}
-    </div>
+<div class="mx-auto max-w-2xl space-y-6">
+  <div>
+    <a href="{% url 'attendance_app:attendance_list' %}" class="btn-ghost btn-sm -ml-3 mb-2">← Attendance</a>
+    <h1 class="page-title">{{ title }}</h1>
+    <p class="page-subtitle">একটি পাঞ্চ ম্যানুয়ালি যোগ করুন (যেমন মেশিন বন্ধ থাকলে)।</p>
+  </div>
 
-    <div class="flex items-center gap-3">
-      <button type="submit"
-              class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded transition">
-        Save
-      </button>
-      <a href="{% url 'attendance_app:attendance_list' %}"
-         class="text-gray-700 dark:text-gray-300 hover:underline">
-        Cancel
-      </a>
+  <form method="post" class="card overflow-hidden" novalidate>
+    {% csrf_token %}
+    <div class="space-y-5 p-5 sm:p-6">
+      {% if form.non_field_errors %}
+      <div class="flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 p-3.5 text-sm text-rose-700 dark:border-rose-500/20 dark:bg-rose-500/10 dark:text-rose-300" role="alert">
+        {% include "partials/icon.html" with name="alert" %}<div>{% for e in form.non_field_errors %}<p>{{ e }}</p>{% endfor %}</div>
+      </div>
+      {% endif %}
+      <div class="grid grid-cols-1 gap-5 sm:grid-cols-2">
+        {% include "partials/form_field.html" with field=form.employee wrap="sm:col-span-2" %}
+        {% include "partials/form_field.html" with field=form.timestamp %}
+        {% include "partials/form_field.html" with field=form.status %}
+      </div>
+    </div>
+    <div class="flex flex-col-reverse gap-3 border-t border-slate-100 bg-slate-50/60 px-5 py-4 sm:flex-row sm:justify-end sm:px-6 dark:border-slate-800 dark:bg-slate-800/40">
+      <a href="{% url 'attendance_app:attendance_list' %}" class="btn-secondary">Cancel</a>
+      <button type="submit" class="btn-primary">{% include "partials/icon.html" with name="check-circle" cls="h-4 w-4" %}Save punch</button>
     </div>
   </form>
 </div>
-
-<style>
-  /* Django default {{ form.as_p }} এর input/textarea ফিল্ডগুলো styled করে দিচ্ছি */
-  form p label {
-    @apply block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1;
-  }
-  form p input, 
-  form p select, 
-  form p textarea {
-    @apply w-full rounded border border-gray-300 dark:border-gray-600 px-3 py-2 
-           bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100
-           focus:outline-none focus:ring-2 focus:ring-blue-500;
-  }
-</style>
 {% endblock %}

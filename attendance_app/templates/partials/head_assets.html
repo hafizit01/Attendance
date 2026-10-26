@@ -1,0 +1,199 @@
+{# ডিজাইন সিস্টেম: Tailwind কনফিগ + কম্পোনেন্ট ক্লাস + থিম। base.html, login.html, 404.html সবাই এটা include করে #}
+  {# থিম ও সাইডবারের অবস্থা রেন্ডারের আগেই বসাই, যাতে ঝলক না দেয় #}
+  <script>
+    (function () {
+      try {
+        var t = localStorage.theme;
+        if (t === 'dark' || (!t && window.matchMedia('(prefers-color-scheme: dark)').matches)) document.documentElement.classList.add('dark');
+        if (localStorage.getItem('sidebarCollapsed') === 'true') document.documentElement.classList.add('sb-collapsed');
+      } catch (e) {}
+    })();
+  </script>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Hind+Siliguri:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <script src="https://cdn.tailwindcss.com/3.4.1"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          // Inter এ বাংলা গ্লিফ নেই — বাংলা লেখা Hind Siliguri তে পড়ে
+          fontFamily: { sans: ['Inter', 'Hind Siliguri', 'ui-sans-serif', 'system-ui', 'sans-serif'] },
+          colors: {
+            primary: { 50: '#eef2ff', 100: '#e0e7ff', 200: '#c7d2fe', 300: '#a5b4fc', 400: '#818cf8', 500: '#6366f1', 600: '#4f46e5', 700: '#4338ca', 800: '#3730a3', 900: '#312e81' }
+          },
+          boxShadow: {
+            soft: '0 1px 2px 0 rgba(16, 24, 40, 0.05), 0 1px 3px 0 rgba(16, 24, 40, 0.04)',
+            lift: '0 12px 24px -12px rgba(16, 24, 40, 0.18)',
+          }
+        }
+      }
+    }
+  </script>
+
+  {# ডিজাইন সিস্টেম: সব পেজ এই কম্পোনেন্ট ক্লাসগুলো ব্যবহার করে #}
+  <style type="text/tailwindcss">
+    @layer base {
+      html { -webkit-tap-highlight-color: transparent; }
+      body { @apply bg-slate-50 text-slate-800 antialiased dark:bg-slate-950 dark:text-slate-200; font-feature-settings: "cv11", "ss01"; }
+    }
+    @layer components {
+      /* কার্ড */
+      .card { @apply rounded-xl border border-slate-200 bg-white shadow-soft transition-all duration-300 ease-in-out dark:border-slate-800 dark:bg-slate-900; }
+      .card-header { @apply flex items-center justify-between gap-3 border-b border-slate-100 px-5 py-3.5 dark:border-slate-800; }
+      .card-title { @apply flex items-center gap-2 text-[0.95rem] font-semibold text-slate-900 dark:text-white; }
+
+      /* পেজ হেডার */
+      .page-header { @apply flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between; }
+      .page-title { @apply text-xl font-semibold tracking-tight text-slate-900 sm:text-2xl dark:text-white; }
+      .page-subtitle { @apply mt-1 text-sm text-slate-500 dark:text-slate-400; }
+      .eyebrow { @apply mb-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-primary-600 dark:text-primary-400; }
+
+      /* বাটন */
+      .btn { @apply inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg px-4 py-2.5 text-sm font-semibold transition-all duration-200 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 active:scale-95 disabled:pointer-events-none disabled:opacity-50 dark:focus-visible:ring-offset-slate-900; }
+      .btn-primary { @apply btn bg-primary-600 text-white shadow-sm hover:bg-primary-700 focus-visible:ring-primary-500; }
+      .btn-success { @apply btn bg-emerald-600 text-white shadow-sm hover:bg-emerald-700 focus-visible:ring-emerald-500; }
+      .btn-danger { @apply btn bg-rose-600 text-white shadow-sm hover:bg-rose-700 focus-visible:ring-rose-500; }
+      .btn-secondary { @apply btn border border-slate-300 bg-white text-slate-700 shadow-sm hover:border-slate-400 hover:bg-slate-50 focus-visible:ring-primary-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700; }
+      .btn-ghost { @apply btn text-slate-600 hover:bg-slate-100 hover:text-slate-900 focus-visible:ring-primary-500 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white; }
+      .btn-icon { @apply inline-flex h-10 w-10 items-center justify-center rounded-lg text-slate-500 transition-all duration-200 ease-in-out hover:bg-slate-100 hover:text-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 active:scale-95 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white; }
+      .btn-sm { @apply px-3 py-2 text-xs; }
+
+      /* ফর্ম */
+      .form-label { @apply mb-1.5 block text-[13px] font-medium text-slate-700 dark:text-slate-300; }
+      .form-input { @apply block w-full rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-slate-800 shadow-sm placeholder:text-slate-400 transition-all duration-200 ease-in-out focus:border-primary-500 focus:outline-none focus:ring-4 focus:ring-primary-500/15 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500; }
+      /* ড্রপডাউন তীর: data-URL @apply এ চলে না, তাই সাধারণ CSS */
+      .form-select {
+        @apply form-input appearance-none pr-10;
+        background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%2394a3b8' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3e%3c/svg%3e");
+        background-size: 1.25rem; background-position: right .65rem center; background-repeat: no-repeat;
+      }
+
+      /* স্ট্যাটাস ব্যাজ */
+      .form-checkbox { @apply h-5 w-5 shrink-0 cursor-pointer rounded-md accent-primary-600 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500; }
+      .form-file { @apply block w-full cursor-pointer rounded-lg border border-dashed border-slate-300 bg-slate-50 text-sm text-slate-600 transition-all duration-300 file:mr-4 file:cursor-pointer file:rounded-l-lg file:border-0 file:bg-primary-50 file:px-4 file:py-2.5 file:text-sm file:font-semibold file:text-primary-700 hover:border-primary-300 hover:file:bg-primary-100 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-300 dark:file:bg-primary-500/10 dark:file:text-primary-300; }
+      .form-help { @apply mt-1.5 text-xs text-slate-500 dark:text-slate-400; }
+      .form-error { @apply mt-1.5 flex items-center gap-1 text-xs font-medium text-rose-600 dark:text-rose-400; }
+      .has-error .form-input, .has-error .form-select, .has-error .form-file { @apply border-rose-300 ring-1 ring-rose-200 dark:border-rose-500/50 dark:ring-rose-500/20; }
+
+      /* বিবিধ */
+      .avatar { @apply flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary-50 text-xs font-bold uppercase text-primary-700 dark:bg-primary-500/10 dark:text-primary-300; }
+      .section-title { @apply flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-white; }
+      .kv-label { @apply text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400; }
+      .kv-value { @apply mt-0.5 text-sm font-medium text-slate-900 break-words dark:text-slate-100; }
+      .page-link { @apply inline-flex h-9 min-w-[2.25rem] items-center justify-center rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium text-slate-600 transition-all duration-300 hover:bg-slate-50 hover:text-slate-900 active:scale-95 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700; }
+      .page-link.is-disabled { @apply pointer-events-none opacity-40; }
+      .link { @apply font-medium text-primary-600 underline-offset-4 transition hover:text-primary-700 hover:underline dark:text-primary-400; }
+
+      .badge { @apply inline-flex items-center gap-1.5 whitespace-nowrap rounded-md px-2 py-0.5 text-xs font-medium ring-1 ring-inset; }
+      .badge-dot { @apply h-1.5 w-1.5 rounded-full bg-current; }
+      .badge-success { @apply badge bg-emerald-50 text-emerald-700 ring-emerald-600/20 dark:bg-emerald-500/10 dark:text-emerald-300 dark:ring-emerald-500/25; }
+      .badge-danger { @apply badge bg-rose-50 text-rose-700 ring-rose-600/20 dark:bg-rose-500/10 dark:text-rose-300 dark:ring-rose-500/25; }
+      .badge-warning { @apply badge bg-amber-50 text-amber-800 ring-amber-600/25 dark:bg-amber-500/10 dark:text-amber-300 dark:ring-amber-500/25; }
+      .badge-info { @apply badge bg-blue-50 text-blue-700 ring-blue-600/20 dark:bg-blue-500/10 dark:text-blue-300 dark:ring-blue-500/25; }
+      .badge-purple { @apply badge bg-violet-50 text-violet-700 ring-violet-600/20 dark:bg-violet-500/10 dark:text-violet-300 dark:ring-violet-500/25; }
+      .badge-neutral { @apply badge bg-slate-50 text-slate-600 ring-slate-500/20 dark:bg-slate-700/40 dark:text-slate-300 dark:ring-slate-500/30; }
+
+      /* টেবিল */
+      .table-modern { @apply w-full text-left text-sm; }
+      .table-modern thead th { @apply whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:border-slate-800 dark:bg-slate-800/60 dark:text-slate-400; }
+      .table-modern tbody tr { @apply transition-colors duration-150 hover:bg-slate-50/70 dark:hover:bg-slate-800/50; }
+      .table-modern tbody td { @apply px-5 py-3 align-middle; }
+      .table-modern tbody tr + tr { @apply border-t border-slate-100 dark:border-slate-800; }
+
+      /* স্ট্যাট কার্ড */
+      .stat-card { @apply card relative overflow-hidden p-5; }
+      .stat-icon { @apply flex h-10 w-10 items-center justify-center rounded-lg; }
+      .stat-label { @apply text-[13px] font-medium text-slate-500 dark:text-slate-400; }
+      .stat-value { @apply mt-1.5 text-[1.75rem] font-semibold tabular-nums tracking-tight text-slate-900 dark:text-white; }
+
+      /* সাইডবার */
+      .nav-section { @apply mb-1.5 mt-6 px-3 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500 first:mt-0; }
+      .nav-link { @apply flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-slate-600 transition-all duration-200 ease-in-out hover:bg-slate-100 hover:text-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white; }
+      /* সাইডবার সবসময় গাঢ় নেভি — তাই এর ভেতরের লিংক আলাদা রঙে */
+      .sb .nav-link { @apply relative text-slate-400 hover:bg-white/5 hover:text-white dark:hover:bg-white/5; }
+      .sb .nav-link svg { @apply text-slate-500 transition-colors duration-200; }
+      .sb .nav-link:hover svg { @apply text-slate-300; }
+      .sb .nav-link.is-active { @apply bg-white/10 text-white; }
+      .sb .nav-link.is-active svg { @apply text-primary-400; }
+      .sb .nav-link.nav-danger, .sb .nav-link.nav-danger svg { @apply text-rose-400; }
+      .sb .nav-link.nav-danger:hover { @apply bg-rose-500/10 text-rose-300; }
+      .sb .nav-link.is-active::before { content: ""; @apply absolute -left-3 bottom-1.5 top-1.5 w-[3px] rounded-r-full bg-primary-400; }
+
+      /* মোবাইল বটম নেভ */
+      .bnav-link { @apply flex flex-col items-center justify-center gap-1 rounded-lg py-1.5 text-[11px] font-medium text-slate-500 transition-all duration-200 ease-in-out active:scale-95 dark:text-slate-400; }
+      .bnav-link.is-active { @apply text-primary-600 dark:text-primary-400; }
+    }
+  </style>
+
+  <style>
+    [x-cloak] { display: none !important; }
+    /* পেজ লোডের সময় স্টাইল বসানোর মুহূর্তে ট্রানজিশনের কালচে ঝলক এড়াতে লোড শেষ না হওয়া পর্যন্ত ট্রানজিশন বন্ধ */
+    html.preload *, html.preload *::before, html.preload *::after { transition: none !important; animation: none !important; }
+
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; border: 2px solid transparent; background-clip: padding-box; }
+    .dark ::-webkit-scrollbar-thumb { background-color: #334155; }
+
+    /* সাইডবার: মোবাইলে স্লাইড-আউট ড্রয়ার, ডেস্কটপে কলাপস করলে আইকন-রেইল */
+    #sidebar { transition: width .3s ease-in-out, transform .3s ease-in-out; }
+    #content { transition: padding .3s ease-in-out; }
+    @media (max-width: 767px) {
+      #sidebar { transform: translateX(-100%); }
+      #sidebar.is-open { transform: translateX(0); }
+    }
+    @media (min-width: 768px) {
+      #content { padding-left: 17rem; }
+      html.sb-collapsed #content { padding-left: 5rem; }
+      html.sb-collapsed #sidebar { width: 5rem; }
+      html.sb-collapsed #sidebar .nav-label,
+      html.sb-collapsed #sidebar .sb-hide { display: none; }
+      html.sb-collapsed #sidebar .nav-link { justify-content: center; padding-left: 0; padding-right: 0; }
+      html.sb-collapsed #sidebar .nav-section { height: 1px; margin: 1rem .75rem; padding: 0; overflow: hidden; background: currentColor; opacity: .25; }
+      html.sb-collapsed #sidebar .sb-brand { justify-content: center; }
+    }
+
+    /* iPhone এ ইনপুটে ক্লিক করলে পেজ জুম না হওয়ার জন্য ১৬px */
+    @media (max-width: 639px) {
+      input:not([type=checkbox]):not([type=radio]), select, textarea { font-size: 16px !important; }
+    }
+
+    /* .responsive-table: মোবাইলে (md এর নিচে) প্রতিটা সারি একটা কার্ড, প্রতিটা ঘরের পাশে কলামের নাম
+       (data-label নিচের স্ক্রিপ্ট thead থেকে বসায়) */
+    @media (max-width: 767px) {
+      table.responsive-table, table.responsive-table tbody, table.responsive-table tfoot,
+      table.responsive-table tr, table.responsive-table td { display: block; width: 100% !important; }
+      table.responsive-table thead { display: none; }
+      table.responsive-table tbody { padding: .75rem; }
+      table.responsive-table tr {
+        margin: 0 0 .75rem; padding: .5rem .25rem; border-radius: .75rem;
+        border: 1px solid #e2e8f0 !important; background: #fff; box-shadow: 0 1px 2px rgba(16,24,40,.05);
+      }
+      table.responsive-table tr:last-child { margin-bottom: 0; }
+      .dark table.responsive-table tr { border-color: #1e293b !important; background: #0f172a; }
+      table.responsive-table td {
+        display: flex; justify-content: space-between; align-items: center; gap: .75rem;
+        padding: .5rem .875rem !important; border: 0 !important; text-align: right !important;
+        position: static !important; white-space: normal;
+      }
+      table.responsive-table td[data-label]::before {
+        content: attr(data-label); flex-shrink: 0; max-width: 45%; text-align: left;
+        font-size: .68rem; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: #94a3b8;
+      }
+      table.responsive-table td[data-label=""]::before { display: none; }
+      table.responsive-table td[colspan] { display: block; text-align: center !important; }
+      table.responsive-table td[colspan]::before { display: none; }
+      table.responsive-table td.rt-title { font-weight: 600; font-size: .95rem; text-align: left !important; justify-content: flex-start; padding-bottom: .65rem !important; border-bottom: 1px solid #f1f5f9 !important; margin-bottom: .25rem; }
+      .dark table.responsive-table td.rt-title { border-bottom-color: #1e293b !important; }
+      table.responsive-table td.rt-title::before { display: none; }
+      table.responsive-table td.rt-hide { display: none; }
+      table.responsive-table tr.hidden { display: none; }  /* "Load More" দিয়ে লুকানো সারি */
+      /* hover এ লুকানো action বাটন মোবাইলে সবসময় দেখাও (টাচে hover নেই) */
+      table.responsive-table .opacity-0 { opacity: 1 !important; }
+    }
+  </style>
+

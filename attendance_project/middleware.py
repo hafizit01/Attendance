@@ -5,6 +5,8 @@ from django.shortcuts import redirect
 from django.urls import reverse, resolve, Resolver404
 from django.utils.deprecation import MiddlewareMixin
 
+from subscription_app.utils import is_subscription_active
+
 # সবসময়ই যেগুলো চলতে দিতে হবে (public)
 ALWAYS_ALLOWED_URL_NAMES = {
     "login", "logout", "my_plans",
@@ -24,7 +26,8 @@ ALWAYS_ALLOWED_URL_NAMES = {
     "cancel",
     "payment_details",             # e.g., bkash callback
 }
-ALWAYS_ALLOWED_PREFIXES = ("/static/", "/media/", "/favicon.ico", "/robots.txt", "/api/webhooks/")
+# /admin/ এর নিজস্ব staff লগইন আছে; এটা ব্লক করলে superuser নিজেই লক হয়ে যাবে
+ALWAYS_ALLOWED_PREFIXES = ("/static/", "/media/", "/favicon.ico", "/robots.txt", "/api/webhooks/", "/admin/")
 
 # সাবস্ক্রিপশন EXPIRED হলে কেবল এগুলো চলবে (renew/pay/expired/display)
 EXPIRED_ALLOWED_URL_NAMES = {
@@ -75,12 +78,8 @@ class SubscriptionExpiryMiddleware(MiddlewareMixin):
         if SUBSCRIPTION_SUPERUSER_BYPASS and user.is_superuser:
             return None
 
-        # 4) কোম্পানি/সাবস্ক্রিপশন স্টেট
-        company = getattr(request, "current_company", None) or getattr(user, "company", None)
-        sub = getattr(company, "subscription", None) if company else None
-        is_expired = bool(getattr(sub, "is_expired", False))
-
-        if not is_expired:
+        # 4) সাবস্ক্রিপশন স্টেট (request.user.profile.company.subscription → utils এ)
+        if is_subscription_active(user):
             return None  # সক্রিয় সাবস্ক্রিপশন → পাস
 
         # 5) EXPIRED — কেবল নির্দিষ্ট রুটগুলোই চলবে
@@ -95,10 +94,7 @@ class SubscriptionExpiryMiddleware(MiddlewareMixin):
             )
 
         # 7) অন্য সবক্ষেত্রে expiry পেজে রিডাইরেক্ট (লুপ এড়ান)
-        try:
-            expired_url = reverse("subscription_app:expired_notice")  # যদি namespace দেন
-        except Exception:
-            expired_url = reverse("expired_notice")                   # না থাকলে সাধারণ নাম
+        expired_url = reverse("subscription_app:expired_notice")
 
         if path != expired_url:
             return redirect(expired_url)

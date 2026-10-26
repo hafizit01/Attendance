@@ -1,172 +1,86 @@
 {% extends "base.html" %}
+{% block title %}Departments{% endblock %}
 {% block content %}
-<div class="p-4 sm:p-6 bg-white dark:bg-gray-800 rounded shadow transition-colors duration-300">
-  <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
-    <h1 class="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100">Departments</h1>
-
-    <div class="flex items-center gap-2">
-      <form method="get" class="flex items-center gap-2">
-        <input type="text" name="q" value="{{ q|default:'' }}"
-               class="w-48 sm:w-64 border dark:border-gray-700 rounded px-3 py-2 text-sm dark:bg-gray-900 dark:text-gray-100"
-               placeholder="Search (name/company)">
-        <button class="bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 px-3 py-2 rounded text-sm">
-          Search
-        </button>
-        {% if q %}
-        <a href="{% url 'attendance_app:department_list' %}"
-           class="text-sm text-gray-600 dark:text-gray-300 underline">Clear</a>
-        {% endif %}
+<div class="space-y-6">
+  <div class="page-header">
+    <div>
+      <p class="eyebrow">Organization</p>
+      <h1 class="page-title">Departments</h1>
+      <p class="page-subtitle">Office hours, weekly off-days and attendance devices.</p>
+    </div>
+    <div class="flex w-full flex-col gap-2 sm:flex-row lg:w-auto">
+      <form method="get" class="relative sm:flex-1 lg:w-72 lg:flex-none" role="search">
+        <span class="pointer-events-none absolute inset-y-0 left-3 flex items-center text-slate-400">{% include "partials/icon.html" with name="filter" cls="h-4 w-4" %}</span>
+        <label for="dept-q" class="sr-only">Search departments</label>
+        <input id="dept-q" type="search" name="q" value="{{ q|default:'' }}" placeholder="Search departments…" class="form-input pl-9">
       </form>
-
       {% if request.user.is_superuser %}
-  <a href="{% url 'attendance_app:department_add' %}"
-     class="bg-blue-600 hover:bg-blue-700 text-white px-3 sm:px-4 py-2 rounded text-sm sm:text-base transition">
-    ➕ Add Department
-  </a>
-{% else %}
-  <button type="button"
-          class="bg-gray-400 text-white px-3 sm:px-4 py-2 rounded text-sm sm:text-base cursor-not-allowed"
-          disabled>
-    ➕ Add Department
-  </button>
-{% endif %}
-
+        <a href="{% url 'attendance_app:department_add' %}" class="btn-primary">{% include "partials/icon.html" with name="plus" cls="h-4 w-4" %}Add department</a>
+      {% else %}
+        <button type="button" class="btn-primary" disabled title="শুধু admin ডিপার্টমেন্ট যোগ করতে পারে">{% include "partials/icon.html" with name="plus" cls="h-4 w-4" %}Add department</button>
+      {% endif %}
     </div>
   </div>
 
-  {# Django messages (optional) #}
-  {% if messages %}
-    <ul class="mb-3 space-y-1">
-      {% for message in messages %}
-        <li class="text-sm px-3 py-2 rounded
-                   {% if message.tags == 'success' %} bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-200
-                   {% elif message.tags == 'error' %} bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-200
-                   {% else %} bg-gray-50 text-gray-700 dark:bg-gray-900/30 dark:text-gray-200 {% endif %}">
-          {{ message }}
-        </li>
-      {% endfor %}
-    </ul>
-  {% endif %}
-
-  <div class="overflow-x-auto">
-    <table class="table-auto w-full border border-gray-300 dark:border-gray-700 text-sm">
-      <thead class="bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-gray-100">
-        <tr>
-          <th class="border border-gray-300 dark:border-gray-700 px-2 sm:px-4 py-2">ID</th>
-          <th class="border border-gray-300 dark:border-gray-700 px-2 sm:px-4 py-2">Company</th>
-          <th class="border border-gray-300 dark:border-gray-700 px-2 sm:px-4 py-2">Name</th>
-          <th class="border border-gray-300 dark:border-gray-700 px-2 sm:px-4 py-2">Weekly Off Day</th>
-          <th class="border border-gray-300 dark:border-gray-700 px-2 sm:px-4 py-2">Device</th>
-          <th class="border border-gray-300 dark:border-gray-700 px-2 sm:px-4 py-2">Office Hours</th>
-          <th class="border border-gray-300 dark:border-gray-700 px-2 sm:px-4 py-2 text-center">Edit</th>
-          <th class="border border-gray-300 dark:border-gray-700 px-2 sm:px-4 py-2 text-center">Delete</th>
-        </tr>
-      </thead>
-      <tbody class="text-gray-800 dark:text-gray-200">
-        {% for dept in departments %}
-        <tr class="hover:bg-gray-50 dark:hover:bg-gray-900 transition">
-          <td class="border border-gray-300 dark:border-gray-700 px-2 sm:px-4 py-2">{{ dept.id }}</td>
-
-          <td class="border border-gray-300 dark:border-gray-700 px-2 sm:px-4 py-2">
-            {{ dept.company.name|default:"—" }}
-          </td>
-
-          <td class="border border-gray-300 dark:border-gray-700 px-2 sm:px-4 py-2">
-            {{ dept.name }}
-          </td>
-
-          {# যদি weekly_off_day-এ choices ব্যবহার করেন, display দেখান #}
-          <td class="border border-gray-300 dark:border-gray-700 px-2 sm:px-4 py-2">
-            {{ dept.get_weekly_off_day_display|default:dept.weekly_off_day }}
-          </td>
-          <td class="border border-gray-300 dark:border-gray-700 px-2 sm:px-4 py-2">
-            {% if request.user.is_superuser %}
-              {% if dept.device_ip %}{{ dept.device_ip }}{% else %}—{% endif %}
-              {% if dept.device_port %}:{% if dept.device_port %}{{ dept.device_port }}{% endif %}{% endif %}
-            {% else %}
-              {% if dept.device_ip %}*******{% else %}—{% endif %}
-              {% if dept.device_port %}:*******{% endif %}
-            {% endif %}
-          </td>
-
-        <td class="border border-gray-300 dark:border-gray-700 px-2 sm:px-4 py-2">
-          {% if dept.in_time %}{{ dept.in_time|time:"H:i" }}{% else %}—{% endif %}
-          — 
-          {% if dept.out_time %}{{ dept.out_time|time:"H:i" }}{% else %}—{% endif %}
-        </td>
-
-        <td class="border border-gray-300 dark:border-gray-700 px-2 sm:px-4 py-2 text-center">
-          {% if request.user.is_superuser %}
-            <a href="{% url 'attendance_app:department_edit' dept.id %}"
-              class="inline-flex items-center justify-center gap-1 text-blue-600 hover:underline">
-              ✏️ Edit
-            </a>
-          {% else %}
-            <button class="inline-flex items-center justify-center gap-1 text-gray-400 cursor-not-allowed" disabled>
-              ✏️ Edit
-            </button>
-          {% endif %}
-        </td>
-
-          {# নিরাপদ ডিলিট: POST + CSRF + confirm #}
-          <td class="border border-gray-300 dark:border-gray-700 px-2 sm:px-4 py-2 text-center">
-            {% if request.user.is_superuser %}
-              <form method="post" action="{% url 'attendance_app:department_delete' dept.id %}"
-                    onsubmit="return confirm('Delete {{ dept.name }}? This action cannot be undone.');">
-                {% csrf_token %}
-                <button type="submit"
-                        class="inline-flex items-center justify-center gap-1 text-red-600 hover:underline">
-                  🗑️ Delete
-                </button>
-              </form>
-            {% else %}
-              <div x-data="{ showToast: false }" class="inline-block relative">
-                <button 
-                  type="button"
-                  class="inline-flex items-center justify-center gap-1 text-gray-400 cursor-not-allowed"
-                  @mouseenter="showToast = true" 
-                  @mouseleave="showToast = false">
-                  🗑️ Delete
-                </button>
-
+  <div class="card overflow-hidden">
+    <div class="overflow-x-auto">
+      <table class="responsive-table table-modern">
+        <thead>
+          <tr>
+            <th class="w-16">ID</th>
+            <th>Department</th>
+            <th>Office hours</th>
+            <th>Weekly off</th>
+            <th>Device</th>
+            <th class="text-right">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for dept in departments %}
+          <tr>
+            <td class="rt-hide text-xs tabular-nums text-slate-400">#{{ dept.id }}</td>
+            <td class="rt-title">
+              <div class="flex items-center gap-3">
+                <span class="stat-icon h-10 w-10 bg-primary-50 text-primary-600 dark:bg-primary-500/10 dark:text-primary-400">{% include "partials/icon.html" with name="building" cls="h-5 w-5" %}</span>
+                <div class="min-w-0">
+                  <p class="truncate font-semibold text-slate-900 dark:text-white">{{ dept.name }}</p>
+                  <p class="truncate text-xs font-normal text-slate-500">{% if dept.branch %}{{ dept.branch.name }}{% else %}<span class="text-amber-600">No branch</span>{% endif %}</p>
+                </div>
               </div>
-            {% endif %}
-          </td>
-
-        </tr>
-        {% empty %}
-        <tr>
-          <td colspan="8" class="text-center py-4 text-gray-600 dark:text-gray-400">
-            No departments found.
-          </td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
-
-  {# Pagination #}
-  {% if page_obj %}
-    <div class="flex items-center justify-between mt-4 text-sm text-gray-700 dark:text-gray-300">
-      <div>
-        Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
-      </div>
-      <div class="flex items-center gap-2">
-        {% if page_obj.has_previous %}
-          <a class="px-3 py-1 border dark:border-gray-700 rounded"
-             href="?{% if q %}q={{ q }}&{% endif %}page={{ page_obj.previous_page_number }}">Prev</a>
-        {% else %}
-          <span class="px-3 py-1 border dark:border-gray-700 rounded opacity-50 cursor-not-allowed">Prev</span>
-        {% endif %}
-
-        {% if page_obj.has_next %}
-          <a class="px-3 py-1 border dark:border-gray-700 rounded"
-             href="?{% if q %}q={{ q }}&{% endif %}page={{ page_obj.next_page_number }}">Next</a>
-        {% else %}
-          <span class="px-3 py-1 border dark:border-gray-700 rounded opacity-50 cursor-not-allowed">Next</span>
-        {% endif %}
-      </div>
+            </td>
+            <td class="whitespace-nowrap tabular-nums text-slate-700 dark:text-slate-200">
+              {% if dept.in_time %}{{ dept.in_time|time:"h:i A" }}{% else %}—{% endif %} – {% if dept.out_time %}{{ dept.out_time|time:"h:i A" }}{% else %}—{% endif %}
+            </td>
+            <td><span class="badge-neutral">{{ dept.get_weekly_off_day_display|default:dept.weekly_off_day }}</span></td>
+            <td class="whitespace-nowrap font-mono text-xs text-slate-500">
+              {% if dept.device_ip %}
+                {% if request.user.is_superuser %}{{ dept.device_ip }}{% if dept.device_port %}:{{ dept.device_port }}{% endif %}{% else %}<span class="badge-success font-sans"><span class="badge-dot"></span>Configured</span>{% endif %}
+              {% else %}<span class="badge-warning font-sans">Not set</span>{% endif %}
+            </td>
+            <td class="text-right">
+              {% if request.user.is_superuser %}
+              <div class="flex items-center justify-end gap-1">
+                <a href="{% url 'attendance_app:department_edit' dept.id %}" class="btn-icon h-9 w-9 hover:bg-amber-50 hover:text-amber-600 dark:hover:bg-amber-500/10" title="Edit" aria-label="Edit {{ dept.name }}">{% include "partials/icon.html" with name="pencil" cls="h-4 w-4" %}</a>
+                <form method="post" action="{% url 'attendance_app:department_delete' dept.id %}" onsubmit="return confirm('Delete {{ dept.name|escapejs }}? এর সব কর্মচারীও মুছে যাবে।');">
+                  {% csrf_token %}
+                  <button type="submit" class="btn-icon h-9 w-9 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-500/10" title="Delete" aria-label="Delete {{ dept.name }}">{% include "partials/icon.html" with name="trash" cls="h-4 w-4" %}</button>
+                </form>
+              </div>
+              {% else %}
+              <span class="text-xs text-slate-400">View only</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="6">
+            {% if q %}{% include "partials/empty_state.html" with icon="building" title="No departments match your search" %}
+            {% else %}{% include "partials/empty_state.html" with icon="building" title="No departments yet" text="Departments hold office hours and the attendance device settings." %}{% endif %}
+          </td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
     </div>
-  {% endif %}
+    {% include "partials/pagination.html" with page=page_obj %}
+  </div>
 </div>
 {% endblock %}

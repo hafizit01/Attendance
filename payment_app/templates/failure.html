@@ -1,13 +1,20 @@
 {% extends 'base.html' %}
+{% block title %}Payment Issue{% endblock %}
 {% block content %}
-<div class="mx-auto max-w-lg px-6 py-16">
-  <div class="bg-white shadow-lg rounded-2xl p-8 text-center border border-amber-200">
-    <div class="mx-auto w-20 h-20 flex items-center justify-center rounded-full bg-amber-100 text-amber-600 mb-4">⚠️</div>
-    <h2 class="text-2xl md:text-3xl font-bold text-amber-700 mb-3">Payment Issue</h2>
-    <p class="text-gray-600 mb-6">{{ message }}</p>
-    <a href="{% url 'subscription_app:view_plans' %}" class="inline-flex items-center justify-center px-6 py-3 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold shadow">
-      Try Again →
-    </a>
+<div class="mx-auto flex min-h-[60vh] max-w-lg items-center">
+  <div class="card w-full overflow-hidden">
+    <div class="h-1.5 bg-gradient-to-r from-rose-500 to-orange-500"></div>
+    <div class="p-6 text-center sm:p-10">
+      <span class="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-rose-50 text-rose-600 dark:bg-rose-500/10 dark:text-rose-400">{% include "partials/icon.html" with name="alert" cls="h-8 w-8" %}</span>
+      <h1 class="mt-5 text-2xl font-bold tracking-tight text-slate-900 dark:text-white">Payment issue</h1>
+      <p class="mt-2 text-sm text-slate-600 dark:text-slate-300">{{ message|default:"পেমেন্ট সম্পন্ন হয়নি।" }}</p>
+      {% if payment_id %}<p class="mt-3 font-mono text-xs text-slate-400">Payment ID: {{ payment_id }}</p>{% endif %}
+      <p class="mt-4 text-xs text-slate-500">টাকা কেটে গেলেও সাবস্ক্রিপশন চালু না হলে <a href="{% url 'attendance_app:support_page' %}" class="link">সাপোর্টে জানান</a>।</p>
+      <div class="mt-8 flex flex-col-reverse gap-3 sm:flex-row sm:justify-center">
+        <a href="{% url 'attendance_app:dashboard' %}" class="btn-secondary">Back to dashboard</a>
+        <a href="{% url 'subscription_app:view_plans' %}" class="btn-primary">Try again {% include "partials/icon.html" with name="arrow-right" cls="h-4 w-4" %}</a>
+      </div>
+    </div>
   </div>
 </div>
 {% endblock %}

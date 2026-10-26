@@ -1,17 +1,6 @@
 {% extends 'base.html' %}
 {% block title %}Delete Profile{% endblock %}
-
 {% block content %}
-<div class="bg-white dark:bg-gray-800 shadow rounded-lg p-6 max-w-lg mx-auto text-center">
-  <h2 class="text-xl font-bold mb-4">⚠️ Confirm Delete</h2>
-  <p>Are you sure you want to delete profile of <strong>{{ profile.employee.name }}</strong>?</p>
-
-  <form method="post" class="mt-6 flex justify-center gap-4">
-    {% csrf_token %}
-    <a href="{% url 'userapp:employee_profile_list' %}" 
-       class="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600">Cancel</a>
-    <button type="submit" 
-            class="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700">Yes, Delete</button>
-  </form>
-</div>
+{% url 'userapp:employee_profile_list' as cancel_url %}
+{% include "partials/confirm_delete.html" with title="Delete profile" question="Delete the profile of" subject=profile.employee.name detail=profile.designation cancel_url=cancel_url warning="কর্মচারী নিজে মুছবে না, শুধু প্রোফাইলের তথ্য ও ডকুমেন্ট।" %}
 {% endblock %}

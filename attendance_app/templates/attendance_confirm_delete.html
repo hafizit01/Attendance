@@ -1,0 +1,8 @@
+{% extends "base.html" %}
+{% block title %}Delete Attendance{% endblock %}
+{% block content %}
+{% url 'attendance_app:attendance_list' as cancel_url %}
+{% with when=attendance.timestamp|date:"d M Y" %}
+{% include "partials/confirm_delete.html" with title="Delete attendance" question="Delete all In/Out punches of" subject=attendance.employee.name detail=when cancel_url=cancel_url %}
+{% endwith %}
+{% endblock %}

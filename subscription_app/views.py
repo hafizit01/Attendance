@@ -15,7 +15,7 @@ from django.utils.dateparse import parse_date   # ⬅️ এটা যোগ ক
 from .models import UserSubscription
 
 
-from .utils import is_subscription_active_for  # utils.py তে helper ফাংশন রেখেছিলাম
+from .utils import is_subscription_active  # ✅ একমাত্র সাবস্ক্রিপশন চেক
 
 @login_required
 def post_login_router(request):
@@ -32,7 +32,7 @@ def post_login_router(request):
 
     if is_subscription_active(user):
         return redirect('attendance_app:dashboard')
-    return redirect("subscription_app:expired")
+    return redirect("subscription_app:expired_notice")
 
 
 
@@ -46,35 +46,6 @@ def view_plans(request):
 
 
 
-def is_subscription_active(sub: UserSubscription) -> bool:
-    """end_date যদি DateField হয় → localdate দিয়ে তুলনা।
-       DateTimeField হলে → timezone.now() দিয়ে তুলনা (tz-aware করে)।"""
-    if not sub or not sub.end_date:
-        return False
-
-    field = UserSubscription._meta.get_field("end_date")
-
-    # Pure DateField (NOT DateTimeField)
-    if isinstance(field, models.DateField) and not isinstance(field, models.DateTimeField):
-        # end_date inclusive (দিনের শেষ পর্যন্ত বৈধ ধরা হলে এটিই যথেষ্ট)
-        return timezone.localdate() <= sub.end_date
-
-    # DateTimeField
-    end = sub.end_date
-    if timezone.is_naive(end):
-        end = timezone.make_aware(end, timezone.get_current_timezone())
-    return timezone.now() <= end
-
-# subscription_app/views.py  (বা যেখানে এই ভিউটা রেখেছেন)
-from django.contrib.auth.decorators import login_required
-from django.utils import timezone
-from django.shortcuts import render
-
-from .models import UserSubscription
-# যদি আপনার নিজের helper থাকে, সেটাই ব্যবহার করুন
-
-from .utils import is_subscription_active_for    # ✅ user-ভিত্তিক helper
-
 @login_required
 def subscription_expired(request):
     # ইউজারের লাস্ট সাবস্ক্রিপশন
@@ -87,7 +58,7 @@ def subscription_expired(request):
     )
 
     # ✅ এখানে user পাঠান, subscription নয়
-    active = is_subscription_active_for(request.user)
+    active = is_subscription_active(request.user)
 
     # days_left হিসাব (টেমপ্লেটের জন্য)
     today = timezone.localdate()

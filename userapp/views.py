@@ -11,8 +11,7 @@ from django.http import HttpResponse
 from django.template.loader import render_to_string
 import weasyprint
 
-from subscription_app.models import UserSubscription
-from django.utils import timezone
+from subscription_app.utils import is_subscription_expired
 
 from django.contrib.auth.decorators import login_required
 from .forms import EmployeeProfileForm   # form আমরা নিচে বানাবো
@@ -23,14 +22,8 @@ from django.db.models import Q
 from .models import EmployeeProfile
 
 def _is_expired(user):
-    company = getattr(user, "current_company", None) or getattr(user, "company", None)
-    sub = getattr(company, "subscription", None) or \
-          UserSubscription.objects.filter(user=user).order_by("-end_date").first()
-    if not sub:
-        return True  # প্ল্যানই না থাকলে expired-এর মত আচরণ করতে চাইলে True রাখুন
-    today = timezone.localdate()
-    end_date = sub.end_date.date() if hasattr(sub.end_date, "date") else sub.end_date
-    return end_date < today or getattr(sub, "is_expired", False)
+    # প্ল্যান না থাকলেও expired ধরা হয়
+    return is_subscription_expired(user)
 
 
 def _safe_next(request):
@@ -64,15 +57,31 @@ def login_view(request):
         else:
             messages.error(request, '⚠️ Invalid username or password. Please try again.')
 
-    return render(request, 'login.html')
+    # লগইনের পর আগের পেজে ফেরার জন্য next টেমপ্লেটে hidden ফিল্ড হিসেবে যায়
+    next_url = request.GET.get('next') or request.POST.get('next') or ''
+    return render(request, 'login.html', {'next': next_url})
 
 
 
 
 
+def _company_profiles(request, secure=False):
+    """শুধু লগইন করা user-এর company এর employee profiles"""
+    company = getattr(getattr(request.user, "profile", None), "company", None)
+    if not company:
+        return EmployeeProfile.objects.none()
+    qs = EmployeeProfile.objects.select_related("employee", "employee__department").filter(employee__company=company)
+    # ব্রাঞ্চ ম্যানেজার / বাছাই করা ব্রাঞ্চ
+    from attendance_app.scoping import get_scope
+    scope = get_scope(request)
+    scope = scope.security if secure else scope  # একটা প্রোফাইল খোলা: মালিকের সুইচার প্রযোজ্য নয়
+    return qs.filter(employee__department__branch=scope.branch) if scope.branch else qs
+
+
+@login_required
 def employee_profile_list(request):
     search_query = request.GET.get("q", "")
-    profiles = EmployeeProfile.objects.select_related("employee").all()
+    profiles = _company_profiles(request)
 
     if search_query:
         profiles = profiles.filter(
@@ -100,7 +109,7 @@ import os
 @login_required
 def employee_profile_list_pdf(request):
     search_query = request.GET.get("q", "")
-    profiles = EmployeeProfile.objects.select_related("employee").all()
+    profiles = _company_profiles(request)
 
     if search_query:
         profiles = profiles.filter(
@@ -130,12 +139,12 @@ def employee_profile_list_pdf(request):
 # EmployeeProfile Detail
 @login_required
 def employee_profile_detail(request, pk):
-    profile = get_object_or_404(EmployeeProfile, pk=pk)
+    profile = get_object_or_404(_company_profiles(request, secure=True), pk=pk)
     return render(request, "detail.html", {"profile": profile})
 
 @login_required
 def employee_profile_pdf(request, pk):
-    profile = get_object_or_404(EmployeeProfile, pk=pk)
+    profile = get_object_or_404(_company_profiles(request, secure=True), pk=pk)
 
     # Template render
     html = render_to_string("pdf_template.html", {"profile": profile})
@@ -159,9 +168,10 @@ def employee_profile_pdf(request, pk):
 
 
 # Create EmployeeProfile
+@login_required
 def employee_profile_create(request):
     if request.method == "POST":
-        form = EmployeeProfileForm(request.POST, request.FILES)
+        form = EmployeeProfileForm(request.POST, request.FILES, user=request.user)
         if form.is_valid():
             form.save()
             messages.success(request, "✅ Employee Profile added successfully!")
@@ -169,29 +179,29 @@ def employee_profile_create(request):
         else:
             messages.error(request, "❌ Something went wrong. Please check the form.")
     else:
-        form = EmployeeProfileForm()
+        form = EmployeeProfileForm(user=request.user)
     return render(request, "form.html", {"form": form, "title": "Add Employee Profile"})
 
 
 # Update EmployeeProfile
 @login_required
 def employee_profile_update(request, pk):
-    profile = get_object_or_404(EmployeeProfile, pk=pk)
+    profile = get_object_or_404(_company_profiles(request, secure=True), pk=pk)
     if request.method == "POST":
-        form = EmployeeProfileForm(request.POST, request.FILES, instance=profile)
+        form = EmployeeProfileForm(request.POST, request.FILES, instance=profile, user=request.user)
         if form.is_valid():
             form.save()
             messages.success(request, "Employee Profile updated successfully ✏️")
             return redirect("userapp:employee_profile_detail", pk=pk)
     else:
-        form = EmployeeProfileForm(instance=profile)
+        form = EmployeeProfileForm(instance=profile, user=request.user)
     return render(request, "form.html", {"form": form, "title": "Edit Employee Profile"})
 
 
 # Delete EmployeeProfile
 @login_required
 def employee_profile_delete(request, pk):
-    profile = get_object_or_404(EmployeeProfile, pk=pk)
+    profile = get_object_or_404(_company_profiles(request, secure=True), pk=pk)
     if request.method == "POST":
         profile.delete()
         messages.success(request, "Employee Profile deleted ❌")
@@ -210,8 +220,7 @@ def logout_view(request):
 
 
 def post_login_router(request):
+    # teacher_app নামে কোনো অ্যাপ নেই, তাই Teacher গ্রুপের ব্রাঞ্চ বাদ (NoReverseMatch দিত)
     if request.user.is_superuser:
         return redirect("admin:index")
-    elif request.user.groups.filter(name="Teacher").exists():
-        return redirect("teacher_app:dashboard")
     return redirect("attendance_app:dashboard")

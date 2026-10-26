@@ -1,0 +1,25 @@
+{# ব্রাঞ্চ সুইচার: মালিক = ড্রপডাউন (সব/একটা ব্রাঞ্চ), ম্যানেজার = শুধু নিজের ব্রাঞ্চের ব্যাজ #}
+{% if branch_scope.company %}
+  {% if branch_scope.locked %}
+    <span class="badge-info gap-1.5 py-1.5" title="আপনি শুধু এই ব্রাঞ্চের ডাটা দেখতে পারেন">
+      {% include "partials/icon.html" with name="building" cls="h-3.5 w-3.5" %}{{ branch_scope.branch.name }}
+    </span>
+  {% elif switchable_branches %}
+    <form method="post" action="{% url 'attendance_app:branch_switch' %}" class="{{ cls|default:'' }}">
+      {% csrf_token %}
+      <input type="hidden" name="next" value="{{ request.path }}">
+      <label for="{{ input_id|default:'branch-switch' }}" class="sr-only">Branch</label>
+      <div class="relative">
+        <span class="pointer-events-none absolute inset-y-0 left-3 flex items-center text-primary-500">{% include "partials/icon.html" with name="building" cls="h-4 w-4" %}</span>
+        <select id="{{ input_id|default:'branch-switch' }}" name="branch" onchange="this.form.submit()"
+                class="form-select h-10 py-1.5 pl-9 text-sm font-medium {% if branch_scope.branch %}border-primary-300 bg-primary-50/60 text-primary-800 dark:border-primary-500/40 dark:bg-primary-500/10 dark:text-primary-200{% endif %} {{ select_cls|default:'w-48' }}">
+          <option value="all">All branches</option>
+          {% for b in switchable_branches %}
+            <option value="{{ b.id }}" {% if branch_scope.branch_id == b.id %}selected{% endif %}>{{ b.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <noscript><button type="submit" class="btn-secondary btn-sm mt-2">Switch</button></noscript>
+    </form>
+  {% endif %}
+{% endif %}

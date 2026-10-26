@@ -1,0 +1,22 @@
+# Secrets
+.env
+
+# Local data
+db.sqlite3
+media/
+
+# Logs
+*.log
+
+# Python
+__pycache__/
+*.py[cod]
+env/
+venv/
+.venv/
+staticfiles/
+
+# push agent (token থাকে)
+push_agent.ini
+push_agent_state.json
+push_agent.log

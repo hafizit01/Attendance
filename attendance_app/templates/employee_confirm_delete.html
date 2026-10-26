@@ -1,23 +1,6 @@
 {% extends "base.html" %}
-
+{% block title %}Delete Employee{% endblock %}
 {% block content %}
-<div class="p-6 sm:p-8 bg-white dark:bg-gray-800 rounded shadow max-w-md mx-auto text-center transition-colors duration-300">
-  <h1 class="text-2xl font-bold mb-4 text-gray-900 dark:text-gray-100">Delete Employee</h1>
-  <p class="text-gray-700 dark:text-gray-300">
-    Are you sure you want to delete <strong class="text-red-600 dark:text-red-400">{{ employee.name }}</strong>?
-  </p>
-  
-  <form method="post" class="mt-6 flex justify-center gap-4">
-    {% csrf_token %}
-    <button type="submit"
-            class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded shadow transition">
-      Yes, Delete
-    </button>
-    <a href="{% url 'attendance_app:employee_list' %}"
-       class="px-4 py-2 rounded border border-gray-400 dark:border-gray-600 
-              text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition">
-      Cancel
-    </a>
-  </form>
-</div>
+{% url 'attendance_app:employee_list' as cancel_url %}
+{% include "partials/confirm_delete.html" with title="Delete employee" subject=employee.name detail=employee.department.name cancel_url=cancel_url warning="এই কর্মচারীর সব হাজিরা, ছুটি ও বেতনের রেকর্ডও মুছে যাবে।" %}
 {% endblock %}

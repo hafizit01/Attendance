@@ -3,6 +3,7 @@ from django.db import models
 # Create your models here.
 from django.db import models
 from django.contrib.auth.models import User
+from django.utils import timezone
 from django.utils.text import slugify
 from datetime import timedelta, date
 from ckeditor_uploader.fields import RichTextUploadingField
@@ -28,11 +29,14 @@ class SubscriptionPlan(models.Model):
 class UserSubscription(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     plan = models.ForeignKey(SubscriptionPlan, on_delete=models.CASCADE)
-    start_date = models.DateField(auto_now_add=True)
+    # early renewal এ ভবিষ্যতের তারিখ সেট করা যায় তাই auto_now_add নয়
+    start_date = models.DateField(default=timezone.localdate)
     end_date = models.DateField()
     active = models.BooleanField(default=True)
 
     def save(self, *args, **kwargs):
+        if not self.start_date:
+            self.start_date = timezone.localdate()
         if not self.end_date:
             self.end_date = self.start_date + timedelta(days=self.plan.duration_days)
         super().save(*args, **kwargs)

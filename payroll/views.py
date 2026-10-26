@@ -20,6 +20,14 @@ from django.utils.timezone import is_naive, make_aware
 from weasyprint import HTML
 from attendance_app.models import *
 from .models import EmployeeSalary
+from attendance_app.utils.params import int_param, month_param
+from attendance_app.utils.pdf import render_pdf
+from django.utils.http import url_has_allowed_host_and_scheme
+from .forms import PayrollSettingsForm
+from .rounding import round_cash_figure
+from .overtime import DayWork, OvertimeSettings, calculate_pay
+from attendance_app import scoping
+from attendance_app.utils.attendance_helpers import load_holidays, is_holiday_for, load_transfers, branch_on
 from django.http import HttpResponseForbidden
 from io import BytesIO
 import os
@@ -52,7 +60,6 @@ from datetime import datetime, timedelta, time
 from django.utils import timezone
 from django.utils.timezone import is_naive, make_aware
 from collections import defaultdict
-
 def get_salary_summary_data(request, month_str, department_id=None, employee_id=None):
     user_company = getattr(getattr(request.user, "profile", None), "company", None)
     if not user_company:
@@ -60,9 +67,10 @@ def get_salary_summary_data(request, month_str, department_id=None, employee_id=
 
     summary_data = []
 
-    # Dropdowns
-    departments = Department.objects.filter(company=user_company)
-    employees_qs = Employee.objects.filter(company=user_company).select_related('department', 'employeesalary', 'company').order_by('id')
+    # Dropdowns (ব্রাঞ্চ ম্যানেজার / বাছাই করা ব্রাঞ্চ অনুযায়ী)
+    scope = scoping.get_scope(request)
+    departments = scoping.departments(Department.objects.all(), scope)
+    employees_qs = Employee.objects.filter(company=user_company).select_related('department', 'department__branch', 'employeesalary', 'company').order_by('id')
 
     if department_id:
         employees_qs = employees_qs.filter(department__id=department_id)
@@ -77,6 +85,9 @@ def get_salary_summary_data(request, month_str, department_id=None, employee_id=
     # Extra Totals needed for Footer
     total_earned = Decimal(0)
     total_bonus = Decimal(0)
+    total_rounding_adjustment = Decimal(0)
+    rounding_enabled = user_company.salary_rounding_enabled
+    ot_settings = OvertimeSettings.for_company(user_company)
 
     if month_str:
         year, month = map(int, month_str.split('-'))
@@ -98,7 +109,7 @@ def get_salary_summary_data(request, month_str, department_id=None, employee_id=
         # Optimization Maps
         att_map = defaultdict(list)
         for att in all_attendance:
-            att_map[(att.employee_id, att.timestamp.date())].append(att)
+            att_map[(att.employee_id, timezone.localtime(att.timestamp).date())].append(att)
 
         leave_map = set()
         for lv in all_leaves:
@@ -109,15 +120,9 @@ def get_salary_summary_data(request, month_str, department_id=None, employee_id=
                 leave_map.add((lv.employee_id, curr))
                 curr += timedelta(days=1)
 
-        holidays = Holiday.objects.filter(company=user_company, start_date__lte=end_date, end_date__gte=start_date)
-        holiday_dates = set()
-        for h in holidays:
-            s = max(h.start_date, start_date)
-            e = min(h.end_date, end_date)
-            curr = s
-            while curr <= e:
-                holiday_dates.add(curr)
-                curr += timedelta(days=1)
+        # ছুটি: সব-ব্রাঞ্চের + কর্মচারী যে দিন যে ব্রাঞ্চে ছিল সেই ব্রাঞ্চের
+        company_holidays = load_holidays([user_company.id], start_date, end_date).get(user_company.id, {})
+        emp_transfers = load_transfers(list(employees_qs.values_list('id', flat=True)))
 
         DEFAULT_IN = time(10, 30)
         DEFAULT_OUT = time(20, 30)
@@ -125,12 +130,17 @@ def get_salary_summary_data(request, month_str, department_id=None, employee_id=
         for emp in employees_qs:
             if not hasattr(emp, 'employeesalary'):
                 continue
+            current_branch = emp.department.branch_id if emp.department_id else None
+            transfers = emp_transfers.get(emp.id, [])
+            # ব্রাঞ্চ বাছাই থাকলে: মাসের শেষ দিনে যে ব্রাঞ্চে ছিল সেই ব্রাঞ্চের বেতনে ধরা হয়
+            if scope.branch and branch_on(current_branch, transfers, end_date) != scope.branch_id:
+                continue
             
             sal = emp.employeesalary
             base_salary = sal.base_salary
             bank_transfer = sal.bank_transfer_amount
-            # Cash cannot be negative
-            cash = max(base_salary - bank_transfer, Decimal(0))
+            # Cash cannot be negative (শুধুমাত্র বেসিক থেকে ব্যাংক বাদ)
+            base_cash = max(base_salary - bank_transfer, Decimal(0))
 
             dep = emp.department
             off_day = dep.weekly_off_day if dep else None
@@ -151,9 +161,8 @@ def get_salary_summary_data(request, month_str, department_id=None, employee_id=
             pub_holiday = 0
             absent_days = 0
             
-            total_work_time = timedelta()
             total_late_time = timedelta()
-            total_over_time = timedelta()
+            day_works = []  # ওভারটাইম/বেতনের হিসাবের জন্য প্রতিদিনের কাজ (payroll/overtime.py)
 
             total_days = (end_date - start_date).days + 1
             working_days_count = 0
@@ -162,26 +171,25 @@ def get_salary_summary_data(request, month_str, department_id=None, employee_id=
                 curr = start_date + timedelta(days=n)
                 wd = curr.strftime('%A')
 
-                is_holiday = curr in holiday_dates
+                is_holiday = is_holiday_for(company_holidays, curr, branch_on(current_branch, transfers, curr))
                 is_off = (off_day and wd == off_day)
                 is_leave = (emp.id, curr) in leave_map
                 recs = att_map.get((emp.id, curr), [])
 
                 if is_holiday:
                     pub_holiday += 1
-                    if not recs: # পাঞ্চ না থাকলে স্কিপ করবে
+                    if not recs:
                         continue
                 elif is_off:
                     weekly_off += 1
-                    if not recs: # পাঞ্চ না থাকলে স্কিপ করবে
+                    if not recs:
                         continue
                 else:
-                    working_days_count += 1 # Expected working day
+                    working_days_count += 1
 
-                # 🟢 আপনার অরিজিনাল লিভ লজিক (কোনো হাত দেওয়া হয়নি)
                 if is_leave:
                     leave_days += 1
-                    total_work_time += regular # Credit for leave
+                    day_works.append(DayWork(is_leave=True))
                     continue
 
                 if recs:
@@ -198,65 +206,68 @@ def get_salary_summary_data(request, month_str, department_id=None, employee_id=
                     if first_in > exp_in:
                         total_late_time += (first_in - exp_in)
 
-                    # Work Duration
+                    # Work Duration and Overtime
                     if last_out:
                         if is_naive(last_out): last_out = make_aware(last_out)
                         actual_start = max(first_in, exp_in) 
                         if last_out > actual_start:
-                            duration = last_out - actual_start
-                            total_work_time += duration
-                            
-                            # 🟢 শুধু ওভারটাইম লজিক আপডেটেড
-                            if is_holiday or is_off:
-                                total_over_time += duration
-                            elif duration > regular:
-                                total_over_time += (duration - regular)
+                            day_works.append(DayWork(work=last_out - actual_start, is_off=bool(is_holiday or is_off)))
                 else:
                     absent_days += 1
 
-            # --- Calculations ---
-            # 1. Expected Hours
-            hours_per_day = regular.total_seconds() / 3600
-            expected_hours_float = working_days_count * hours_per_day
+            # Calculations (ওভারটাইম কোম্পানির সেটিং অনুযায়ী)
+            pay = calculate_pay(base_salary, regular, working_days_count, day_works, ot_settings)
+            total_work_time = pay['total_work']
+            total_over_time = pay['over_time']
+            expected_hours_float = pay['expected_hours']
             expected_td = timedelta(hours=expected_hours_float)
-            
-            # 2. Actual Hours
-            actual_hours_float = total_work_time.total_seconds() / 3600
-            
-            # 3. Time Difference Calculation (+/- HH:MM)
+
             diff_seconds = total_work_time.total_seconds() - expected_td.total_seconds()
             
-            # Format Logic for Difference
             abs_seconds = abs(diff_seconds)
             h = int(abs_seconds // 3600)
             m = int((abs_seconds % 3600) // 60)
             sign = "+" if diff_seconds >= 0 else "-"
-            time_diff_str = f"{sign}{h:02d}:{m:02d}"  # Example: "+05:30" or "-02:15"
+            time_diff_str = f"{sign}{h:02d}:{m:02d}"
 
             # Salary Logic
-            hourly_rate = (base_salary / Decimal(expected_hours_float)) if expected_hours_float > 0 else Decimal(0)
-
-            if actual_hours_float <= expected_hours_float:
-                earned_salary = Decimal(actual_hours_float) * hourly_rate
-            else:
-                extra = actual_hours_float - expected_hours_float
-                earned_salary = (Decimal(expected_hours_float) * hourly_rate) + (Decimal(extra) * hourly_rate * Decimal('1.5'))
+            earned_salary = pay['earned']
 
             bonus_amount = sal.bonus_for_month(year, month)
             final_salary = earned_salary + bonus_amount
-            payable_cash = max(final_salary - bank_transfer, Decimal(0))
             
-            # Difference Logic
+            # 🟢 আপনার দেওয়া লজিক অনুযায়ী পেয়াবল ক্যাশ ক্যালকুলেশন
+            if base_salary > 0:
+                # ব্যাংকের অংশে কত টাকা বোনাস পড়বে তা আনুপাতিক হারে বের করা হচ্ছে (e.g., 25k/30k = 83.33%)
+                bonus_to_bank = bonus_amount * (bank_transfer / base_salary)
+            else:
+                bonus_to_bank = Decimal(0)
+            
+            # ব্যাংকে একচুয়ালি পাঠানো মোট টাকা (বেসিক ব্যাংক + বোনাসের ব্যাংক অংশ)
+            actual_bank_transfer = bank_transfer + bonus_to_bank
+            
+            # ফাইনাল পেয়াবল ক্যাশ = মোট ফাইনাল স্যালারি থেকে ব্যাংকের মোট টাকা বাদ
+            # (অ্যাবসেন্ট হলে ক্যাশ থেকে কাটা যাবে, ওভারটাইম হলে ক্যাশে যোগ হবে)
+            payable_cash = max(final_salary - actual_bank_transfer, Decimal(0))
+
+            # ফিগার মিল: সেটিং চালু থাকলে নগদ অংশ 50/100 টাকায় (সবসময় উপরে) — ব্যাংক অংশ হুবহু থাকে
+            payable_cash_raw = payable_cash
+            rounding_adjustment = Decimal(0)
+            if rounding_enabled:
+                payable_cash = round_cash_figure(payable_cash_raw)
+                rounding_adjustment = payable_cash - payable_cash_raw
+                final_salary += rounding_adjustment  # মোট = ব্যাংক + (মেলানো) নগদ
+
             salary_diff = final_salary - base_salary
 
             # Totals
             total_base_salary += base_salary
             total_final_salary += final_salary
             total_payable_cash += payable_cash
+            total_rounding_adjustment += rounding_adjustment
             total_earned += earned_salary
             total_bonus += bonus_amount
 
-            # Helper for formatting plain timedeltas
             def fmt_td(td):
                 s = int(td.total_seconds())
                 return f"{s//3600:02d}:{(s%3600)//60:02d}"
@@ -266,7 +277,7 @@ def get_salary_summary_data(request, month_str, department_id=None, employee_id=
                 'month': month_str,
                 'base_salary': base_salary,
                 'bank_transfer': bank_transfer,
-                'cash_amount': cash,
+                'cash_amount': base_cash, # Pure Base Cash (30k-25k=5k)
                 
                 'present_days': present_days,
                 'leave_days': leave_days,
@@ -277,36 +288,36 @@ def get_salary_summary_data(request, month_str, department_id=None, employee_id=
                 'late_time': fmt_td(total_late_time),
                 'over_time': fmt_td(total_over_time),
                 
-                # --- PDF Specific Logic Data ---
-                'expected_hours': f"{int(expected_hours_float):02d}:00", # Display
-                'total_work_hours': fmt_td(total_work_time), # Display
+                'expected_hours': f"{int(expected_hours_float):02d}:00",
+                'total_work_hours': fmt_td(total_work_time),
                 
-                # Raw value for Color Logic (Red if negative)
                 'time_difference_val': diff_seconds, 
-                # String for Display (+05:00 or -02:00)
                 'time_difference_str': time_diff_str,
                 
                 'earned_salary': earned_salary,
+                'overtime_pay': pay['overtime_pay'],
                 'bonus_amount': bonus_amount,
                 'final_salary': final_salary,
-                'payable_cash': payable_cash,
+                'payable_cash': payable_cash, # 🟢 আপনার লজিকের ফাইনাল ক্যাশ (7500 tk)
+                'payable_cash_raw': payable_cash_raw,
+                'rounding_adjustment': rounding_adjustment,
                 
-                # Salary Difference
                 'salary_difference': salary_diff
             })
 
     # Footer Totals
     total_salary_difference = total_final_salary - total_base_salary
     total_bank_sum = sum(row['bank_transfer'] for row in summary_data)
-    total_cash_sum = sum(row['payable_cash'] for row in summary_data)
+    total_cash_amount_sum = sum(row['cash_amount'] for row in summary_data)
 
-    employees_dropdown = Employee.objects.filter(company=user_company)
+    employees_dropdown = scoping.employees(Employee.objects.all(), scope)
     if department_id:
         employees_dropdown = employees_dropdown.filter(department_id=department_id)
 
     return {
         'summaries': summary_data,
         'departments': departments,
+        'branch_name': scope.branch.name if scope.branch else '',
         'employees': employees_dropdown,
         'selected_month': month_str,
         'selected_department': int(department_id) if department_id else None,
@@ -314,80 +325,90 @@ def get_salary_summary_data(request, month_str, department_id=None, employee_id=
         
         'total_base_salary': round(total_base_salary, 2),
         'total_bank_transfer': round(total_bank_sum, 2),
-        'total_payable_cash': round(total_cash_sum, 2),
+        'total_cash_amount': round(total_cash_amount_sum, 2),
+        'total_payable_cash': round(total_payable_cash, 2),
         
         'total_earned': round(total_earned, 2),
         'total_bonus': round(total_bonus, 2),
         'total_final_salary': round(total_final_salary, 2),
         'total_salary_difference': round(total_salary_difference, 2),
+
+        'rounding_enabled': rounding_enabled,
+        'total_rounding_adjustment': round(total_rounding_adjustment, 2),
+        'can_change_settings': can_change_payroll_settings(request.user, user_company),
+        'ot_settings': ot_settings,
+        'company': user_company,
     }
     
-    
-    
+def can_change_payroll_settings(user, company):
+    """বেতন সেটিং বদলাতে পারে: superuser, কোম্পানির owner, অথবা change_company পারমিশন থাকলে"""
+    if not company:
+        return False
+    return (user.is_superuser or company.owner_id == user.id
+            or user.has_perm('attendance_app.change_company'))
+
+
 @login_required
-@user_passes_test(is_not_attendance_group)
+def payroll_settings(request):
+    """ফিগার মিল + ওভারটাইম সেটিং (কোম্পানি অনুযায়ী)"""
+    company = getattr(getattr(request.user, "profile", None), "company", None)
+    if not can_change_payroll_settings(request.user, company):
+        return HttpResponseForbidden("এই সেটিং বদলানোর অনুমতি আপনার নেই।")
+
+    form = PayrollSettingsForm(request.POST or None, instance=company)
+    if request.method == 'POST' and form.is_valid():
+        form.save()
+        messages.success(request, "বেতন সেটিং সেভ হয়েছে।")
+        nxt = request.POST.get('next')
+        if nxt and url_has_allowed_host_and_scheme(nxt, allowed_hosts={request.get_host()}):
+            return redirect(nxt)
+        return redirect('payroll:salary_summary_list')
+
+    return render(request, 'payroll/payroll_settings.html', {
+        'form': form,
+        'next': request.GET.get('next') or request.POST.get('next') or '',
+    })
+
+
+@login_required
 def salary_summary_list(request):
     if request.user.groups.filter(name='attendance').exists():
-        return redirect('dashboard')
+        return redirect('attendance_app:dashboard')
 
-    month_str = request.GET.get('month')
-    department_id = request.GET.get('department')
-    employee_id = request.GET.get('employee')
+    # ভুল ইনপুট হলে 400 (আগে 500 দিত)
+    month_str = month_param(request.GET, 'month')
+    department_id = int_param(request.GET, 'department')
+    employee_id = int_param(request.GET, 'employee')
 
     try:
         context = get_salary_summary_data(request, month_str, department_id, employee_id)
     except PermissionError:
         return HttpResponseForbidden("Company not set.")
-        
+
     return render(request, 'payroll/salary_summary_list.html', context)
 
-
-@user_passes_test(is_not_attendance_group)
+@login_required
 def export_salary_summary_pdf(request):
-    # 1. Month Validation
-    month_str = request.GET.get('month') or timezone.localdate().strftime('%Y-%m')
-    if not re.fullmatch(r"\d{4}-(0[1-9]|1[0-2])", month_str):
-        return HttpResponseBadRequest("Invalid month format. Use YYYY-MM.")
+    # ভুল ইনপুট হলে 400 (HTML পেজের মতোই); মাস না দিলে চলতি মাস
+    month_str = month_param(request.GET, 'month', timezone.localdate().strftime('%Y-%m'))
+    department_id = int_param(request.GET, 'department')
+    employee_id = int_param(request.GET, 'employee')
 
-    # 2. Department/Employee Validation
-    dep_raw = request.GET.get('department')
-    emp_raw = request.GET.get('employee')
-    try:
-        department_id = int(dep_raw) if dep_raw else None
-        employee_id = int(emp_raw) if emp_raw else None
-    except (TypeError, ValueError):
-        return HttpResponseBadRequest("Invalid department/employee id.")
-
-    # 3. Fetch Data (সব লজিক এখন get_salary_summary_data এর ভেতরে)
     try:
         context = get_salary_summary_data(request, month_str, department_id, employee_id)
     except PermissionError:
         return HttpResponseForbidden("আপনার কোম্পানি সেট করা নেই।")
-    except Exception as e:
-        return HttpResponseBadRequest(f"Data Generation Error: {str(e)}")
 
-    # 4. Context Enhancements for PDF
-    context["print_mode"] = True
-    context["logo_url"] = request.build_absolute_uri('/static/images/logo.png')
-    context["generated_at"] = timezone.now()
-
-    # 5. Render Template
-    template = get_template('payroll/salary_summary_pdf.html')
-    html_string = template.render(context)
-
-    # 6. Generate PDF
-    if 'HTML' not in globals():
-        return HttpResponse("WeasyPrint library is missing.", status=500)
-
-    pdf_io = BytesIO()
-    HTML(string=html_string, base_url=request.build_absolute_uri('/')).write_pdf(target=pdf_io)
-    pdf_io.seek(0)
-
-    filename = f"Salary_Summary_{month_str}.pdf"
-    resp = HttpResponse(pdf_io.read(), content_type='application/pdf')
-    resp['Content-Disposition'] = f'inline; filename="{filename}"'
-    return resp
-
+    month = datetime.strptime(context['selected_month'], '%Y-%m')
+    dept = next((d for d in context['departments'] if d.id == department_id), None) if department_id else None
+    emp = context['employees'].filter(id=employee_id).first() if employee_id else None
+    context.update({
+        'month_label': month.strftime('%B %Y'),
+        'department_name': dept.name if dept else '',
+        'employee_name': emp.name if emp else '',
+        'total_salary_difference_abs': abs(context['total_salary_difference']),
+    })
+    return render_pdf(request, 'payroll/salary_summary_pdf.html', context, f"Salary_Summary_{context['selected_month']}.pdf")
 # def is_not_attendance_group(user): ...
 
 @login_required
@@ -418,8 +439,7 @@ def set_base_salaries(request):
 
     # base queryset (company-scoped), SERIAL ORDER = id ASC
     employees_qs = (
-        Employee.objects.select_related("employeesalary", "department")
-        .filter(company=user_company)
+        scoping.employees(Employee.objects.select_related("employeesalary", "department"), scoping.get_scope(request))
         .order_by("id")  # database serial asc
     )
 

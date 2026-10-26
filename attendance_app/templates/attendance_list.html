@@ -1,193 +1,147 @@
 {% extends "base.html" %}
 {% block title %}Attendance Records{% endblock %}
 {% block content %}
+<div class="space-y-6">
 
-<div class="w-full px-2 sm:px-4 py-6 space-y-6">
-  
-  <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+  <div class="page-header">
     <div>
-        <h1 class="text-2xl font-bold text-gray-800 dark:text-white flex items-center gap-2">
-            <span class="p-2 bg-blue-100 dark:bg-blue-900 rounded-lg text-blue-600">📋</span>
-            Attendance Records
-        </h1>
-        <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">Manage and track daily attendance logs efficiently.</p>
+      <p class="eyebrow">Attendance</p>
+      <h1 class="page-title">Attendance Records</h1>
+      <p class="page-subtitle">Daily punch logs with status for every employee.</p>
     </div>
-
-    <div class="flex flex-wrap gap-3">
-        <a href="{% url 'attendance_app:attendance_add' %}"
-           class="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg shadow-md transition-all hover:-translate-y-0.5">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
-            Add Attendance
-        </a>
-        
-        <a href="{% url 'attendance_app:attendance_list_pdf' %}?start_date={{ start_date }}&end_date={{ end_date }}{% if request.GET.employee %}&employee={{ request.GET.employee }}{% endif %}{% if request.GET.department %}&department={{ request.GET.department }}{% endif %}"
-           target="_blank" rel="noopener"
-           class="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold rounded-lg shadow-md transition-all hover:-translate-y-0.5">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
-            Export PDF
-        </a>
+    <div class="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
+      <a href="{% url 'attendance_app:attendance_add' %}" class="btn-primary">
+        {% include "partials/icon.html" with name="plus" cls="h-4 w-4" %}Add Attendance
+      </a>
+      <a href="{% url 'attendance_app:attendance_list_pdf' %}?start_date={{ start_date }}&end_date={{ end_date }}{% if selected_employee %}&employee={{ selected_employee }}{% endif %}{% if selected_department %}&department={{ selected_department }}{% endif %}"
+         target="_blank" rel="noopener" class="btn-secondary">
+        {% include "partials/icon.html" with name="download" cls="h-4 w-4" %}Export PDF
+      </a>
     </div>
   </div>
 
-  <div class="bg-white dark:bg-gray-800 p-5 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
-    <form method="get" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
-        <div>
-            <label class="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1.5">Start Date</label>
-            <input type="date" name="start_date" value="{{ request.GET.start_date|default:start_date }}"
-                   class="w-full bg-gray-50 dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-gray-800 dark:text-gray-200 text-sm px-3 py-2 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all">
-        </div>
-
-        <div>
-            <label class="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1.5">End Date</label>
-            <input type="date" name="end_date" value="{{ request.GET.end_date|default:end_date }}"
-                   class="w-full bg-gray-50 dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-gray-800 dark:text-gray-200 text-sm px-3 py-2 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all">
-        </div>
-
-        <div>
-            <label class="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1.5">Employee</label>
-            <select name="employee"
-                    class="w-full bg-gray-50 dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-gray-800 dark:text-gray-200 text-sm px-3 py-2 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none appearance-none transition-all">
-                <option value="">All Employees</option>
-                {% for emp in employees %}
-                    <option value="{{ emp.id }}" {% if request.GET.employee == emp.id|stringformat:"s" %}selected{% endif %}>{{ emp.name }}</option>
-                {% endfor %}
-            </select>
-        </div>
-
-        <div>
-            <label class="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1.5">Department</label>
-            <select name="department"
-                    class="w-full bg-gray-50 dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-gray-800 dark:text-gray-200 text-sm px-3 py-2 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none appearance-none transition-all">
-                <option value="">All Departments</option>
-                {% for dept in departments %}
-                    <option value="{{ dept.id }}" {% if request.GET.department == dept.id|stringformat:"s" %}selected{% endif %}>{{ dept.name }}</option>
-                {% endfor %}
-            </select>
-        </div>
-
-        <div class="flex gap-2">
-            <button type="submit" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold px-4 py-2 rounded-lg shadow transition-all">
-                Apply Filter
-            </button>
-            <a href="{% url 'attendance_app:attendance_list' %}" class="p-2 bg-gray-100 dark:bg-gray-700 text-gray-500 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-all" title="Clear">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
-            </a>
-        </div>
+  {# ── ফিল্টার ── #}
+  <div class="card p-4 sm:p-5">
+    <form method="get" class="grid grid-cols-1 items-end gap-4 sm:grid-cols-2 xl:grid-cols-5">
+      <div>
+        <label class="form-label" for="f-start">Start date</label>
+        <input id="f-start" type="date" name="start_date" value="{{ start_date }}" class="form-input">
+      </div>
+      <div>
+        <label class="form-label" for="f-end">End date</label>
+        <input id="f-end" type="date" name="end_date" value="{{ end_date }}" class="form-input">
+      </div>
+      <div>
+        <label class="form-label" for="f-emp">Employee</label>
+        <select id="f-emp" name="employee" class="form-select">
+          <option value="">All employees</option>
+          {% for emp in all_employees %}
+            <option value="{{ emp.id }}" {% if selected_employee == emp.id %}selected{% endif %}>{{ emp.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label class="form-label" for="f-dept">Department</label>
+        <select id="f-dept" name="department" class="form-select">
+          <option value="">All departments</option>
+          {% for dept in departments %}
+            <option value="{{ dept.id }}" {% if selected_department == dept.id %}selected{% endif %}>{{ dept.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="flex gap-2 sm:col-span-2 xl:col-span-1">
+        <button type="submit" class="btn-primary flex-1">
+          {% include "partials/icon.html" with name="filter" cls="h-4 w-4" %}Apply
+        </button>
+        <a href="{% url 'attendance_app:attendance_list' %}" class="btn-secondary px-3" title="Clear filters" aria-label="Clear filters">
+          {% include "partials/icon.html" with name="x" cls="h-4 w-4" %}
+        </a>
+      </div>
     </form>
   </div>
 
-  <div class="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
-    <div class="overflow-x-auto min-h-[400px]">
-      <table class="w-full text-sm text-left">
-        <thead class="bg-gray-50 dark:bg-gray-700/50 text-gray-500 dark:text-gray-400 uppercase text-xs font-bold tracking-wider border-b border-gray-200 dark:border-gray-700">
+  {# ── টেবিল ── #}
+  <div class="card overflow-hidden">
+    <div class="card-header">
+      <h2 class="card-title">{% include "partials/icon.html" with name="calendar" cls="h-5 w-5 text-primary-500" %}
+        {% if start_date == end_date %}{{ start_date }}{% else %}{{ start_date }} → {{ end_date }}{% endif %}
+      </h2>
+      <span class="badge-neutral">{{ page_obj.paginator.count }} record{{ page_obj.paginator.count|pluralize }}</span>
+    </div>
+
+    <div class="overflow-x-auto">
+      <table class="responsive-table table-modern">
+        <thead>
           <tr>
-            <th class="px-6 py-4">Employee Name</th>
-            <th class="px-6 py-4">Date</th>
-            <th class="px-6 py-4">Punch Time</th>
-            <th class="px-6 py-4 text-center">Status</th>
-            <th class="px-6 py-4 text-right">Actions</th>
+            <th>Employee</th>
+            <th>Date</th>
+            <th>Check in</th>
+            <th>Check out</th>
+            <th>Status</th>
+            <th class="text-right">Actions</th>
           </tr>
         </thead>
-        <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
+        <tbody>
           {% for record in attendance_summary %}
-          <tr class="group hover:bg-blue-50/30 dark:hover:bg-blue-900/10 transition-colors">
-            <td class="px-6 py-4">
-                <div class="font-bold text-gray-900 dark:text-gray-100">{{ record.employee.name }}</div>
-                <div class="text-[10px] text-gray-500 uppercase">{{ record.employee.department.name|default:"General" }}</div>
-            </td>
-            <td class="px-6 py-4 font-mono text-gray-600 dark:text-gray-300">
-                {{ record.date }}
-            </td>
-            <td class="px-6 py-4">
-                <div class="flex items-center gap-2 font-mono text-xs">
-                    {% if record.in_time %}
-                        <span class="bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400 px-2 py-1 rounded">
-                            IN: {{ record.in_time|time:"h:i A" }}
-                        </span>
-                    {% else %}
-                        <span class="text-gray-300">--:--</span>
-                    {% endif %}
-                    
-                    <span class="text-gray-300">➜</span>
-
-                    {% if record.out_time %}
-                        <span class="bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 px-2 py-1 rounded">
-                            OUT: {{ record.out_time|time:"h:i A" }}
-                        </span>
-                    {% else %}
-                        <span class="text-gray-300">--:--</span>
-                    {% endif %}
+          <tr class="group">
+            <td class="rt-title">
+              <div class="flex items-center gap-3">
+                <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary-50 text-xs font-bold text-primary-700 dark:bg-primary-500/10 dark:text-primary-300">{{ record.employee.name|slice:":1"|upper }}</span>
+                <div class="min-w-0">
+                  <p class="truncate font-semibold text-slate-900 dark:text-white">{{ record.employee.name }}</p>
+                  <p class="truncate text-xs font-normal text-slate-500">{{ record.employee.department.name|default:"General" }}</p>
                 </div>
+              </div>
             </td>
-            <td class="px-6 py-4 text-center">
-                {% if record.status == 'Present' %}
-                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400">
-                        Present
-                    </span>
-                {% elif record.status == 'Absent' %}
-                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-400">
-                        Absent
-                    </span>
-                {% elif record.status == 'Weekly Off' %}
-                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400">
-                        Weekly Off
-                    </span>
-                {% elif record.status == 'Public Holiday' %}
-                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400">
-                        Holiday
-                    </span>
-                {% elif record.status == 'Leave' %}
-                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400">
-                        On Leave
-                    </span>
-                {% endif %}
+            <td class="whitespace-nowrap text-slate-600 dark:text-slate-300">{{ record.date|date:"D, d M Y" }}</td>
+            <td class="whitespace-nowrap tabular-nums">
+              {% if record.in_time %}<span class="font-medium text-slate-900 dark:text-white">{{ record.in_time|time:"h:i A" }}</span>{% else %}<span class="text-slate-400">—</span>{% endif %}
             </td>
-            <td class="px-6 py-4 text-right">
-                <div class="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                    {% if record.attendance_id %}
-                        <a href="{% url 'attendance_app:attendance_edit' record.attendance_id %}" 
-                           class="p-1.5 text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20 rounded-lg transition-colors" title="Edit">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
-                        </a>
-                        <form action="{% url 'attendance_app:attendance_delete' record.attendance_id %}" method="post" 
-                              onsubmit="return confirm('Are you sure you want to delete this record?');" class="inline">
-                            {% csrf_token %}
-                            <button type="submit" class="p-1.5 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/20 rounded-lg transition-colors" title="Delete">
-                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                            </button>
-                        </form>
-                    {% else %}
-                        <span class="text-xs text-gray-300 italic">No Action</span>
-                    {% endif %}
-                </div>
+            <td class="whitespace-nowrap tabular-nums">
+              {% if record.out_time %}<span class="font-medium text-slate-900 dark:text-white">{{ record.out_time|time:"h:i A" }}</span>{% else %}<span class="text-slate-400">—</span>{% endif %}
+            </td>
+            <td>
+              {% if record.status == 'Present' %}<span class="badge-success"><span class="badge-dot"></span>Present</span>
+              {% elif record.status == 'Absent' %}<span class="badge-danger"><span class="badge-dot"></span>Absent</span>
+              {% elif record.status == 'Weekly Off' %}<span class="badge-neutral"><span class="badge-dot"></span>Weekly off</span>
+              {% elif record.status == 'Public Holiday' %}<span class="badge-purple"><span class="badge-dot"></span>Holiday</span>
+              {% elif record.status == 'Leave' %}<span class="badge-info"><span class="badge-dot"></span>On leave</span>
+              {% else %}<span class="badge-neutral">{{ record.status }}</span>{% endif %}
+            </td>
+            <td class="text-right">
+              {% if record.attendance_id %}
+              <div class="flex items-center justify-end gap-1 md:opacity-60 transition-opacity duration-300 group-hover:opacity-100">
+                <a href="{% url 'attendance_app:attendance_edit' record.attendance_id %}" class="btn-icon h-9 w-9 hover:bg-amber-50 hover:text-amber-600 dark:hover:bg-amber-500/10" title="Edit" aria-label="Edit {{ record.employee.name }} {{ record.date }}">
+                  {% include "partials/icon.html" with name="pencil" cls="h-4 w-4" %}
+                </a>
+                <form action="{% url 'attendance_app:attendance_delete' record.attendance_id %}" method="post"
+                      onsubmit="return confirm('এই দিনের সব পাঞ্চ মুছে ফেলবেন?');" class="inline">
+                  {% csrf_token %}
+                  <button type="submit" class="btn-icon h-9 w-9 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-500/10" title="Delete" aria-label="Delete {{ record.employee.name }} {{ record.date }}">
+                    {% include "partials/icon.html" with name="trash" cls="h-4 w-4" %}
+                  </button>
+                </form>
+              </div>
+              {% else %}
+              <span class="text-xs text-slate-400">—</span>
+              {% endif %}
             </td>
           </tr>
           {% empty %}
           <tr>
-            <td colspan="5" class="px-6 py-20 text-center">
-                <div class="flex flex-col items-center">
-                    <div class="p-4 bg-gray-50 dark:bg-gray-700 rounded-full mb-4">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
-                    </div>
-                    <h3 class="text-lg font-bold text-gray-800 dark:text-gray-200">No Records Found</h3>
-                    <p class="text-sm text-gray-500">Try adjusting the date range or filters.</p>
-                </div>
+            <td colspan="6" class="px-6 py-16 text-center">
+              <div class="flex flex-col items-center gap-2 text-slate-500">
+                {% include "partials/icon.html" with name="inbox" cls="h-10 w-10 text-slate-300" %}
+                <p class="font-semibold text-slate-700 dark:text-slate-200">No records found</p>
+                <p class="text-sm">Try a different date range or clear the filters.</p>
+              </div>
             </td>
           </tr>
           {% endfor %}
         </tbody>
       </table>
     </div>
+    {% include "partials/pagination.html" with page=page_obj %}
   </div>
 </div>
-
-<style>
-    /* Custom Scrollbar */
-    .overflow-x-auto::-webkit-scrollbar { height: 8px; width: 8px; }
-    .overflow-x-auto::-webkit-scrollbar-track { background: #f8fafc; }
-    .dark .overflow-x-auto::-webkit-scrollbar-track { background: #1e293b; }
-    .overflow-x-auto::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
-    .dark .overflow-x-auto::-webkit-scrollbar-thumb { background: #475569; }
-</style>
-
 {% endblock content %}

@@ -1,135 +1,33 @@
 {% extends "base.html" %}
-
+{% block title %}{{ title }}{% endblock %}
 {% block content %}
-<div class="max-w-2xl mx-auto mt-10 bg-white dark:bg-gray-800 p-8 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-gray-200 transition-colors duration-300 form-wrap">
+<div class="mx-auto max-w-2xl space-y-6">
+  <div>
+    <a href="{% url 'attendance_app:holiday_list' %}" class="btn-ghost btn-sm -ml-3 mb-2">← Public holidays</a>
+    <h1 class="page-title">{{ title }}</h1>
+    <p class="page-subtitle">এই দিনগুলো হাজিরা ও বেতনের হিসাবে ছুটি হিসেবে গণ্য হবে।</p>
+  </div>
 
-  
-  <h2 class="text-3xl font-semibold text-gray-800 dark:text-gray-100 mb-6 text-center">
-    {{ title }}
-  </h2>
-
-  <form method="post" class="space-y-6">
+  <form method="post" class="card overflow-hidden" novalidate>
     {% csrf_token %}
-    {% for field in form %}
-      <div>
-        <label for="{{ field.id_for_label }}" 
-               class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-          {{ field.label }}
-        </label>
-        {{ field }}
-        {% if field.help_text %}
-          <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">{{ field.help_text }}</p>
-        {% endif %}
-        {% for error in field.errors %}
-          <p class="text-sm text-red-600 dark:text-red-400 mt-1">{{ error }}</p>
-        {% endfor %}
+    <div class="space-y-5 p-5 sm:p-6">
+      {% if form.non_field_errors %}
+      <div class="flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 p-3.5 text-sm text-rose-700 dark:border-rose-500/20 dark:bg-rose-500/10 dark:text-rose-300" role="alert">
+        {% include "partials/icon.html" with name="alert" %}<div>{% for e in form.non_field_errors %}<p>{{ e }}</p>{% endfor %}</div>
       </div>
-    {% endfor %}
-
-    <div class="flex justify-end gap-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-      <a href="{% url 'attendance_app:holiday_list' %}" 
-         class="bg-gray-500 dark:bg-gray-600 text-white px-5 py-2 rounded-xl 
-                hover:bg-gray-600 dark:hover:bg-gray-700 transition">
-        Cancel
-      </a>
-      <button type="submit" 
-              class="bg-blue-600 dark:bg-blue-700 text-white px-6 py-2 rounded-xl 
-                     hover:bg-blue-700 dark:hover:bg-blue-800 transition">
-        Save
-      </button>
+      {% endif %}
+      <div class="grid grid-cols-1 gap-5 sm:grid-cols-2">
+        {% include "partials/form_field.html" with field=form.title %}
+        {% include "partials/form_field.html" with field=form.branch %}
+        {% include "partials/form_field.html" with field=form.start_date %}
+        {% include "partials/form_field.html" with field=form.end_date %}
+        {% include "partials/form_field.html" with field=form.description wrap="sm:col-span-2" %}
+      </div>
+    </div>
+    <div class="flex flex-col-reverse gap-3 border-t border-slate-100 bg-slate-50/60 px-5 py-4 sm:flex-row sm:justify-end sm:px-6 dark:border-slate-800 dark:bg-slate-800/40">
+      <a href="{% url 'attendance_app:holiday_list' %}" class="btn-secondary">Cancel</a>
+      <button type="submit" class="btn-primary">{% include "partials/icon.html" with name="check-circle" cls="h-4 w-4" %}Save holiday</button>
     </div>
   </form>
-
-  
 </div>
-
-
-<style>
-  /* -------- Base (Light) -------- */
-  .form-wrap label{
-    display:block;
-    font:600 0.9rem/1.5 system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,"Apple Color Emoji","Segoe UI Emoji";
-    color:#374151;            /* gray-700 */
-    margin:0 0 .35rem;
-  }
-  .form-wrap input,
-  .form-wrap select,
-  .form-wrap textarea{
-    width:100%;
-    padding:.55rem .75rem;
-    border:1px solid #D1D5DB; /* gray-300 */
-    border-radius:.75rem;
-    background:#FFFFFF;
-    color:#111827;            /* gray-900 */
-    outline:none;
-    transition:border-color .15s, box-shadow .15s, background .15s, color .15s;
-  }
-  .form-wrap input::placeholder,
-  .form-wrap textarea::placeholder{ color:#9CA3AF; } /* gray-400 */
-
-  .form-wrap input:focus,
-  .form-wrap select:focus,
-  .form-wrap textarea:focus{
-    border-color:#3B82F6;     /* blue-500 */
-    box-shadow:0 0 0 2px rgba(59,130,246,.35);
-  }
-
-  /* Field errors */
-  .form-wrap .errorlist,
-  .form-wrap .field-errors{ list-style:none; padding:0; margin:.35rem 0 0; }
-  .form-wrap .errorlist li,
-  .form-wrap .field-errors li,
-  .form-wrap .error-text{
-    font-size:.85rem;
-    color:#B91C1C;            /* red-700 */
-    background:#FEE2E2;       /* red-100 */
-    border:1px solid #FECACA; /* red-200 */
-    padding:.35rem .5rem;
-    border-radius:.5rem;
-  }
-
-  /* -------- Dark Mode -------- */
-  html.dark .form-wrap label{ color:#D1D5DB; }              /* gray-300 */
-
-  html.dark .form-wrap input,
-  html.dark .form-wrap select,
-  html.dark .form-wrap textarea{
-    border-color:#4B5563;    /* gray-600 */
-    background:#0B1220;      /* deep slate */
-    color:#E5E7EB;           /* gray-200 */
-  }
-  html.dark .form-wrap input::placeholder,
-  html.dark .form-wrap textarea::placeholder{ color:#9CA3AF; }
-
-  html.dark .form-wrap input:focus,
-  html.dark .form-wrap select:focus,
-  html.dark .form-wrap textarea:focus{
-    border-color:#60A5FA;    /* blue-400 */
-    box-shadow:0 0 0 2px rgba(96,165,250,.45);
-  }
-
-  /* Disabled */
-  .form-wrap input[disabled],
-  .form-wrap select[disabled],
-  .form-wrap textarea[disabled]{
-    opacity:.8; cursor:not-allowed;
-    background:#F3F4F6; color:#6B7280;
-  }
-  html.dark .form-wrap input[disabled],
-  html.dark .form-wrap select[disabled],
-  html.dark .form-wrap textarea[disabled]{
-    background:#111827; color:#9CA3AF; border-color:#374151;
-  }
-
-  /* Non-field error (top banner) helper */
-  .form-wrap .nf-error{
-    background:#FEE2E2; color:#991B1B; border:1px solid #FECACA;
-    padding:.7rem 1rem; border-radius:.75rem; margin-bottom:1rem;
-  }
-  html.dark .form-wrap .nf-error{
-    background:#2A0F12; color:#FCA5A5; border-color:#7F1D1D;
-  }
-</style>
-
-
 {% endblock %}

@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+{# সব PDF রিপোর্টের কমন লেআউট — utils/pdf.py এর render_pdf দিয়ে রেন্ডার হয় (ফন্ট লোকাল, base_url = pdf_fonts) #}
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>{% block title %}Report{% endblock %} — {{ company_name }}</title>
+<style>
+  @font-face { font-family: 'Inter'; font-weight: 400; src: url(Inter-400.ttf); }
+  @font-face { font-family: 'Inter'; font-weight: 500; src: url(Inter-500.ttf); }
+  @font-face { font-family: 'Inter'; font-weight: 600; src: url(Inter-600.ttf); }
+  @font-face { font-family: 'Inter'; font-weight: 700; src: url(Inter-700.ttf); }
+  /* বাংলা লেখা ও ৳ চিহ্ন */
+  @font-face { font-family: 'Hind Siliguri'; font-weight: 400; src: url(HindSiliguri-Regular.ttf); }
+  @font-face { font-family: 'Hind Siliguri'; font-weight: 500; src: url(HindSiliguri-Medium.ttf); }
+  @font-face { font-family: 'Hind Siliguri'; font-weight: 600; src: url(HindSiliguri-SemiBold.ttf); }
+  @font-face { font-family: 'Hind Siliguri'; font-weight: 700; src: url(HindSiliguri-Bold.ttf); }
+
+  @page {
+    size: A4 {% block orientation %}portrait{% endblock %};
+    margin: 13mm 11mm 15mm 11mm;
+    @bottom-left {
+      content: string(footer);
+      font-family: 'Inter', 'Hind Siliguri'; font-size: 6.8pt; color: #94a3b8;
+    }
+    @bottom-right {
+      content: "Page " counter(page) " of " counter(pages);
+      font-family: 'Inter'; font-size: 6.8pt; color: #94a3b8;
+    }
+  }
+
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: 'Inter', 'Hind Siliguri', sans-serif; font-size: 8.4pt; line-height: 1.35; color: #1e293b; }
+  .bn { font-family: 'Hind Siliguri', 'Inter', sans-serif; }
+
+  /* ── হেডার ── */
+  .head { width: 100%; border-collapse: collapse; }
+  .head td { vertical-align: bottom; padding: 0; }
+  .mark { display: inline-block; width: 26pt; height: 26pt; border-radius: 6pt; background: #4f46e5; color: #fff;
+          font-weight: 700; font-size: 13pt; text-align: center; line-height: 26pt; vertical-align: middle; margin-right: 8pt; }
+  .co { display: inline-block; vertical-align: middle; }
+  .co-name { font-size: 14pt; font-weight: 700; color: #0f172a; letter-spacing: -0.2pt; }
+  .co-sub { font-size: 8pt; color: #64748b; margin-top: 1pt; }
+  .head .right { text-align: right; }
+  .eyebrow { font-size: 6.8pt; font-weight: 600; letter-spacing: 1.2pt; text-transform: uppercase; color: #4f46e5; }
+  .title { font-size: 15pt; font-weight: 700; color: #0f172a; letter-spacing: -0.3pt; margin-top: 1pt; }
+  .accent { height: 2.2pt; margin: 9pt 0 10pt; background: linear-gradient(90deg, #4f46e5 0%, #4f46e5 18%, #e2e8f0 18%, #e2e8f0 100%); }
+
+  /* ── ফিল্টার/মেটা তথ্য ── */
+  .meta { width: 100%; border-collapse: separate; border-spacing: 0; margin-bottom: 9pt; border: 0.75pt solid #e2e8f0; border-radius: 5pt; }
+  .meta td { padding: 5pt 9pt; vertical-align: top; border-left: 0.75pt solid #e2e8f0; }
+  .meta td:first-child { border-left: 0; }
+  .meta .k { font-size: 6.3pt; font-weight: 600; letter-spacing: 0.6pt; text-transform: uppercase; color: #94a3b8; }
+  .meta .v { font-size: 8.6pt; font-weight: 600; color: #0f172a; margin-top: 1.5pt; }
+
+  /* ── KPI ── */
+  .kpis { width: 100%; border-collapse: collapse; table-layout: fixed; margin-bottom: 11pt; }
+  .kpis td.kw { padding: 0 0 0 6pt; vertical-align: top; }
+  .kpis td.kw:first-child { padding-left: 0; }
+  .kpi { background: #f8fafc; border: 0.75pt solid #e2e8f0; border-radius: 5pt; padding: 7pt 9pt; height: 48pt; overflow: hidden; }
+  .kpi .k { font-size: 6.5pt; font-weight: 600; letter-spacing: 0.5pt; text-transform: uppercase; color: #64748b; }
+  .kpi .v { font-size: 13pt; font-weight: 700; color: #0f172a; margin-top: 2pt; letter-spacing: -0.2pt; }
+  .kpi .s { font-size: 6.5pt; color: #94a3b8; margin-top: 1pt; white-space: nowrap; }
+  .kpi.brand { background: #eef2ff; border-color: #c7d2fe; } .kpi.brand .v { color: #3730a3; }
+  .kpi.good .v { color: #047857; } .kpi.bad .v { color: #be123c; } .kpi.warn .v { color: #b45309; }
+
+  /* ── টেবিল ── */
+  table.tbl { width: 100%; border-collapse: collapse; }
+  .tbl thead { display: table-header-group; }   /* প্রতিটা পাতায় হেডার আবার আসে */
+  .tbl tfoot { display: table-row-group; page-break-before: avoid; }
+  .tbl th { background: #f1f5f9; color: #475569; font-size: 6.5pt; font-weight: 600; letter-spacing: 0.4pt; text-transform: uppercase;
+            text-align: left; padding: 5pt 5pt; border-bottom: 0.9pt solid #cbd5e1; white-space: nowrap; }
+  .tbl th.grp { background: #e2e8f0; color: #334155; text-align: center; border-bottom: 0; border-left: 1.5pt solid #fff; }
+  .tbl td { padding: 4.2pt 5pt; border-bottom: 0.5pt solid #e5e9f0; vertical-align: middle; }
+  .tbl tbody tr:nth-child(even) td { background: #fafbfd; }
+  .tbl tr { page-break-inside: avoid; }
+  .tbl tfoot td { background: #eef2ff; font-weight: 700; color: #1e1b4b; border-top: 1pt solid #a5b4fc; border-bottom: 0; padding: 5.5pt 5pt; }
+  .tbl .sep { border-left: 1.5pt solid #e2e8f0; }
+  .tbl tr.day td { background: #f1f5f9 !important; color: #334155; font-weight: 700; font-size: 7.6pt; padding: 4pt 5pt; border-bottom: 0.75pt solid #cbd5e1; }
+  .num { text-align: right !important; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .ctr { text-align: center !important; }
+  .mono { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .name { font-weight: 600; color: #0f172a; }
+  .sub { font-size: 6.8pt; color: #94a3b8; }
+  .muted { color: #94a3b8; }
+  .sl { color: #94a3b8; font-size: 7pt; }
+  .pos { color: #047857; font-weight: 600; } .neg { color: #be123c; font-weight: 600; }
+  .hl-final { background: #ecfdf5 !important; color: #065f46; font-weight: 700; }
+  .hl-pay { background: #fff1f2 !important; color: #9f1239; font-weight: 700; }
+
+  /* স্ট্যাটাস — শুধু রঙিন লেখা (হাজার সারিতেও দ্রুত) */
+  .st { font-weight: 600; font-size: 7.6pt; }
+  .st-present { color: #047857; } .st-absent { color: #be123c; } .st-leave { color: #1d4ed8; }
+  .st-holiday { color: #7e22ce; } .st-off { color: #64748b; } .st-other { color: #94a3b8; }
+
+  .empty { text-align: center; color: #94a3b8; padding: 24pt 0 !important; font-style: italic; }
+  .note { font-size: 7pt; color: #64748b; margin-top: 6pt; }
+
+  /* ── সই ── */
+  .sigs { width: 100%; border-collapse: collapse; table-layout: fixed; margin-top: 34pt; page-break-inside: avoid; }
+  .sigs td { text-align: center; vertical-align: bottom; padding: 26pt 14pt 0; }
+  .sigs td:first-child { padding-left: 0; } .sigs td:last-child { padding-right: 0; }
+  .sigs .line { border-top: 0.8pt solid #475569; padding-top: 4pt; font-size: 7.6pt; font-weight: 600; color: #334155; }
+  .sigs .role { font-size: 6.6pt; color: #94a3b8; font-weight: 400; }
+  .footer-src { string-set: footer content(); height: 0; overflow: hidden; font-size: 1pt; color: #fff; }
+  {% block extra_css %}{% endblock %}
+</style>
+</head>
+<body>
+  <div class="footer-src">{{ company_name }} · {% block footer_title %}Report{% endblock %} · Generated {{ generated_at|date:"d M Y, h:i A" }} by {{ generated_by }}</div>
+  <table class="head"><tr>
+    <td>
+      <span class="mark">{{ company_name|slice:":1"|upper }}</span><div class="co">
+        <div class="co-name">{{ company_name }}</div>
+        <div class="co-sub">{{ branch_name }}</div>
+      </div>
+    </td>
+    <td class="right">
+      <div class="eyebrow">{% block eyebrow %}Report{% endblock %}</div>
+      <div class="title">{% block heading %}Report{% endblock %}</div>
+    </td>
+  </tr></table>
+  <div class="accent"></div>
+
+  {% block meta %}{% endblock %}
+  {% block kpis %}{% endblock %}
+  {% block content %}{% endblock %}
+  {% block signatures %}{% endblock %}
+</body>
+</html>

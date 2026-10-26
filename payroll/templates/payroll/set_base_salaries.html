@@ -1,351 +1,161 @@
 {% extends "base.html" %}
+{% block title %}Base Salaries{% endblock %}
 {% block content %}
-
-<div class="mx-auto max-w-[1400px] p-4 sm:p-6 space-y-6">
-  
-  <div class="flex flex-col lg:flex-row justify-between items-end gap-4 bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
-    <div class="w-full lg:w-auto">
-      <h1 class="text-2xl font-bold tracking-tight text-gray-900 dark:text-gray-100 flex items-center gap-2">
-        <span>💸</span> Set Base Salaries & Bonuses
-      </h1>
-      <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">
-        Showing {{ employees|length }} employees. (Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }})
-      </p>
+<div class="space-y-6">
+  <div class="page-header">
+    <div>
+      <p class="eyebrow">Payroll</p>
+      <h1 class="page-title">Base Salaries & Bonuses</h1>
+      <p class="page-subtitle">{{ employees|length }} employee{{ employees|length|pluralize }} on this page · page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</p>
     </div>
-
-    <form method="get" class="flex flex-wrap gap-2 w-full lg:w-auto items-center">
-      <input type="hidden" name="page" value="{{ page_obj.number }}" />
-      
-      <div class="relative">
-        <select name="per" onchange="this.form.submit()" class="appearance-none pl-3 pr-8 py-2.5 bg-gray-50 dark:bg-gray-700 border-0 rounded-lg text-sm font-medium focus:ring-2 focus:ring-emerald-500 cursor-pointer">
-          {% for n in per_choices %}
-            <option value="{{ n }}" {% if per == n %}selected{% endif %}>{{ n }} rows</option>
-          {% endfor %}
+    <form method="get" class="flex w-full flex-col gap-2 sm:flex-row lg:w-auto" role="search">
+      <div class="relative sm:flex-1 lg:w-64 lg:flex-none">
+        <span class="pointer-events-none absolute inset-y-0 left-3 flex items-center text-slate-400">{% include "partials/icon.html" with name="filter" cls="h-4 w-4" %}</span>
+        <label for="bs-q" class="sr-only">Search employees</label>
+        <input id="bs-q" type="search" name="q" value="{{ q }}" placeholder="Name or device ID…" class="form-input pl-9">
+      </div>
+      <div class="flex gap-2">
+        <label for="bs-per" class="sr-only">Rows per page</label>
+        <select id="bs-per" name="per" onchange="this.form.submit()" class="form-select w-32">
+          {% for n in per_choices %}<option value="{{ n }}" {% if per == n %}selected{% endif %}>{{ n }} rows</option>{% endfor %}
         </select>
-        <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-500">
-          <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" /></svg>
-        </div>
+        <button type="submit" class="btn-secondary flex-1 sm:flex-none">Search</button>
       </div>
-
-      <div class="relative flex-grow lg:flex-grow-0 lg:w-72">
-        <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
-          <svg class="h-5 w-5 text-gray-400" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clip-rule="evenodd" /></svg>
-        </div>
-        <input type="text" name="q" value="{{ q }}" placeholder="Search name or ID..." 
-               class="block w-full rounded-lg border-0 bg-gray-50 dark:bg-gray-700 py-2.5 pl-10 text-gray-900 dark:text-gray-100 placeholder:text-gray-400 focus:ring-2 focus:ring-emerald-500 sm:text-sm">
-      </div>
-      
-      <button type="submit" class="bg-gray-900 dark:bg-gray-600 text-white px-4 py-2.5 rounded-lg hover:bg-gray-800 transition shadow-sm font-medium text-sm">Search</button>
     </form>
   </div>
 
-  <form method="post" id="salary-form" class="relative">
+  <div class="flex items-start gap-2 rounded-2xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800 dark:border-blue-500/20 dark:bg-blue-500/10 dark:text-blue-300">
+    {% include "partials/icon.html" with name="info" %}
+    <p>শুধু এই পেজের সারিগুলো সেভ হয়। বোনাস হয় শতাংশ (%) <strong>অথবা</strong> নির্দিষ্ট টাকা — দুটো একসাথে নয়। ব্যাংকের টাকা মূল বেতনের বেশি হলে লাল দেখাবে।</p>
+  </div>
+
+  <form method="post" id="salary-form" class="space-y-4">
     {% csrf_token %}
-
-    <div id="save-bar" class="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 hidden transition-all duration-300 transform translate-y-20 opacity-0 data-[visible=true]:translate-y-0 data-[visible=true]:opacity-100">
-      <div class="bg-gray-900 text-white px-6 py-3 rounded-full shadow-2xl flex items-center gap-4 border border-gray-700">
-        <span class="text-sm font-medium"><span id="changes-count" class="text-emerald-400 font-bold text-lg">0</span> changes made</span>
-        <div class="h-4 w-px bg-gray-700"></div>
-        <button type="button" id="reset-btn" class="text-sm text-gray-300 hover:text-white transition">Reset</button>
-        <button type="submit" class="bg-emerald-500 hover:bg-emerald-600 text-white px-5 py-1.5 rounded-full text-sm font-bold shadow-lg transition transform hover:scale-105">Save Changes</button>
-      </div>
-    </div>
-
-    <div class="hidden md:block bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+    <div class="card overflow-hidden">
       <div class="overflow-x-auto">
-        <table class="w-full text-left border-collapse">
+        <table class="responsive-table table-modern">
           <thead>
-            <tr class="bg-gray-50 dark:bg-gray-700/50 border-b border-gray-200 dark:border-gray-700 text-xs uppercase text-gray-500 dark:text-gray-400 font-semibold tracking-wider">
-              <th class="p-4 sticky left-0 bg-gray-50 dark:bg-gray-800 z-10 w-64">Employee</th>
-              <th class="p-4 text-center w-40 text-blue-600 dark:text-blue-400 bg-blue-50/50 dark:bg-blue-900/10">Base Salary</th>
-              <th class="p-4 text-center w-40 text-purple-600 dark:text-purple-400 bg-purple-50/50 dark:bg-purple-900/10">Bank Transfer</th>
-              <th class="p-4 text-center w-32">Bonus %</th>
-              <th class="p-4 text-center w-36">Fixed Bonus</th>
-              <th class="p-4 text-center w-40">Payout Month</th>
+            <tr>
+              <th>Employee</th>
+              <th>Base salary</th>
+              <th>Bank transfer</th>
+              <th>Bonus %</th>
+              <th>Fixed bonus</th>
+              <th>Bonus month</th>
             </tr>
           </thead>
-          <tbody class="divide-y divide-gray-100 dark:divide-gray-700 text-sm">
+          <tbody>
             {% for emp in employees %}
-            <tr class="group hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
-              <td class="p-4 sticky left-0 bg-white dark:bg-gray-800 group-hover:bg-gray-50 dark:group-hover:bg-gray-700/50 z-10 border-r border-transparent group-hover:border-gray-200 dark:group-hover:border-gray-700">
+            <tr>
+              <td class="rt-title">
                 <div class="flex items-center gap-3">
-                  <div class="h-9 w-9 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white font-bold text-xs shadow-sm">
-                    {{ emp.name|slice:":1" }}
-                  </div>
-                  <div>
-                    <div class="font-bold text-gray-900 dark:text-white">{{ emp.name }}</div>
-                    <div class="text-xs text-gray-500">{{ emp.device_user_id }} | {{ emp.department.name|default:"-" }}</div>
+                  <span class="avatar">{{ emp.name|slice:":1" }}</span>
+                  <div class="min-w-0">
+                    <p class="truncate font-semibold text-slate-900 dark:text-white">{{ emp.name }}</p>
+                    <p class="truncate text-xs font-normal text-slate-500">#{{ emp.device_user_id }} · {{ emp.department.name|default:"—" }}</p>
                   </div>
                 </div>
               </td>
-
-              <td class="p-3 bg-blue-50/10 dark:bg-blue-900/5">
-                <div class="relative rounded-md shadow-sm">
-                  <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
-                    <span class="text-gray-400 sm:text-sm">৳</span>
-                  </div>
-                  <input type="number" step="0.01" name="salary_{{ emp.id }}" data-emp="{{ emp.id }}"
-                         value="{{ emp.employeesalary.base_salary|default_if_none:'' }}" placeholder="0"
-                         class="block w-full rounded-md border-0 py-2 pl-7 pr-2 text-gray-900 dark:text-white ring-1 ring-inset ring-gray-300 dark:ring-gray-600 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-blue-600 sm:text-sm sm:leading-6 bg-white dark:bg-gray-900 text-right font-mono">
+              <td>
+                <div class="relative w-full max-w-[11rem] md:w-36">
+                  <span class="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm text-slate-400">৳</span>
+                  <input type="number" step="0.01" min="0" name="salary_{{ emp.id }}" value="{{ emp.employeesalary.base_salary|default_if_none:'' }}" placeholder="0" class="form-input pl-7 text-right tabular-nums" aria-label="Base salary for {{ emp.name }}">
                 </div>
               </td>
-
-              <td class="p-3 bg-purple-50/10 dark:bg-purple-900/5">
-                <div class="relative rounded-md shadow-sm">
-                  <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
-                    <span class="text-gray-400 sm:text-sm">৳</span>
-                  </div>
-                  <input type="number" step="0.01" name="bank_transfer_{{ emp.id }}" data-emp="{{ emp.id }}"
-                         value="{{ emp.employeesalary.bank_transfer_amount|default_if_none:'' }}" placeholder="0"
-                         class="block w-full rounded-md border-0 py-2 pl-7 pr-2 text-gray-900 dark:text-white ring-1 ring-inset ring-gray-300 dark:ring-gray-600 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-purple-600 sm:text-sm sm:leading-6 bg-white dark:bg-gray-900 text-right font-mono">
+              <td>
+                <div class="relative w-full max-w-[11rem] md:w-36">
+                  <span class="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm text-slate-400">৳</span>
+                  <input type="number" step="0.01" min="0" name="bank_transfer_{{ emp.id }}" value="{{ emp.employeesalary.bank_transfer_amount|default_if_none:'' }}" placeholder="0" class="form-input pl-7 text-right tabular-nums" aria-label="Bank transfer for {{ emp.name }}">
                 </div>
               </td>
-
-              <td class="p-3">
-                <div class="relative rounded-md shadow-sm group/bonus">
-                  <input type="number" step="0.01" name="bonus_percent_{{ emp.id }}" placeholder="0"
-                         value="{{ emp.employeesalary.yearly_bonus_percent|default_if_none:'' }}"
-                         class="block w-full rounded-md border-0 py-2 pl-3 pr-8 text-gray-900 dark:text-white ring-1 ring-inset ring-gray-300 dark:ring-gray-600 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-emerald-600 sm:text-sm sm:leading-6 bg-white dark:bg-gray-900 text-center disabled:bg-gray-100 dark:disabled:bg-gray-800 disabled:text-gray-400 transition-all">
-                  <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3">
-                    <span class="text-gray-400 sm:text-sm">%</span>
-                  </div>
+              <td>
+                <div class="relative w-full max-w-[8rem] md:w-24">
+                  <input type="number" step="0.01" min="0" name="bonus_percent_{{ emp.id }}" value="{{ emp.employeesalary.yearly_bonus_percent|default_if_none:'' }}" placeholder="0" class="form-input pr-7 text-right tabular-nums" aria-label="Bonus percent for {{ emp.name }}">
+                  <span class="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-slate-400">%</span>
                 </div>
               </td>
-
-              <td class="p-3">
-                <div class="relative rounded-md shadow-sm">
-                  <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
-                    <span class="text-gray-400 sm:text-sm">৳</span>
-                  </div>
-                  <input type="number" step="0.01" name="bonus_fixed_{{ emp.id }}" placeholder="0"
-                         value="{{ emp.employeesalary.yearly_bonus_fixed|default_if_none:'' }}"
-                         class="block w-full rounded-md border-0 py-2 pl-7 pr-2 text-gray-900 dark:text-white ring-1 ring-inset ring-gray-300 dark:ring-gray-600 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-emerald-600 sm:text-sm sm:leading-6 bg-white dark:bg-gray-900 text-right font-mono disabled:bg-gray-100 dark:disabled:bg-gray-800 disabled:text-gray-400 transition-all">
+              <td>
+                <div class="relative w-full max-w-[11rem] md:w-32">
+                  <span class="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm text-slate-400">৳</span>
+                  <input type="number" step="0.01" min="0" name="bonus_fixed_{{ emp.id }}" value="{{ emp.employeesalary.yearly_bonus_fixed|default_if_none:'' }}" placeholder="0" class="form-input pl-7 text-right tabular-nums" aria-label="Fixed bonus for {{ emp.name }}">
                 </div>
               </td>
-
-              <td class="p-3">
-                <select name="bonus_month_{{ emp.id }}" class="block w-full rounded-md border-0 py-2 pl-3 pr-8 text-gray-900 dark:text-white ring-1 ring-inset ring-gray-300 dark:ring-gray-600 focus:ring-2 focus:ring-inset focus:ring-emerald-600 sm:text-xs sm:leading-6 bg-white dark:bg-gray-900">
-                  {% for val,label in month_choices %}
-                    <option value="{{ val }}" {% if emp.employeesalary.bonus_payout_month == val %}selected{% endif %}>{{ label }}</option>
-                  {% endfor %}
+              <td>
+                <select name="bonus_month_{{ emp.id }}" class="form-select w-full max-w-[11rem] md:w-36" aria-label="Bonus payout month for {{ emp.name }}">
+                  {% for val, label in month_choices %}<option value="{{ val }}" {% if emp.employeesalary.bonus_payout_month == val %}selected{% endif %}>{{ label }}</option>{% endfor %}
                 </select>
               </td>
             </tr>
+            {% empty %}
+            <tr><td colspan="6">{% include "partials/empty_state.html" with icon="users" title="No employees found" text="Try a different search." %}</td></tr>
             {% endfor %}
           </tbody>
         </table>
       </div>
+      {% include "partials/pagination.html" with page=page_obj %}
     </div>
 
-    <div class="md:hidden space-y-4">
-      {% for emp in employees %}
-      <div class="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm border border-gray-200 dark:border-gray-700">
-        <div class="flex items-center gap-3 mb-4 border-b border-gray-100 dark:border-gray-700 pb-3">
-            <div class="h-10 w-10 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center font-bold">{{ emp.name|slice:":1" }}</div>
-            <div>
-                <h3 class="font-bold text-gray-900 dark:text-white">{{ emp.name }}</h3>
-                <p class="text-xs text-gray-500">ID: {{ emp.device_user_id }}</p>
-            </div>
-        </div>
-        
-        <div class="space-y-3">
-            <div>
-                <label class="text-xs font-semibold text-blue-600 dark:text-blue-400 uppercase">Base Salary</label>
-                <div class="relative mt-1">
-                    <span class="absolute left-3 top-2.5 text-gray-400">৳</span>
-                    <input type="number" name="salary_{{ emp.id }}" data-emp="{{ emp.id }}" value="{{ emp.employeesalary.base_salary|default_if_none:'' }}" class="w-full pl-8 rounded-lg border-gray-300 dark:bg-gray-700 dark:border-gray-600 py-2 font-mono">
-                </div>
-            </div>
-            <div>
-                <label class="text-xs font-semibold text-purple-600 dark:text-purple-400 uppercase">Bank Transfer</label>
-                <div class="relative mt-1">
-                    <span class="absolute left-3 top-2.5 text-gray-400">৳</span>
-                    <input type="number" name="bank_transfer_{{ emp.id }}" data-emp="{{ emp.id }}" value="{{ emp.employeesalary.bank_transfer_amount|default_if_none:'' }}" class="w-full pl-8 rounded-lg border-gray-300 dark:bg-gray-700 dark:border-gray-600 py-2 font-mono">
-                </div>
-            </div>
-            <div class="grid grid-cols-2 gap-3">
-                <div>
-                    <label class="text-xs text-gray-500">Bonus %</label>
-                    <div class="relative">
-                        <input type="number" name="bonus_percent_{{ emp.id }}" value="{{ emp.employeesalary.yearly_bonus_percent|default_if_none:'' }}" class="w-full rounded-lg border-gray-300 dark:bg-gray-700 py-2 pr-6 text-center disabled:bg-gray-100">
-                        <span class="absolute right-3 top-2.5 text-gray-400">%</span>
-                    </div>
-                </div>
-                <div>
-                    <label class="text-xs text-gray-500">Fixed Bonus</label>
-                    <div class="relative">
-                        <span class="absolute left-2 top-2.5 text-gray-400">৳</span>
-                        <input type="number" name="bonus_fixed_{{ emp.id }}" value="{{ emp.employeesalary.yearly_bonus_fixed|default_if_none:'' }}" class="w-full pl-6 rounded-lg border-gray-300 dark:bg-gray-700 py-2 text-right disabled:bg-gray-100">
-                    </div>
-                </div>
-            </div>
-        </div>
+    {# পরিবর্তন হলে নিচে ভাসমান সেভ বার (মোবাইলে বটম-নেভের উপরে) #}
+    <div id="save-bar" class="pointer-events-none fixed inset-x-0 bottom-20 z-30 flex translate-y-4 justify-center px-4 opacity-0 transition-all duration-300 md:bottom-6 md:pl-[17rem] [html.sb-collapsed_&]:md:pl-20">
+      <div class="pointer-events-auto flex w-full max-w-lg items-center gap-3 rounded-2xl border border-slate-200 bg-white/95 p-3 shadow-lift backdrop-blur dark:border-slate-700 dark:bg-slate-900/95">
+        <span class="flex-1 pl-1 text-sm text-slate-600 dark:text-slate-300"><strong id="changes-count" class="tabular-nums text-slate-900 dark:text-white">0</strong> unsaved change(s)</span>
+        <button type="button" id="reset-btn" class="btn-ghost btn-sm">Reset</button>
+        <button type="submit" class="btn-primary btn-sm">{% include "partials/icon.html" with name="check-circle" cls="h-4 w-4" %}Save</button>
       </div>
-      {% endfor %}
     </div>
-
   </form>
-
-  {% if page_obj.paginator.num_pages > 1 %}
-  <div class="flex justify-center pt-6">
-    <nav class="isolate inline-flex -space-x-px rounded-md shadow-sm" aria-label="Pagination">
-      {% if page_obj.has_previous %}
-      <a href="?q={{ q }}&per={{ per }}&page={{ page_obj.previous_page_number }}" class="relative inline-flex items-center rounded-l-md px-4 py-2 text-gray-900 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:z-20 focus:outline-offset-0 bg-white dark:bg-gray-800 dark:text-gray-200 dark:ring-gray-700">Prev</a>
-      {% endif %}
-      
-      <span class="relative inline-flex items-center px-4 py-2 text-sm font-semibold text-gray-700 ring-1 ring-inset ring-gray-300 focus:outline-offset-0 bg-white dark:bg-gray-800 dark:text-gray-200 dark:ring-gray-700">
-        Page {{ page_obj.number }}
-      </span>
-
-      {% if page_obj.has_next %}
-      <a href="?q={{ q }}&per={{ per }}&page={{ page_obj.next_page_number }}" class="relative inline-flex items-center rounded-r-md px-4 py-2 text-gray-900 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:z-20 focus:outline-offset-0 bg-white dark:bg-gray-800 dark:text-gray-200 dark:ring-gray-700">Next</a>
-      {% endif %}
-    </nav>
-  </div>
-  {% endif %}
-
 </div>
 
 <script>
 document.addEventListener('DOMContentLoaded', function () {
   const form = document.getElementById('salary-form');
   const saveBar = document.getElementById('save-bar');
-  const changesCountEl = document.getElementById('changes-count');
-  const resetBtn = document.getElementById('reset-btn');
-
-  // 1. Change Tracking Logic (Updated to handle duplicate inputs)
-  const initial = new Map();
-  const inputs = Array.from(form.querySelectorAll('input, select'));
-  inputs.forEach(el => initial.set(el.name, el.value));
+  const countEl = document.getElementById('changes-count');
+  const fields = Array.from(form.querySelectorAll('input[type=number], select'));
+  const initial = new Map(fields.map(el => [el.name, el.value]));
+  const byName = name => form.querySelector(`[name="${name}"]`);
 
   function updateChanged() {
-    let changed = 0;
-    const checkedNames = new Set();
-    
-    inputs.forEach(el => {
-      // Avoid double counting for Mobile + Desktop inputs
-      if (!checkedNames.has(el.name)) {
-        if ((initial.get(el.name) || '') !== (el.value || '')) {
-            changed++;
-        }
-        checkedNames.add(el.name);
-      }
-    });
-    
-    changesCountEl.textContent = changed;
-    
-    if (changed > 0) {
-      saveBar.classList.remove('hidden');
-      setTimeout(() => saveBar.setAttribute('data-visible', 'true'), 10);
-    } else {
-      saveBar.setAttribute('data-visible', 'false');
-      setTimeout(() => saveBar.classList.add('hidden'), 300);
-    }
+    const changed = fields.filter(el => (initial.get(el.name) || '') !== (el.value || '')).length;
+    countEl.textContent = changed;
+    const show = changed > 0;
+    saveBar.classList.toggle('opacity-0', !show);
+    saveBar.classList.toggle('translate-y-4', !show);
   }
 
-  // 2. Bonus Mutual Exclusion Logic (Updated for multiple inputs)
-  function handleBonusLock(empId) {
-    // Select ALL inputs (Desktop + Mobile)
-    const percents = document.querySelectorAll(`input[name="bonus_percent_${empId}"]`);
-    const fixeds = document.querySelectorAll(`input[name="bonus_fixed_${empId}"]`);
-    
-    if (percents.length === 0 || fixeds.length === 0) return;
-
-    // Use value from the first input (since they are synced)
-    const pVal = parseFloat(percents[0].value) || 0;
-    const fVal = parseFloat(fixeds[0].value) || 0;
-
-    // Logic to disable/enable inputs across both views
-    percents.forEach(el => {
-        el.disabled = false;
-        el.parentElement.classList.remove('opacity-50');
-        if (fVal > 0) {
-            el.disabled = true;
-            el.value = '';
-            el.parentElement.classList.add('opacity-50');
-        }
-    });
-
-    fixeds.forEach(el => {
-        el.disabled = false;
-        el.parentElement.classList.remove('opacity-50');
-        if (pVal > 0) {
-            el.disabled = true;
-            el.value = '';
-            el.parentElement.classList.add('opacity-50');
-        }
-    });
+  // বোনাস: শতাংশ অথবা নির্দিষ্ট টাকা — একটায় মান থাকলে অন্যটা বন্ধ
+  function bonusLock(id) {
+    const p = byName(`bonus_percent_${id}`), f = byName(`bonus_fixed_${id}`);
+    if (!p || !f) return;
+    const pv = parseFloat(p.value) || 0, fv = parseFloat(f.value) || 0;
+    p.disabled = fv > 0; f.disabled = pv > 0;
+    [p, f].forEach(el => el.closest('div').classList.toggle('opacity-50', el.disabled));
   }
 
-  // 3. Bank Transfer Clamping (Updated for multiple inputs)
-  function clampBank(empId) {
-    const bases = document.querySelectorAll(`input[name="salary_${empId}"]`);
-    const banks = document.querySelectorAll(`input[name="bank_transfer_${empId}"]`);
-    
-    if(bases.length === 0 || banks.length === 0) return;
-
-    const baseVal = parseFloat(bases[0].value) || 0;
-    const bankVal = parseFloat(banks[0].value) || 0;
-
-    banks.forEach(bankEl => {
-        if(bankVal > baseVal) {
-            bankEl.classList.add('text-red-600', 'font-bold');
-        } else {
-            bankEl.classList.remove('text-red-600', 'font-bold');
-        }
-    });
+  // ব্যাংকের টাকা মূল বেতনের বেশি হলে লাল
+  function bankCheck(id) {
+    const b = byName(`salary_${id}`), k = byName(`bank_transfer_${id}`);
+    if (!b || !k) return;
+    const bad = (parseFloat(k.value) || 0) > (parseFloat(b.value) || 0);
+    k.classList.toggle('!border-rose-400', bad);
+    k.classList.toggle('!text-rose-600', bad);
+    k.title = bad ? 'Bank transfer is more than the base salary' : '';
   }
 
-  // Event Listeners with SYNC LOGIC
-  form.addEventListener('input', (e) => {
-    // A. SYNC LOGIC: Update duplicate fields (Desktop <-> Mobile)
-    const name = e.target.name;
-    const val = e.target.value;
-    const relatedInputs = document.querySelectorAll(`input[name="${name}"], select[name="${name}"]`);
-    
-    relatedInputs.forEach(el => {
-        if (el !== e.target) {
-            el.value = val;
-        }
-    });
-
-    // B. Normal Logic
-    updateChanged();
-    
-    const id = name.split('_').pop();
-    
-    if (name.includes('bonus')) {
-      handleBonusLock(id);
-    }
-    
-    if (name.includes('salary') || name.includes('bank')) {
-        clampBank(id);
-    }
-  });
-
-  resetBtn.addEventListener('click', () => {
-    inputs.forEach(el => {
-      el.value = initial.get(el.name);
-      // Re-apply disabled states
-      const id = el.name.split('_').pop();
-      if(el.name.includes('bonus')) handleBonusLock(id);
-      if(el.name.includes('salary') || el.name.includes('bank')) clampBank(id);
-    });
+  const idOf = name => name.split('_').pop();
+  form.addEventListener('input', e => {
+    const id = idOf(e.target.name);
+    if (e.target.name.startsWith('bonus_')) bonusLock(id);
+    if (e.target.name.startsWith('salary_') || e.target.name.startsWith('bank_')) bankCheck(id);
     updateChanged();
   });
-
-  // Init checks on load
-  const processedIds = new Set();
-  inputs.forEach(el => {
-    const id = el.name.split('_').pop();
-    if (!processedIds.has(id)) {
-      if (el.name.includes('bonus')) handleBonusLock(id);
-      if (el.name.includes('salary')) clampBank(id);
-      processedIds.add(id);
-    }
+  document.getElementById('reset-btn').addEventListener('click', () => {
+    fields.forEach(el => { el.value = initial.get(el.name); });
+    new Set(fields.map(el => idOf(el.name))).forEach(id => { bonusLock(id); bankCheck(id); });
+    updateChanged();
   });
-
+  // সেভের সময় disabled ইনপুট POST এ যায় না — ভিউ সেটাকে "খালি" ধরে, যা ঠিক আছে (একটা বোনাসই থাকে)
+  new Set(fields.map(el => idOf(el.name))).forEach(id => { bonusLock(id); bankCheck(id); });
 });
 </script>
-
 {% endblock %}

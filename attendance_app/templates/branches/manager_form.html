@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}Add manager · {{ branch.name }}{% endblock %}
+{% block content %}
+<div class="mx-auto max-w-2xl space-y-6">
+  <div>
+    <a href="{% url 'attendance_app:branch_list' %}" class="btn-ghost btn-sm -ml-3 mb-2">← Branches</a>
+    <p class="eyebrow">{{ branch.name }}</p>
+    <h1 class="page-title">Add branch manager</h1>
+    <p class="page-subtitle">এই লগইন দিয়ে শুধু <strong class="text-slate-900 dark:text-white">{{ branch.name }}</strong> এর কর্মচারী, হাজিরা, ছুটি ও বেতন দেখা যাবে। অন্য ব্রাঞ্চ, ব্রাঞ্চ সেটিং বা বেতন সেটিং দেখা যাবে না।</p>
+  </div>
+  <form method="post" class="card overflow-hidden" novalidate autocomplete="off">
+    {% csrf_token %}
+    <div class="grid grid-cols-1 gap-5 p-5 sm:grid-cols-2 sm:p-6">
+      {% include "partials/form_field.html" with field=form.full_name %}
+      {% include "partials/form_field.html" with field=form.email %}
+      {% include "partials/form_field.html" with field=form.username %}
+      {% include "partials/form_field.html" with field=form.password %}
+    </div>
+    <div class="flex flex-col-reverse gap-3 border-t border-slate-100 bg-slate-50/60 px-5 py-4 sm:flex-row sm:justify-end sm:px-6 dark:border-slate-800 dark:bg-slate-800/40">
+      <a href="{% url 'attendance_app:branch_list' %}" class="btn-secondary">Cancel</a>
+      <button type="submit" class="btn-primary">{% include "partials/icon.html" with name="user" cls="h-4 w-4" %}Create manager login</button>
+    </div>
+  </form>
+</div>
+{% endblock %}

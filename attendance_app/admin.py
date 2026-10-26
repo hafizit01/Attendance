@@ -21,9 +21,10 @@ class UserProfileAdmin(admin.ModelAdmin):
 
 @admin.register(Department)
 class DepartmentAdmin(admin.ModelAdmin):
-    list_display = ['name', 'company', 'weekly_off_day']
+    list_display = ['name', 'company', 'weekly_off_day', 'last_synced_at']
     list_filter = ['company']
     search_fields = ['name']  # ← এটা যোগ করা জরুরি
+    readonly_fields = ['push_token', 'last_synced_at']  # ডিভাইসে push_token বসাতে এখান থেকে কপি করুন
 
 
 
@@ -86,7 +87,7 @@ class EmployeeAdmin(admin.ModelAdmin):
             self.message_user(request, "; ".join(e.messages), level=messages.ERROR)
             raise
         except IntegrityError:
-            self.message_user(request, "This device_user_id already exists for the selected company.", level=messages.ERROR)
+            self.message_user(request, "This device_user_id already exists in this branch.", level=messages.ERROR)
             raise
 
 

@@ -2,6 +2,7 @@ from django.urls import path
 
 from attendance_app.views import attendance_pdf_report, attendance_list_pdf
 from .views import *
+from . import branch_views
 app_name = "attendance_app"
 
 urlpatterns = [
@@ -13,7 +14,6 @@ urlpatterns = [
     path('monthly-report/pdf/', monthly_work_time_pdf, name='monthly_work_time_pdf'),
     path('sync-attendance/', sync_attendance_view, name='sync_attendance'),
     path('attendance/<int:employee_id>/pdf/', employee_attendance_pdf, name='attendance_pdf'),
-    path('api/zkteco/push/', zkteco_push_view, name='zkteco_push'),
     
 
 # ---------emplyee add-----------
@@ -55,6 +55,16 @@ urlpatterns = [
     path('holidays/add/', holiday_create, name='holiday_add'),
     path('holidays/<int:pk>/edit/', holiday_edit, name='holiday_edit'),
     path('holidays/<int:pk>/delete/', holiday_delete, name='holiday_delete'),
+
+    # ----------------------Branches----------------------------
+    path('branches/', branch_views.branch_list, name='branch_list'),
+    path('branches/add/', branch_views.branch_form, name='branch_add'),
+    path('branches/<int:pk>/edit/', branch_views.branch_form, name='branch_edit'),
+    path('branches/<int:pk>/delete/', branch_views.branch_delete, name='branch_delete'),
+    path('branches/<int:pk>/managers/add/', branch_views.manager_add, name='manager_add'),
+    path('branches/managers/<int:user_id>/remove/', branch_views.manager_remove, name='manager_remove'),
+    path('branch/switch/', branch_views.branch_switch, name='branch_switch'),
+    path('employees/<int:pk>/transfer/', branch_views.employee_transfer, name='employee_transfer'),
 
     path('support/', support_page, name='support_page'),
     path('support/success/', support_success, name='support_success'),

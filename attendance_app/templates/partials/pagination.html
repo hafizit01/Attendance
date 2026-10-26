@@ -1,0 +1,19 @@
+{% load custom_filters %}
+{# পেজিনেশন: {% include "partials/pagination.html" with page=page_obj %} — বর্তমান ফিল্টারগুলো (q, status...) নিজে থেকেই ধরে রাখে #}
+{% if page and page.paginator.num_pages > 1 %}
+{% with qs=request.GET|qs_without_page %}
+<nav class="flex flex-col items-center justify-between gap-3 border-t border-slate-100 px-5 py-4 text-sm sm:flex-row dark:border-slate-800" aria-label="Pagination">
+  <p class="text-slate-500 dark:text-slate-400">
+    Showing <span class="font-semibold text-slate-900 dark:text-white">{{ page.start_index }}–{{ page.end_index }}</span>
+    of <span class="font-semibold text-slate-900 dark:text-white">{{ page.paginator.count }}</span>
+  </p>
+  <div class="flex items-center gap-1.5">
+    <a href="?{{ qs }}page=1" class="page-link {% if not page.has_previous %}is-disabled{% endif %}" aria-label="First page">«</a>
+    <a href="?{{ qs }}page={% if page.has_previous %}{{ page.previous_page_number }}{% else %}1{% endif %}" class="page-link {% if not page.has_previous %}is-disabled{% endif %}">Prev</a>
+    <span class="page-link border-primary-200 bg-primary-50 text-primary-700 dark:border-primary-500/30 dark:bg-primary-500/10 dark:text-primary-300" aria-current="page">{{ page.number }} / {{ page.paginator.num_pages }}</span>
+    <a href="?{{ qs }}page={% if page.has_next %}{{ page.next_page_number }}{% else %}{{ page.number }}{% endif %}" class="page-link {% if not page.has_next %}is-disabled{% endif %}">Next</a>
+    <a href="?{{ qs }}page={{ page.paginator.num_pages }}" class="page-link {% if not page.has_next %}is-disabled{% endif %}" aria-label="Last page">»</a>
+  </div>
+</nav>
+{% endwith %}
+{% endif %}

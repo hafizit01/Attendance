@@ -2,8 +2,22 @@
 
 from django import forms
 from .models import EmployeeSalary, SalarySummary
-from attendance_app.models import Employee
+from attendance_app.models import Employee, Company
 from django.forms import modelformset_factory
+
+
+class PayrollSettingsForm(forms.ModelForm):
+    """কোম্পানির বেতন সেটিং: ফিগার মিল + ওভারটাইম"""
+    class Meta:
+        model = Company
+        fields = ['salary_rounding_enabled', 'ot_calculation', 'ot_min_minutes',
+                  'ot_multiplier', 'holiday_ot_multiplier']
+        widgets = {
+            'ot_calculation': forms.RadioSelect,
+            'ot_min_minutes': forms.NumberInput(attrs={'min': 0, 'max': 600, 'step': 5}),
+            'ot_multiplier': forms.NumberInput(attrs={'min': 1, 'max': 5, 'step': '0.25'}),
+            'holiday_ot_multiplier': forms.NumberInput(attrs={'min': 1, 'max': 5, 'step': '0.25', 'placeholder': 'খালি = আলাদা রেট নেই'}),
+        }
 
 class EmployeeSalaryForm(forms.ModelForm):
     class Meta:

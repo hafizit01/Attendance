@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}Transfer · {{ employee.name }}{% endblock %}
+{% block content %}
+<div class="mx-auto max-w-2xl space-y-6">
+  <div>
+    <a href="{% url 'attendance_app:employee_list' %}" class="btn-ghost btn-sm -ml-3 mb-2">← Employees</a>
+    <h1 class="page-title">Transfer employee</h1>
+    <p class="page-subtitle">বদলির তারিখের আগের হাজিরা পুরনো ব্রাঞ্চের রিপোর্টে, পরেরটা নতুন ব্রাঞ্চের রিপোর্টে দেখাবে।</p>
+  </div>
+
+  <div class="card flex items-center gap-4 p-5">
+    <span class="avatar h-12 w-12 text-base">{{ employee.name|slice:":1" }}</span>
+    <div class="min-w-0">
+      <p class="truncate font-semibold text-slate-900 dark:text-white">{{ employee.name }}</p>
+      <p class="text-sm text-slate-500">Now: <span class="font-medium text-slate-700 dark:text-slate-200">{% if employee.department %}{{ employee.department.branch.name|default:"No branch" }} · {{ employee.department.name }}{% else %}No department{% endif %}</span></p>
+    </div>
+  </div>
+
+  <form method="post" class="card overflow-hidden" novalidate>
+    {% csrf_token %}
+    <div class="grid grid-cols-1 gap-5 p-5 sm:grid-cols-2 sm:p-6">
+      {% include "partials/form_field.html" with field=form.to_department wrap="sm:col-span-2" %}
+      {% include "partials/form_field.html" with field=form.effective_date %}
+      {% include "partials/form_field.html" with field=form.new_device_user_id %}
+      {% include "partials/form_field.html" with field=form.note wrap="sm:col-span-2" %}
+    </div>
+    <div class="flex flex-col-reverse gap-3 border-t border-slate-100 bg-slate-50/60 px-5 py-4 sm:flex-row sm:justify-end sm:px-6 dark:border-slate-800 dark:bg-slate-800/40">
+      <a href="{% url 'attendance_app:employee_list' %}" class="btn-secondary">Cancel</a>
+      <button type="submit" class="btn-primary">{% include "partials/icon.html" with name="arrow-right" cls="h-4 w-4" %}Transfer</button>
+    </div>
+  </form>
+
+  {% if history %}
+  <div class="card overflow-hidden">
+    <div class="card-header"><h2 class="card-title">{% include "partials/icon.html" with name="clock" cls="h-5 w-5 text-primary-500" %}Transfer history</h2></div>
+    <ol class="divide-y divide-slate-100 dark:divide-slate-800">
+      {% for t in history %}
+      <li class="flex flex-col gap-1 px-5 py-3.5 sm:flex-row sm:items-center sm:justify-between">
+        <div class="text-sm">
+          <span class="text-slate-500">{{ t.from_branch.name|default:"—" }}{% if t.from_department %} · {{ t.from_department.name }}{% endif %}</span>
+          <span class="mx-1 text-slate-400">→</span>
+          <span class="font-medium text-slate-900 dark:text-white">{{ t.to_branch.name|default:"—" }}{% if t.to_department %} · {{ t.to_department.name }}{% endif %}</span>
+          {% if t.note %}<p class="text-xs text-slate-500">{{ t.note }}</p>{% endif %}
+        </div>
+        <span class="badge-neutral self-start sm:self-auto">{{ t.effective_date|date:"d M Y" }}</span>
+      </li>
+      {% endfor %}
+    </ol>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

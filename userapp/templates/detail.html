@@ -1,120 +1,96 @@
 {% extends 'base.html' %}
-{% block title %}Profile Detail{% endblock %}
-
+{% block title %}{{ profile.employee.name }} · Profile{% endblock %}
 {% block content %}
-<div class="max-w-6xl mx-auto mt-8 space-y-6">
+<div class="mx-auto max-w-5xl space-y-6">
+  <a href="{% url 'userapp:employee_profile_list' %}" class="btn-ghost btn-sm -ml-3">← Employee profiles</a>
 
-  <!-- Header Section -->
-  <div class="bg-white dark:bg-gray-800 shadow-xl rounded-2xl p-8 flex flex-col md:flex-row gap-6 items-center border dark:border-gray-700">
-    <div>
-      {% if profile.image %}
-        <img src="{{ profile.image.url }}" alt="Profile Image" 
-             class="w-32 h-32 rounded-full object-cover shadow-md border">
-      {% else %}
-        <div class="w-32 h-32 flex items-center justify-center rounded-full bg-gray-200 dark:bg-gray-700 text-gray-500">
-          No Image
+  {# ── হেডার কার্ড ── #}
+  <div class="card overflow-hidden">
+    <div class="h-24 bg-gradient-to-r from-primary-600 via-indigo-600 to-violet-600 sm:h-28"></div>
+    <div class="flex flex-col gap-4 px-5 pb-5 sm:flex-row sm:items-end sm:justify-between sm:px-6">
+      <div class="flex flex-col gap-3 sm:flex-row sm:items-end">
+        {% if profile.image %}
+          <img src="{{ profile.image.url }}" alt="{{ profile.employee.name }}" class="-mt-12 h-24 w-24 rounded-2xl object-cover shadow-lift ring-4 ring-white dark:ring-slate-900">
+        {% else %}
+          <span class="-mt-12 flex h-24 w-24 items-center justify-center rounded-2xl bg-white text-3xl font-bold text-primary-600 shadow-lift ring-4 ring-white dark:bg-slate-800 dark:text-primary-300 dark:ring-slate-900">{{ profile.employee.name|slice:":1"|upper }}</span>
+        {% endif %}
+        <div class="pt-1 sm:pb-1">
+          <h1 class="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">{{ profile.employee.name }}</h1>
+          <p class="text-sm text-slate-500 dark:text-slate-400">{{ profile.designation|default:"No designation" }}{% if profile.employee.department %} · {{ profile.employee.department.name }}{% endif %}</p>
+          <div class="mt-2">{% if profile.status == 'Active' %}<span class="badge-success"><span class="badge-dot"></span>Active</span>{% else %}<span class="badge-neutral"><span class="badge-dot"></span>Inactive</span>{% endif %}</div>
         </div>
-      {% endif %}
-    </div>
-    <div>
-      <h2 class="text-3xl font-bold text-gray-800 dark:text-gray-100">{{ profile.employee.name }}</h2>
-      <p class="text-lg text-gray-500 dark:text-gray-400">{{ profile.designation|default:"No Designation" }}</p>
-      <span class="inline-block mt-2 px-3 py-1 text-sm rounded-full 
-                   {% if profile.status == 'Active' %}
-                     bg-green-100 text-green-700 dark:bg-green-700 dark:text-green-100
-                   {% else %}
-                     bg-red-100 text-red-700 dark:bg-red-700 dark:text-red-100
-                   {% endif %}">
-        {{ profile.status }}
-      </span>
+      </div>
+      <div class="flex flex-wrap gap-2">
+        <a href="{% url 'userapp:employee_profile_pdf' profile.id %}" target="_blank" rel="noopener" class="btn-secondary">{% include "partials/icon.html" with name="download" cls="h-4 w-4" %}PDF</a>
+        <a href="{% url 'userapp:employee_profile_update' profile.id %}" class="btn-primary">{% include "partials/icon.html" with name="pencil" cls="h-4 w-4" %}Edit</a>
+      </div>
     </div>
   </div>
 
-  <!-- Personal Info -->
-  <div class="bg-white dark:bg-gray-800 shadow-lg rounded-xl p-6">
-    <h3 class="text-xl font-semibold mb-4">🧑 Personal Information</h3>
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-      <div><strong>Date of Birth:</strong> {{ profile.date_of_birth|default:"-" }}</div>
-      <div><strong>Gender:</strong> {{ profile.gender|default:"-" }}</div>
-      <div><strong>Marital Status:</strong> {{ profile.marital_status|default:"-" }}</div>
-      <div><strong>National ID:</strong> {{ profile.national_id|default:"-" }}</div>
+  <div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
+    <div class="card p-5 sm:p-6">
+      <h2 class="section-title mb-4">{% include "partials/icon.html" with name="user" cls="h-4 w-4 text-primary-500" %}Personal</h2>
+      <dl class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div><dt class="kv-label">Date of birth</dt><dd class="kv-value">{{ profile.date_of_birth|date:"d M Y"|default:"—" }}</dd></div>
+        <div><dt class="kv-label">Gender</dt><dd class="kv-value">{{ profile.gender|default:"—" }}</dd></div>
+        <div><dt class="kv-label">Marital status</dt><dd class="kv-value">{{ profile.marital_status|default:"—" }}</dd></div>
+        <div><dt class="kv-label">National ID</dt><dd class="kv-value font-mono">{{ profile.national_id|default:"—" }}</dd></div>
+      </dl>
+    </div>
+
+    <div class="card p-5 sm:p-6">
+      <h2 class="section-title mb-4">{% include "partials/icon.html" with name="mail" cls="h-4 w-4 text-primary-500" %}Contact</h2>
+      <dl class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div><dt class="kv-label">Mobile</dt><dd class="kv-value">{% if profile.mobile_number %}<a href="tel:{{ profile.mobile_number }}" class="link">{{ profile.mobile_number }}</a>{% else %}—{% endif %}</dd></div>
+        <div><dt class="kv-label">Email</dt><dd class="kv-value">{% if profile.email %}<a href="mailto:{{ profile.email }}" class="link">{{ profile.email }}</a>{% else %}—{% endif %}</dd></div>
+        <div class="sm:col-span-2"><dt class="kv-label">Address</dt><dd class="kv-value">{{ profile.address|default:"—"|linebreaksbr }}</dd></div>
+        <div><dt class="kv-label">Emergency contact</dt><dd class="kv-value">{{ profile.emergency_contact_name|default:"—" }}</dd></div>
+        <div><dt class="kv-label">Emergency number</dt><dd class="kv-value">{{ profile.emergency_contact_number|default:"—" }}</dd></div>
+      </dl>
+    </div>
+
+    <div class="card p-5 sm:p-6">
+      <h2 class="section-title mb-4">{% include "partials/icon.html" with name="building" cls="h-4 w-4 text-primary-500" %}Job</h2>
+      <dl class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div><dt class="kv-label">Employee code</dt><dd class="kv-value font-mono">{{ profile.employee_code|default:"—" }}</dd></div>
+        <div><dt class="kv-label">Job type</dt><dd class="kv-value">{{ profile.job_type|default:"—" }}</dd></div>
+        <div><dt class="kv-label">Shift</dt><dd class="kv-value">{{ profile.shift|default:"—" }}</dd></div>
+        <div><dt class="kv-label">Device ID</dt><dd class="kv-value font-mono">{{ profile.employee.device_user_id }}</dd></div>
+        <div><dt class="kv-label">Joined</dt><dd class="kv-value">{{ profile.join_date|date:"d M Y"|default:"—" }}</dd></div>
+        <div><dt class="kv-label">Left</dt><dd class="kv-value">{{ profile.leave_date|date:"d M Y"|default:"—" }}</dd></div>
+      </dl>
+    </div>
+
+    <div class="card p-5 sm:p-6">
+      <h2 class="section-title mb-4">{% include "partials/icon.html" with name="money" cls="h-4 w-4 text-primary-500" %}Bank & salary</h2>
+      <dl class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div><dt class="kv-label">Bank account</dt><dd class="kv-value font-mono">{{ profile.bank_account|default:"—" }}</dd></div>
+        <div><dt class="kv-label">Bank</dt><dd class="kv-value">{{ profile.bank_name|default:"—" }}</dd></div>
+        <div><dt class="kv-label">Branch</dt><dd class="kv-value">{{ profile.branch_name|default:"—" }}</dd></div>
+        <div><dt class="kv-label">Tax ID</dt><dd class="kv-value font-mono">{{ profile.tax_id|default:"—" }}</dd></div>
+        <div><dt class="kv-label">Base salary</dt><dd class="kv-value">{% if profile.salary %}৳{{ profile.salary|floatformat:"0g" }}{% else %}—{% endif %}</dd></div>
+      </dl>
     </div>
   </div>
 
-  <!-- Contact Info -->
-  <div class="bg-white dark:bg-gray-800 shadow-lg rounded-xl p-6">
-    <h3 class="text-xl font-semibold mb-4">📞 Contact Information</h3>
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-      <div><strong>Mobile:</strong> {{ profile.mobile_number|default:"-" }}</div>
-      <div><strong>Email:</strong> {{ profile.email|default:"-" }}</div>
-      <div class="md:col-span-2"><strong>Address:</strong> {{ profile.address|default:"-" }}</div>
-      <div><strong>Emergency Contact Name:</strong> {{ profile.emergency_contact_name|default:"-" }}</div>
-      <div><strong>Emergency Contact Number:</strong> {{ profile.emergency_contact_number|default:"-" }}</div>
+  <div class="card p-5 sm:p-6">
+    <h2 class="section-title mb-4">{% include "partials/icon.html" with name="document" cls="h-4 w-4 text-primary-500" %}Documents</h2>
+    <div class="grid grid-cols-1 gap-3 xl:grid-cols-3">
+      {% with r=profile.resume o=profile.offer_letter j=profile.joining_letter %}
+      <div class="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 p-3.5 dark:border-slate-700">
+        <span class="text-sm font-medium text-slate-700 dark:text-slate-200">Resume</span>
+        {% if r %}<a href="{{ r.url }}" target="_blank" rel="noopener" class="btn-secondary btn-sm">{% include "partials/icon.html" with name="download" cls="h-4 w-4" %}Open</a>{% else %}<span class="badge-neutral">Not uploaded</span>{% endif %}
+      </div>
+      <div class="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 p-3.5 dark:border-slate-700">
+        <span class="text-sm font-medium text-slate-700 dark:text-slate-200">Offer letter</span>
+        {% if o %}<a href="{{ o.url }}" target="_blank" rel="noopener" class="btn-secondary btn-sm">{% include "partials/icon.html" with name="download" cls="h-4 w-4" %}Open</a>{% else %}<span class="badge-neutral">Not uploaded</span>{% endif %}
+      </div>
+      <div class="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 p-3.5 dark:border-slate-700">
+        <span class="text-sm font-medium text-slate-700 dark:text-slate-200">Joining letter</span>
+        {% if j %}<a href="{{ j.url }}" target="_blank" rel="noopener" class="btn-secondary btn-sm">{% include "partials/icon.html" with name="download" cls="h-4 w-4" %}Open</a>{% else %}<span class="badge-neutral">Not uploaded</span>{% endif %}
+      </div>
+      {% endwith %}
     </div>
   </div>
-
-  <!-- Job Info -->
-  <div class="bg-white dark:bg-gray-800 shadow-lg rounded-xl p-6">
-    <h3 class="text-xl font-semibold mb-4">💼 Job Information</h3>
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-      <div><strong>Employee Code:</strong> {{ profile.employee_code|default:"-" }}</div>
-      <div><strong>Job Type:</strong> {{ profile.job_type|default:"-" }}</div>
-      <div><strong>Shift:</strong> {{ profile.shift|default:"-" }}</div>
-      <div><strong>Join Date:</strong> {{ profile.join_date|default:"-" }}</div>
-      <div><strong>Leave Date:</strong> {{ profile.leave_date|default:"-" }}</div>
-    </div>
-  </div>
-
-  <!-- Finance Info -->
-  <div class="bg-white dark:bg-gray-800 shadow-lg rounded-xl p-6">
-    <h3 class="text-xl font-semibold mb-4">💳 Finance Information</h3>
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-      <div><strong>Bank Account:</strong> {{ profile.bank_account|default:"-" }}</div>
-      <div><strong>Bank Name:</strong> {{ profile.bank_name|default:"-" }}</div>
-      <div><strong>Branch Name:</strong> {{ profile.branch_name|default:"-" }}</div>
-      <div><strong>Tax ID:</strong> {{ profile.tax_id|default:"-" }}</div>
-      <div><strong>Salary:</strong> {{ profile.salary|default:"-" }}</div>
-    </div>
-  </div>
-
-  <!-- Files -->
-  <div class="bg-white dark:bg-gray-800 shadow-lg rounded-xl p-6">
-    <h3 class="text-xl font-semibold mb-4">📂 Documents</h3>
-    <ul class="space-y-2">
-      <li>📄 Resume: 
-        {% if profile.resume %}
-          <a href="{{ profile.resume.url }}" class="text-blue-600 hover:underline" target="_blank">Download</a>
-        {% else %}<span class="text-gray-400">Not uploaded</span>{% endif %}
-      </li>
-      <li>📄 Offer Letter: 
-        {% if profile.offer_letter %}
-          <a href="{{ profile.offer_letter.url }}" class="text-blue-600 hover:underline" target="_blank">Download</a>
-        {% else %}<span class="text-gray-400">Not uploaded</span>{% endif %}
-      </li>
-      <li>📄 Joining Letter: 
-        {% if profile.joining_letter %}
-          <a href="{{ profile.joining_letter.url }}" class="text-blue-600 hover:underline" target="_blank">Download</a>
-        {% else %}<span class="text-gray-400">Not uploaded</span>{% endif %}
-      </li>
-    </ul>
-  </div>
-
-  <!-- Action Buttons -->
-  <div class="flex justify-end gap-4 px-4 py-6">
-    <a href="{% url 'userapp:employee_profile_update' profile.id %}" 
-       class="px-5 py-2 rounded-lg bg-yellow-500 text-white font-semibold hover:bg-yellow-600 transition">
-      ✏️ Edit
-    </a>
-    <a href="{% url 'userapp:employee_profile_list' %}" 
-       class="px-5 py-2 rounded-lg bg-gray-500 text-white font-semibold hover:bg-gray-600 transition">
-      ⬅️ Back
-    </a>
-    <!-- 🆕 PDF Button -->
-    <a href="{% url 'userapp:employee_profile_pdf' profile.id %}" target="_blank"
-       class="px-5 py-2 rounded-lg bg-blue-600 text-white font-semibold hover:bg-blue-700 transition">
-      📄 Download PDF
-    </a>
-  </div>
-
 </div>
 {% endblock %}

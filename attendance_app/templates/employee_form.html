@@ -1,57 +1,31 @@
 {% extends "base.html" %}
-
+{% block title %}{{ title }}{% endblock %}
 {% block content %}
-<div class="p-6 sm:p-8 bg-white dark:bg-gray-800 rounded shadow max-w-md mx-auto transition-colors duration-300">
-  <h1 class="text-2xl font-bold mb-6 text-gray-900 dark:text-gray-100">{{ title }}</h1>
+<div class="mx-auto max-w-2xl space-y-6">
+  <div>
+    <a href="{% url 'attendance_app:employee_list' %}" class="btn-ghost btn-sm -ml-3 mb-2">← Employees</a>
+    <h1 class="page-title">{{ title }}</h1>
+    <p class="page-subtitle">Device user ID অবশ্যই ZKTeco মেশিনের ইউজার আইডির সাথে মিলতে হবে।</p>
+  </div>
 
-  
-
-  
-  <form method="post" class="space-y-6">
+  <form method="post" class="card overflow-hidden" novalidate>
     {% csrf_token %}
-    <div class="space-y-4">
-      {{ form.as_p }}
+    <div class="space-y-5 p-5 sm:p-6">
+      {% if form.non_field_errors %}
+      <div class="flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 p-3.5 text-sm text-rose-700 dark:border-rose-500/20 dark:bg-rose-500/10 dark:text-rose-300" role="alert">
+        {% include "partials/icon.html" with name="alert" %}<div>{% for e in form.non_field_errors %}<p>{{ e }}</p>{% endfor %}</div>
+      </div>
+      {% endif %}
+      <div class="grid grid-cols-1 gap-5 sm:grid-cols-2">
+        {% include "partials/form_field.html" with field=form.name wrap="sm:col-span-2" %}
+        {% include "partials/form_field.html" with field=form.device_user_id %}
+        {% include "partials/form_field.html" with field=form.department %}
+      </div>
     </div>
-    
-    <div class="flex items-center gap-4">
-      <button type="submit"
-              class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded shadow transition">
-        Save
-      </button>
-      <a href="{% url 'attendance_app:employee_list' %}"
-         class="text-gray-700 dark:text-gray-300 hover:underline transition">
-        Cancel
-      </a>
+    <div class="flex flex-col-reverse gap-3 border-t border-slate-100 bg-slate-50/60 px-5 py-4 sm:flex-row sm:justify-end sm:px-6 dark:border-slate-800 dark:bg-slate-800/40">
+      <a href="{% url 'attendance_app:employee_list' %}" class="btn-secondary">Cancel</a>
+      <button type="submit" class="btn-primary">{% include "partials/icon.html" with name="check-circle" cls="h-4 w-4" %}Save employee</button>
     </div>
   </form>
 </div>
-
-<style>
-  form p label{
-    display:block; font-size:0.875rem; font-weight:600; margin-bottom:0.25rem; color:#374151;
-  }
-  .dark form p label{ color:#D1D5DB; }
-
-  form p input, form p select, form p textarea{
-    width:100%; border-radius:0.5rem; border:1px solid #D1D5DB; padding:0.5rem 0.75rem;
-    background:#fff; color:#111827; outline: none;
-  }
-  .dark form p input, .dark form p select, .dark form p textarea{
-    border-color:#4B5563; background:#111827; color:#F3F4F6;
-  }
-  form p input:focus, form p select:focus, form p textarea:focus{
-    box-shadow:0 0 0 2px rgba(59,130,246,.5); border-color:#3B82F6;
-  }
-
-  ul.errorlist { list-style: none; padding: 0; margin: .5rem 0; }
-  ul.errorlist li {
-    color: #991b1b;               /* red-800 */
-    background: #fee2e2;          /* red-100 */
-    border: 1px solid #fecaca;    /* red-200 */
-    padding: .5rem .75rem;
-    border-radius: .5rem;
-    font-weight: 600;
-  }
-</style>
-
 {% endblock %}

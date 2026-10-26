@@ -1,62 +1,59 @@
+# subscription_app/utils.py
+# সাবস্ক্রিপশন চেকের একমাত্র জায়গা (single source of truth)।
+# middleware, decorator, dashboard, login, employee limit — সবাই এখান থেকেই চেক করে।
+from django.contrib.auth.models import User
 from django.utils import timezone
+
 from .models import UserSubscription
 
-from typing import Optional
-from django.utils import timezone
-from django.core.exceptions import ObjectDoesNotExist
-from .models import UserSubscription
 
-def get_effective_subscription(user):
+def get_user_company(user):
+    """user -> profile -> company (না থাকলে None)"""
+    return getattr(getattr(user, "profile", None), "company", None)
+
+
+def _active_subscriptions():
+    """active ফ্ল্যাগ True এবং আজকের তারিখ start_date..end_date এর মধ্যে"""
+    today = timezone.localdate()
+    return (
+        UserSubscription.objects
+        .select_related("plan")
+        .filter(active=True, start_date__lte=today, end_date__gte=today)
+        .order_by("-end_date")
+    )
+
+
+def get_company_subscription(company):
     """
-    company.subscription থাকলে সেটাই; না থাকলে ইউজারের latest active UserSubscription।
+    কোম্পানির সক্রিয় সাবস্ক্রিপশন: কোম্পানির owner বা কোম্পানির যেকোনো user
+    যে প্ল্যান কিনেছে, সেটাই পুরো কোম্পানির জন্য প্রযোজ্য।
     """
-    company = getattr(user, "current_company", None) or getattr(user, "company", None)
-    sub = getattr(company, "subscription", None) if company else None
+    if not company:
+        return None
+    holder_ids = set(User.objects.filter(profile__company=company).values_list("id", flat=True))
+    if company.owner_id:
+        holder_ids.add(company.owner_id)
+    return _active_subscriptions().filter(user_id__in=holder_ids).first()
+
+
+def get_active_subscription(user):
+    """
+    user-এর সক্রিয় সাবস্ক্রিপশন:
+    1) user.profile.company.subscription (কোম্পানি-লেভেল)
+    2) না থাকলে user-এর নিজের সক্রিয় UserSubscription
+    """
+    if not user or not user.is_authenticated:
+        return None
+    company = get_user_company(user)
+    sub = company.subscription if company else None
     if sub:
         return sub
-
-    # Fallback: ইউজারের যেটা সত্যিই active আছে সেটি
-    today = timezone.localdate()
-    return (
-        UserSubscription.objects
-        .filter(user=user, active=True, end_date__gte=today)
-        .order_by("-end_date")
-        .first()
-    )
-
-def is_subscription_active_for(user) -> bool:
-    sub = get_effective_subscription(user)
-    if not sub:
-        return False
-    today = timezone.localdate()
-    start_date = sub.start_date.date() if hasattr(sub.start_date, "date") else sub.start_date
-    end_date   = sub.end_date.date()   if hasattr(sub.end_date, "date")   else sub.end_date
-    return bool(getattr(sub, "active", True)) and start_date <= today <= end_date
-
-def is_subscription_expired_for(user) -> bool:
-    return not is_subscription_active_for(user)
+    return _active_subscriptions().filter(user=user).first()
 
 
+def is_subscription_active(user) -> bool:
+    return get_active_subscription(user) is not None
 
 
-def get_effective_subscription_details(user):
-    """
-    মিনিমাল ভার্সন: company.subscription থাকলে সেটাই, নইলে user-এর active UserSubscription।
-    (আগের অ্যাডভান্সড ভার্সনের সরল সংস্করণ)
-    """
-    company = getattr(user, "current_company", None) or getattr(user, "company", None)
-    if company:
-        try:
-            sub = getattr(company, "subscription", None)
-        except ObjectDoesNotExist:
-            sub = None
-        if sub:
-            return sub  # আপনার চাহিদা অনুযায়ী অবজেক্টই ফেরত দিচ্ছি
-
-    today = timezone.localdate()
-    return (
-        UserSubscription.objects
-        .filter(user=user, active=True, end_date__gte=today)
-        .order_by("-end_date")
-        .first()
-    )
+def is_subscription_expired(user) -> bool:
+    return not is_subscription_active(user)

@@ -1,122 +1,89 @@
 {% extends 'base.html' %}
+{% block title %}All Subscriptions{% endblock %}
 {% block content %}
-
-<div class="mx-auto max-w-7xl p-4 sm:p-6">
-  <div class="flex items-center justify-between flex-wrap gap-3 mb-4">
-    <h2 class="text-2xl md:text-3xl font-bold text-gray-900 dark:text-gray-100">👥 Subscriptions</h2>
-
-    <div class="flex items-center gap-2">
-      <a href="?{% if q %}q={{ q }}&{% endif %}{% if status %}status={{ status }}&{% endif %}{% if start_from %}start_from={{ start_from }}&{% endif %}{% if end_to %}end_to={{ end_to }}&{% endif %}per={{ per }}&export=csv"
-         class="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 shadow">
-        ⬇️ Export CSV
-      </a>
+<div class="space-y-6">
+  <div class="page-header">
+    <div>
+      <p class="eyebrow">Admin</p>
+      <h1 class="page-title">All Subscriptions</h1>
+      <p class="page-subtitle">{{ page_obj.paginator.count }} subscription{{ page_obj.paginator.count|pluralize }} across all customers.</p>
     </div>
+    <a href="?{% if q %}q={{ q|urlencode }}&{% endif %}{% if status %}status={{ status }}&{% endif %}{% if start_from %}start_from={{ start_from|date:'Y-m-d' }}&{% endif %}{% if end_to %}end_to={{ end_to|date:'Y-m-d' }}&{% endif %}per={{ per }}&export=csv"
+       class="btn-secondary self-start lg:self-auto">{% include "partials/icon.html" with name="download" cls="h-4 w-4" %}Export CSV</a>
   </div>
 
-  <!-- Filters -->
-  <form method="get" class="bg-white dark:bg-gray-800 p-4 sm:p-6 rounded-2xl border dark:border-gray-700 shadow-sm mb-4">
-    <div class="grid grid-cols-1 md:grid-cols-5 gap-4">
-      <div class="md:col-span-2">
-        <label class="block text-sm text-gray-600 dark:text-gray-300 mb-1">🔍 Search</label>
-        <input type="text" name="q" value="{{ q|default_if_none:'' }}"
-               placeholder="Search by User or Plan"
-               class="w-full border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-200">
+  <div class="card p-4 sm:p-5">
+    <form method="get" class="grid grid-cols-1 items-end gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+      <div class="xl:col-span-2">
+        <label class="form-label" for="sb-q">Search</label>
+        <input id="sb-q" type="search" name="q" value="{{ q|default_if_none:'' }}" placeholder="User or plan…" class="form-input">
       </div>
-
       <div>
-        <label class="block text-sm text-gray-600 dark:text-gray-300 mb-1">📌 Status</label>
-        <select name="status" class="w-full border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-200">
+        <label class="form-label" for="sb-status">Status</label>
+        <select id="sb-status" name="status" class="form-select">
           <option value="">All</option>
-          <option value="active"   {% if status == 'active' %}selected{% endif %}>Active</option>
+          <option value="active" {% if status == 'active' %}selected{% endif %}>Active</option>
           <option value="inactive" {% if status == 'inactive' %}selected{% endif %}>Inactive</option>
         </select>
       </div>
-
       <div>
-        <label class="block text-sm text-gray-600 dark:text-gray-300 mb-1">📅 Start Date ≥</label>
-        <input type="date" name="start_from" value="{{ start_from|date:'Y-m-d' }}"
-               class="w-full border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-200">
+        <label class="form-label" for="sb-from">Start ≥</label>
+        <input id="sb-from" type="date" name="start_from" value="{{ start_from|date:'Y-m-d' }}" class="form-input">
       </div>
-
       <div>
-        <label class="block text-sm text-gray-600 dark:text-gray-300 mb-1">📅 End Date ≤</label>
-        <input type="date" name="end_to" value="{{ end_to|date:'Y-m-d' }}"
-               class="w-full border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-200">
+        <label class="form-label" for="sb-to">End ≤</label>
+        <input id="sb-to" type="date" name="end_to" value="{{ end_to|date:'Y-m-d' }}" class="form-input">
       </div>
-    </div>
-
-    <div class="mt-3 flex items-center justify-between gap-3">
-      <div class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
-        <span>Per page</span>
-        <select name="per" class="border-gray-300 dark:border-gray-600 rounded-lg px-2 py-1 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-200">
-          {% for n in per_choices %}
-            <option value="{{ n }}" {% if per == n %}selected{% endif %}>{{ n }}</option>
-          {% endfor %}
-        </select>
+      <div class="flex gap-2">
+        <div class="w-24 shrink-0">
+          <label class="form-label" for="sb-per">Rows</label>
+          <select id="sb-per" name="per" class="form-select">
+            {% for n in per_choices %}<option value="{{ n }}" {% if per == n %}selected{% endif %}>{{ n }}</option>{% endfor %}
+          </select>
+        </div>
+        <button type="submit" class="btn-primary mt-auto flex-1">{% include "partials/icon.html" with name="filter" cls="h-4 w-4" %}Apply</button>
       </div>
-      <button class="inline-flex items-center px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 shadow">
-        Apply Filters
-      </button>
-    </div>
-  </form>
+    </form>
+  </div>
 
-  <!-- Table -->
-  <div class="overflow-x-auto rounded-2xl border dark:border-gray-700 bg-white dark:bg-gray-800 shadow-sm">
-    <table class="min-w-full text-sm text-gray-800 dark:text-gray-200 border-collapse">
-      <thead class="bg-gray-50 dark:bg-gray-700">
-        <tr>
-          <th class="px-4 py-2 border-b dark:border-gray-600 text-left font-semibold">#</th>
-          <th class="px-4 py-2 border-b dark:border-gray-600 text-left font-semibold">User</th>
-          <th class="px-4 py-2 border-b dark:border-gray-600 text-left font-semibold">Subscription Plan</th>
-          <th class="px-4 py-2 border-b dark:border-gray-600 text-left font-semibold">Status</th>
-          <th class="px-4 py-2 border-b dark:border-gray-600 text-left font-semibold">Start Date</th>
-          <th class="px-4 py-2 border-b dark:border-gray-600 text-left font-semibold">End Date</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for s in page_obj.object_list %}
-          <tr class="hover:bg-gray-50 dark:hover:bg-gray-700">
-            <td class="px-4 py-2 border-b dark:border-gray-600">{{ forloop.counter0|add:page_obj.start_index }}</td>
-            <td class="px-4 py-2 border-b dark:border-gray-600">
-              {{ s.user.get_full_name|default:s.user.username }}
-              <div class="text-xs text-gray-500 dark:text-gray-400">@{{ s.user.username }}</div>
-            </td>
-            <td class="px-4 py-2 border-b dark:border-gray-600">{{ s.plan.name }}</td>
-            <td class="px-4 py-2 border-b dark:border-gray-600">
-              {% if s.active %}
-                <span class="inline-flex items-center rounded-full bg-emerald-100 dark:bg-emerald-900 text-emerald-700 dark:text-emerald-300 px-2 py-0.5 text-xs">Active</span>
-              {% else %}
-                <span class="inline-flex items-center rounded-full bg-rose-100 dark:bg-rose-900 text-rose-700 dark:text-rose-300 px-2 py-0.5 text-xs">Inactive</span>
-              {% endif %}
-            </td>
-            <td class="px-4 py-2 border-b dark:border-gray-600 tabular-nums">{{ s.start_date|date:"Y-m-d" }}</td>
-            <td class="px-4 py-2 border-b dark:border-gray-600 tabular-nums">{{ s.end_date|date:"Y-m-d" }}</td>
-          </tr>
-        {% empty %}
+  <div class="card overflow-hidden">
+    <div class="overflow-x-auto">
+      <table class="responsive-table table-modern">
+        <thead>
           <tr>
-            <td colspan="6" class="px-4 py-6 text-center text-gray-500 dark:text-gray-400">No subscriptions found.</td>
+            <th class="w-12">#</th>
+            <th>Customer</th>
+            <th>Plan</th>
+            <th>Status</th>
+            <th>Start</th>
+            <th>End</th>
           </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
-
-  <!-- Pagination -->
-  {% if page_obj.paginator.num_pages > 1 %}
-  <div class="mt-4 flex items-center justify-between text-sm text-gray-700 dark:text-gray-300">
-    <div>Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</div>
-    <div class="flex gap-2">
-      {% if page_obj.has_previous %}
-        <a class="px-3 py-1 rounded border dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700"
-           href="?page={{ page_obj.previous_page_number }}&q={{ q }}&status={{ status }}&start_from={{ start_from|date:'Y-m-d' }}&end_to={{ end_to|date:'Y-m-d' }}&per={{ per }}">← Prev</a>
-      {% endif %}
-      {% if page_obj.has_next %}
-        <a class="px-3 py-1 rounded border dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700"
-           href="?page={{ page_obj.next_page_number }}&q={{ q }}&status={{ status }}&start_from={{ start_from|date:'Y-m-d' }}&end_to={{ end_to|date:'Y-m-d' }}&per={{ per }}">Next →</a>
-      {% endif %}
+        </thead>
+        <tbody>
+          {% for s in page_obj.object_list %}
+          <tr>
+            <td class="rt-hide text-xs tabular-nums text-slate-400">{{ forloop.counter0|add:page_obj.start_index }}</td>
+            <td class="rt-title">
+              <div class="flex items-center gap-3">
+                <span class="avatar">{{ s.user.username|slice:":1" }}</span>
+                <div class="min-w-0">
+                  <p class="truncate font-semibold text-slate-900 dark:text-white">{{ s.user.get_full_name|default:s.user.username }}</p>
+                  <p class="truncate text-xs font-normal text-slate-500">@{{ s.user.username }}</p>
+                </div>
+              </div>
+            </td>
+            <td class="font-medium text-slate-700 dark:text-slate-200">{{ s.plan.name }}</td>
+            <td>{% if s.active %}<span class="badge-success"><span class="badge-dot"></span>Active</span>{% else %}<span class="badge-neutral"><span class="badge-dot"></span>Inactive</span>{% endif %}</td>
+            <td class="whitespace-nowrap tabular-nums text-slate-600 dark:text-slate-300">{{ s.start_date|date:"d M Y" }}</td>
+            <td class="whitespace-nowrap tabular-nums text-slate-600 dark:text-slate-300">{{ s.end_date|date:"d M Y" }}</td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="6">{% include "partials/empty_state.html" with icon="shield" title="No subscriptions found" text="Try different filters." %}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
     </div>
+    {% include "partials/pagination.html" with page=page_obj %}
   </div>
-  {% endif %}
 </div>
-
 {% endblock %}

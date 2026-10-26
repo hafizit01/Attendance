@@ -1,0 +1,46 @@
+{% extends 'base.html' %}
+{% block title %}Payroll Settings{% endblock %}
+{% block content %}
+<div class="mx-auto max-w-2xl space-y-6">
+  <div>
+    <a href="{% if next %}{{ next }}{% else %}{% url 'payroll:salary_summary_list' %}{% endif %}" class="btn-ghost btn-sm -ml-3 mb-2">← Salary summary</a>
+    <p class="eyebrow">Payroll</p>
+    <h1 class="page-title">বেতন সেটিং</h1>
+    <p class="page-subtitle">এই সেটিং শুধু আপনার কোম্পানির বেতনের হিসাবে প্রযোজ্য। বদলালে বেতনের পেজ ও PDF সাথে সাথে নতুন নিয়মে দেখাবে।</p>
+  </div>
+
+  <form method="post" class="card overflow-hidden" novalidate>
+    {% csrf_token %}
+    <input type="hidden" name="next" value="{{ next }}">
+
+    {% if form.non_field_errors %}
+    <div class="m-5 flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 p-3.5 text-sm text-rose-700 sm:m-6 dark:border-rose-500/20 dark:bg-rose-500/10 dark:text-rose-300" role="alert">
+      {% include "partials/icon.html" with name="alert" %}<div>{% for e in form.non_field_errors %}<p>{{ e }}</p>{% endfor %}</div>
+    </div>
+    {% endif %}
+
+    <section class="space-y-4 p-5 sm:p-6">
+      <h2 class="section-title">{% include "partials/icon.html" with name="money" cls="h-4 w-4 text-primary-500" %}ফিগার মিল (নগদ বেতন)</h2>
+      {% include "partials/form_field.html" with field=form.salary_rounding_enabled %}
+    </section>
+
+    <section class="space-y-5 border-t border-slate-100 p-5 sm:p-6 dark:border-slate-800">
+      <h2 class="section-title">{% include "partials/icon.html" with name="clock" cls="h-4 w-4 text-primary-500" %}ওভারটাইম</h2>
+      {% include "partials/form_field.html" with field=form.ot_calculation %}
+      <p class="rounded-xl bg-slate-50 p-3 text-xs leading-relaxed text-slate-600 dark:bg-slate-800/60 dark:text-slate-300">
+        উদাহরণ: একদিন ২ ঘণ্টা বেশি, আরেকদিন ২ ঘণ্টা কম — "মাসের মোট" এ ওভারটাইম ০; "প্রতিদিন আলাদা" তে ২ ঘণ্টা ওভারটাইম (আর কম দিনে ২ ঘণ্টা কম বেতন)।
+      </p>
+      <div class="grid grid-cols-1 gap-5 sm:grid-cols-3">
+        {% include "partials/form_field.html" with field=form.ot_min_minutes %}
+        {% include "partials/form_field.html" with field=form.ot_multiplier %}
+        {% include "partials/form_field.html" with field=form.holiday_ot_multiplier %}
+      </div>
+    </section>
+
+    <div class="flex flex-col-reverse gap-3 border-t border-slate-100 bg-slate-50/60 px-5 py-4 sm:flex-row sm:justify-end sm:px-6 dark:border-slate-800 dark:bg-slate-800/40">
+      <a href="{% if next %}{{ next }}{% else %}{% url 'payroll:salary_summary_list' %}{% endif %}" class="btn-secondary">Cancel</a>
+      <button type="submit" class="btn-primary">{% include "partials/icon.html" with name="check-circle" cls="h-4 w-4" %}Save settings</button>
+    </div>
+  </form>
+</div>
+{% endblock %}

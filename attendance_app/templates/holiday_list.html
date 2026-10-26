@@ -1,50 +1,65 @@
 {% extends "base.html" %}
+{% block title %}Public Holidays{% endblock %}
 {% block content %}
-<div class="bg-white dark:bg-gray-800 p-6 rounded shadow-md 
-            text-gray-900 dark:text-gray-200 transition-colors duration-300">
-  
-  <div class="flex justify-between items-center mb-4">
-    <h2 class="text-2xl font-bold">📅 Public Holidays</h2>
-    <a href="{% url 'attendance_app:holiday_add' %}" 
-       class="bg-blue-600 dark:bg-blue-700 text-white px-4 py-2 rounded 
-              hover:bg-blue-700 dark:hover:bg-blue-800 transition">
-      Add Holiday
-    </a>
+<div class="space-y-6">
+  <div class="page-header">
+    <div>
+      <p class="eyebrow">Calendar</p>
+      <h1 class="page-title">Public Holidays</h1>
+      <p class="page-subtitle">এই দিনগুলোতে কেউ অনুপস্থিত গণ্য হবে না।</p>
+    </div>
+    <a href="{% url 'attendance_app:holiday_add' %}" class="btn-primary self-start lg:self-auto">{% include "partials/icon.html" with name="plus" cls="h-4 w-4" %}Add holiday</a>
   </div>
 
-  <table class="w-full border border-gray-300 dark:border-gray-700 text-left text-sm">
-    <thead>
-      <tr class="bg-gray-100 dark:bg-gray-700">
-        <th class="p-2">Title</th>
-        <th class="p-2">Start Date</th>
-        <th class="p-2">End Date</th>
-        <th class="p-2">Description</th>
-        <th class="p-2">Actions</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for holiday in holidays %}
-      <tr class="border-t border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-900">
-        <td class="p-2">{{ holiday.title }}</td>
-        <td class="p-2">{{ holiday.start_date }}</td>
-        <td class="p-2">{{ holiday.end_date }}</td>
-        <td class="p-2">{{ holiday.description }}</td>
-        <td class="p-2">
-          <a href="{% url 'attendance_app:holiday_edit' holiday.pk %}" 
-             class="text-blue-600 dark:text-blue-400 hover:underline">Edit</a> |
-          <a href="{% url 'attendance_app:holiday_delete' holiday.pk %}" 
-             class="text-red-600 dark:text-red-400 hover:underline">Delete</a>
-        </td>
-      </tr>
-      {% empty %}
-      <tr>
-        <td colspan="5" 
-            class="p-2 text-center text-gray-500 dark:text-gray-400">
-          No holidays added yet.
-        </td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
+  <div class="card overflow-hidden">
+    <div class="overflow-x-auto">
+      <table class="responsive-table table-modern">
+        <thead>
+          <tr>
+            <th>Holiday</th>
+            <th>Dates</th>
+            <th>Applies to</th>
+            <th>Description</th>
+            <th class="text-right">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for holiday in holidays %}
+          <tr>
+            <td class="rt-title">
+              <div class="flex items-center gap-3">
+                <span class="flex h-11 w-11 shrink-0 flex-col items-center justify-center rounded-xl bg-violet-50 leading-none text-violet-700 dark:bg-violet-500/10 dark:text-violet-300">
+                  <span class="text-[10px] font-semibold uppercase">{{ holiday.start_date|date:"M" }}</span>
+                  <span class="text-base font-bold">{{ holiday.start_date|date:"d" }}</span>
+                </span>
+                <p class="font-semibold text-slate-900 dark:text-white">{{ holiday.title }}</p>
+              </div>
+            </td>
+            <td class="whitespace-nowrap text-slate-600 dark:text-slate-300">
+              {{ holiday.start_date|date:"d M Y" }}{% if holiday.end_date != holiday.start_date %} – {{ holiday.end_date|date:"d M Y" }}{% endif %}
+            </td>
+            <td>{% if holiday.branch %}<span class="badge-info">{{ holiday.branch.name }}</span>{% else %}<span class="badge-purple">All branches</span>{% endif %}</td>
+            <td class="max-w-xs text-slate-500 dark:text-slate-400"><span class="line-clamp-2">{{ holiday.description|default:"—" }}</span></td>
+            <td class="text-right">
+              {% if branch_scope.locked and not holiday.branch %}
+              <span class="text-xs text-slate-400" title="সব ব্রাঞ্চের ছুটি শুধু মালিক বদলাতে পারে">Company-wide</span>
+              {% else %}
+              <div class="flex items-center justify-end gap-1">
+                <a href="{% url 'attendance_app:holiday_edit' holiday.pk %}" class="btn-icon h-9 w-9 hover:bg-amber-50 hover:text-amber-600 dark:hover:bg-amber-500/10" title="Edit" aria-label="Edit {{ holiday.title }}">{% include "partials/icon.html" with name="pencil" cls="h-4 w-4" %}</a>
+                <a href="{% url 'attendance_app:holiday_delete' holiday.pk %}" class="btn-icon h-9 w-9 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-500/10" title="Delete" aria-label="Delete {{ holiday.title }}">{% include "partials/icon.html" with name="trash" cls="h-4 w-4" %}</a>
+              </div>
+              {% endif %}
+            </td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="5">
+            {% url 'attendance_app:holiday_add' as add_url %}
+            {% include "partials/empty_state.html" with icon="sun" title="No holidays added yet" text="Add public holidays so they aren't counted as absences." action_url=add_url action_label="Add holiday" %}
+          </td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
 </div>
 {% endblock %}

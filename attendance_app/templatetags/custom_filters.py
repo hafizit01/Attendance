@@ -47,6 +47,18 @@ def format_diff_timedelta(value):
         return "00:00:00"
 
 @register.filter
+def qs_without_page(query_dict):
+    """
+    request.GET থেকে 'page' বাদ দিয়ে বাকি ফিল্টারগুলোর query string (শেষে & সহ, খালি হলে "")।
+    পেজিনেশন লিংকে ফিল্টার ধরে রাখার জন্য: href="?{{ request.GET|qs_without_page }}page=2"
+    """
+    params = query_dict.copy()
+    params.pop('page', None)
+    encoded = params.urlencode()
+    return f"{encoded}&" if encoded else ""
+
+
+@register.filter
 def abs_timedelta(value):
     """
     timedelta বা float টাইমের absolute মান (ঘাটতি/বাড়তি সময়) রিটার্ন করে।

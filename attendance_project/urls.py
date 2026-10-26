@@ -21,6 +21,9 @@ urlpatterns = [
     path('subscription/', include(('subscription_app.urls', 'subscription_app'), namespace='subscription_app')),
     path('', include(('payment_app.urls', 'payment_app'), namespace='payment_app')),  # ✅ গার্ড ছাড়া, নিজস্ব প্রিফিক্স
 
+    # Device push: no user login; verified by department push_token (see views.zkteco_push_view)
+    path('api/zkteco/push/', views.zkteco_push_view, name='zkteco_push'),
+
     # PROTECTED
     path("", decorator_include(subscription_required, ("attendance_app.urls", "attendance_app"))),
     path('', decorator_include(subscription_required, ('userapp.urls', 'userapp'))),
