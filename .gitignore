@@ -20,3 +20,9 @@ staticfiles/
 push_agent.ini
 push_agent_state.json
 push_agent.log
+
+# ব্রাঞ্চ এক্সপোর্ট (কর্মচারী, বেতন থাকে) ও ডাটাবেস ব্যাকআপ
+*_full.json
+bashundhara*.json
+db_backup_*.sqlite3
+db_merged_*.sqlite3

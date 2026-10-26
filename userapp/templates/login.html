@@ -4,99 +4,210 @@
   {% load static %}
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#4f46e5">
+  <meta name="theme-color" content="#0f172a">
   <title>Sign in · SmartAttendance</title>
   {% include "partials/head_assets.html" %}
+  <style>
+    /* বাঁ প্যানেলের হালকা গ্রিড — নিচের দিকে মিলিয়ে যায় */
+    .login-grid { background-image: linear-gradient(rgba(255,255,255,.05) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.05) 1px, transparent 1px);
+                  background-size: 44px 44px; -webkit-mask-image: radial-gradient(ellipse at 30% 20%, #000 20%, transparent 75%); mask-image: radial-gradient(ellipse at 30% 20%, #000 20%, transparent 75%); }
+    @keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+    .rise { animation: rise .5s ease-out both; } .rise-2 { animation-delay: .08s; } .rise-3 { animation-delay: .16s; }
+    @media (prefers-reduced-motion: reduce) { .rise { animation: none; } }
+  </style>
 </head>
-<body class="min-h-screen">
-  <div class="grid min-h-screen lg:grid-cols-2">
+<body class="min-h-screen bg-white dark:bg-slate-950">
+  <div class="grid min-h-screen lg:grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)]">
 
     {# ── বাঁ দিক: ব্র্যান্ড প্যানেল (ডেস্কটপ) ── #}
-    <aside class="relative hidden overflow-hidden bg-slate-900 p-12 text-white lg:flex lg:flex-col lg:justify-between">
-      <div class="pointer-events-none absolute -right-32 -top-32 h-[28rem] w-[28rem] rounded-full bg-primary-500/20 blur-3xl"></div>
-      <div class="pointer-events-none absolute -bottom-40 -left-24 h-96 w-96 rounded-full bg-indigo-400/10 blur-3xl"></div>
-      <div class="pointer-events-none absolute inset-0 opacity-[0.04]" style="background-image: linear-gradient(#fff 1px, transparent 1px), linear-gradient(90deg, #fff 1px, transparent 1px); background-size: 40px 40px;"></div>
+    <aside class="relative hidden overflow-hidden bg-slate-950 text-white lg:flex lg:flex-col">
+      <div class="login-grid pointer-events-none absolute inset-0"></div>
+      <div class="pointer-events-none absolute -left-40 -top-40 h-[34rem] w-[34rem] rounded-full bg-primary-600/25 blur-[110px]"></div>
+      <div class="pointer-events-none absolute -bottom-48 right-0 h-[26rem] w-[26rem] rounded-full bg-indigo-500/10 blur-[100px]"></div>
 
-      <div class="relative flex items-center gap-3">
-        <span class="flex h-10 w-10 items-center justify-center rounded-lg bg-primary-500">{% include "partials/icon.html" with name="check-circle" cls="h-5 w-5" %}</span>
-        <span class="text-xl font-semibold tracking-tight">Smart<span class="text-primary-400">Attendance</span></span>
+      <div class="relative flex flex-1 flex-col justify-between p-12 xl:p-16">
+        <div class="flex items-center gap-3">
+          <span class="flex h-10 w-10 items-center justify-center rounded-lg bg-primary-500 shadow-lg shadow-primary-500/30">{% include "partials/icon.html" with name="check-circle" cls="h-5 w-5" %}</span>
+          <span class="text-xl font-semibold tracking-tight">Smart<span class="text-primary-400">Attendance</span></span>
+        </div>
+
+        <div class="max-w-lg py-12">
+          <span class="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium text-slate-300">
+            <span class="h-1.5 w-1.5 rounded-full bg-emerald-400"></span>Attendance · Payroll · Multi-branch
+          </span>
+          <h1 class="mt-6 text-[2.6rem] font-semibold leading-[1.1] tracking-tight xl:text-5xl">
+            Every branch.<br>Every punch.<br><span class="text-primary-400">One clear view.</span>
+          </h1>
+          <p class="mt-5 text-base leading-relaxed text-slate-400">সব শাখার ZKTeco মেশিনের হাজিরা, ছুটি, ওভারটাইম আর বেতন — এক জায়গায়, নির্ভুল হিসাবে।</p>
+
+          <div class="mt-10 grid grid-cols-2 gap-3">
+            <div class="rounded-xl border border-white/10 bg-white/[0.03] p-4 backdrop-blur-sm">
+              <span class="flex h-9 w-9 items-center justify-center rounded-lg bg-primary-500/15 text-primary-300">{% include "partials/icon.html" with name="sync" cls="h-5 w-5" %}</span>
+              <p class="mt-3 text-sm font-semibold text-white">Device sync</p>
+              <p class="mt-0.5 text-xs text-slate-400">মেশিন থেকে স্বয়ংক্রিয় হাজিরা</p>
+            </div>
+            <div class="rounded-xl border border-white/10 bg-white/[0.03] p-4 backdrop-blur-sm">
+              <span class="flex h-9 w-9 items-center justify-center rounded-lg bg-primary-500/15 text-primary-300">{% include "partials/icon.html" with name="building" cls="h-5 w-5" %}</span>
+              <p class="mt-3 text-sm font-semibold text-white">Multi-branch</p>
+              <p class="mt-0.5 text-xs text-slate-400">শাখাভিত্তিক ম্যানেজার ও রিপোর্ট</p>
+            </div>
+            <div class="rounded-xl border border-white/10 bg-white/[0.03] p-4 backdrop-blur-sm">
+              <span class="flex h-9 w-9 items-center justify-center rounded-lg bg-primary-500/15 text-primary-300">{% include "partials/icon.html" with name="chart" cls="h-5 w-5" %}</span>
+              <p class="mt-3 text-sm font-semibold text-white">Reports & PDF</p>
+              <p class="mt-0.5 text-xs text-slate-400">মাসিক রিপোর্ট ও হাজিরা খাতা</p>
+            </div>
+            <div class="rounded-xl border border-white/10 bg-white/[0.03] p-4 backdrop-blur-sm">
+              <span class="flex h-9 w-9 items-center justify-center rounded-lg bg-primary-500/15 text-primary-300">{% include "partials/icon.html" with name="money" cls="h-5 w-5" %}</span>
+              <p class="mt-3 text-sm font-semibold text-white">Payroll</p>
+              <p class="mt-0.5 text-xs text-slate-400">ব্যাংক / নগদ ভাগসহ বেতন</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="flex items-center justify-between gap-4 text-xs text-slate-500">
+          <span class="inline-flex items-center gap-1.5">{% include "partials/icon.html" with name="shield" cls="h-4 w-4 text-emerald-400/80" %}Secure sign-in · each company's data kept separate</span>
+          <span>© {% now "Y" %} Easy Coding IT Solutions</span>
+        </div>
       </div>
-
-      <div class="relative max-w-md">
-        <h1 class="text-4xl font-semibold leading-tight tracking-tight">Attendance & payroll,<br>without the paperwork.</h1>
-        <p class="mt-4 text-base text-slate-400">ZKTeco মেশিন থেকে হাজিরা, ছুটি, ওভারটাইম আর বেতন — এক জায়গায়।</p>
-        <ul class="mt-8 space-y-3 text-sm text-slate-300">
-          <li class="flex items-center gap-3">{% include "partials/icon.html" with name="sync" cls="h-5 w-5 text-primary-400" %}Automatic device sync</li>
-          <li class="flex items-center gap-3">{% include "partials/icon.html" with name="chart" cls="h-5 w-5 text-primary-400" %}Late, overtime & monthly reports</li>
-          <li class="flex items-center gap-3">{% include "partials/icon.html" with name="money" cls="h-5 w-5 text-primary-400" %}Payroll with bank / cash split</li>
-        </ul>
-      </div>
-
-      <p class="relative text-xs text-slate-500">© {% now "Y" %} Easy Coding IT Solutions</p>
     </aside>
 
     {# ── ডান দিক: লগইন ফর্ম ── #}
-    <main class="flex items-center justify-center px-4 py-12 sm:px-6">
-      <div class="w-full max-w-sm">
-        <div class="mb-8 flex items-center gap-2.5 lg:hidden">
-          <span class="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-900 text-primary-400 dark:bg-primary-500 dark:text-white">{% include "partials/icon.html" with name="check-circle" cls="h-5 w-5" %}</span>
-          <span class="text-lg font-semibold tracking-tight text-slate-900 dark:text-white">Smart<span class="text-primary-600 dark:text-primary-400">Attendance</span></span>
+    <main class="relative flex flex-col">
+      {# উপরের বার: মোবাইলে লোগো, সবসময় থিম বাটন #}
+      <div class="flex items-center justify-between px-5 pt-5 sm:px-8 sm:pt-6">
+        <div class="flex items-center gap-2.5 lg:invisible">
+          <span class="flex h-9 w-9 items-center justify-center rounded-lg bg-slate-900 text-primary-400 dark:bg-primary-500 dark:text-white">{% include "partials/icon.html" with name="check-circle" cls="h-5 w-5" %}</span>
+          <span class="text-base font-semibold tracking-tight text-slate-900 dark:text-white">Smart<span class="text-primary-600 dark:text-primary-400">Attendance</span></span>
         </div>
+        <button type="button" id="theme-toggle" class="btn-icon h-9 w-9" aria-label="Toggle dark mode" title="Toggle theme">
+          <span class="dark:hidden">{% include "partials/icon.html" with name="moon" cls="h-5 w-5" %}</span>
+          <span class="hidden dark:inline">{% include "partials/icon.html" with name="sun" cls="h-5 w-5" %}</span>
+        </button>
+      </div>
 
-        <h2 class="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">Welcome back</h2>
-        <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Sign in to your account to continue.</p>
+      <div class="flex flex-1 items-center justify-center px-5 py-10 sm:px-8">
+        <div class="w-full max-w-[380px]">
+          <div class="rise">
+            <h2 class="text-[1.75rem] font-semibold tracking-tight text-slate-900 dark:text-white">Sign in</h2>
+            <p class="mt-1.5 text-sm text-slate-500 dark:text-slate-400">আপনার অ্যাকাউন্টে প্রবেশ করুন — Welcome back.</p>
+          </div>
 
-        {% if messages %}
-          <div class="mt-6 space-y-2">
-            {% for message in messages %}
-              <div role="alert" class="flex items-start gap-2 rounded-xl border p-3 text-sm
-                {% if message.tags == 'error' %}border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-500/20 dark:bg-rose-500/10 dark:text-rose-300
-                {% elif message.tags == 'warning' %}border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-300
-                {% else %}border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-300{% endif %}">
-                {% if message.tags == 'error' %}{% include "partials/icon.html" with name="x-circle" cls="h-4 w-4 mt-0.5" %}{% else %}{% include "partials/icon.html" with name="info" cls="h-4 w-4 mt-0.5" %}{% endif %}
-                <span>{{ message }}</span>
+          {% if messages %}
+            <div class="rise rise-2 mt-6 space-y-2">
+              {% for message in messages %}
+                <div role="alert" class="flex items-start gap-2.5 rounded-lg border p-3 text-sm
+                  {% if message.tags == 'error' %}border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-500/20 dark:bg-rose-500/10 dark:text-rose-300
+                  {% elif message.tags == 'warning' %}border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-300
+                  {% else %}border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-300{% endif %}">
+                  {% if message.tags == 'error' %}{% include "partials/icon.html" with name="x-circle" cls="mt-0.5 h-4 w-4" %}{% else %}{% include "partials/icon.html" with name="info" cls="mt-0.5 h-4 w-4" %}{% endif %}
+                  <span>{{ message }}</span>
+                </div>
+              {% endfor %}
+            </div>
+          {% endif %}
+
+          <form method="post" action="{% url 'userapp:login' %}" id="login-form" class="rise rise-2 mt-8 space-y-5" novalidate>
+            {% csrf_token %}
+            {# লগইনের পর আগের পেজে ফেরার জন্য #}
+            <input type="hidden" name="next" value="{{ next }}">
+
+            <div>
+              <label for="username" class="form-label">Username</label>
+              <div class="relative">
+                <span class="pointer-events-none absolute inset-y-0 left-3.5 flex items-center text-slate-400">{% include "partials/icon.html" with name="user" cls="h-[18px] w-[18px]" %}</span>
+                <input type="text" name="username" id="username" required autofocus autocomplete="username" autocapitalize="none" spellcheck="false"
+                       value="{{ request.POST.username|default:'' }}" placeholder="Enter your username" class="form-input h-11 pl-10">
               </div>
-            {% endfor %}
-          </div>
-        {% endif %}
+            </div>
 
-        <form method="post" action="{% url 'userapp:login' %}" class="mt-8 space-y-5">
-          {% csrf_token %}
-          {# লগইনের পর আগের পেজে ফেরার জন্য #}
-          <input type="hidden" name="next" value="{{ next }}">
-          <div>
-            <label for="username" class="form-label">Username</label>
-            <input type="text" name="username" id="username" required autofocus autocomplete="username"
-                   placeholder="Your username" class="form-input py-3">
-          </div>
-          <div>
-            <label for="password" class="form-label">Password</label>
-            <div class="relative">
-              <input type="password" name="password" id="password" required autocomplete="current-password" placeholder="••••••••" class="form-input py-3 pr-12">
-              <button type="button" id="pw-toggle" class="btn-icon absolute inset-y-0 right-1 my-auto h-9 w-9" aria-label="Show password" aria-pressed="false">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.7" stroke="currentColor" class="h-5 w-5"><path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 0 1 0-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178Z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z"/></svg>
-              </button>
+            <div>
+              <label for="password" class="form-label">Password</label>
+              <div class="relative">
+                <span class="pointer-events-none absolute inset-y-0 left-3.5 flex items-center text-slate-400">{% include "partials/icon.html" with name="lock" cls="h-[18px] w-[18px]" %}</span>
+                <input type="password" name="password" id="password" required autocomplete="current-password" placeholder="Enter your password" class="form-input h-11 pl-10 pr-11">
+                <button type="button" id="pw-toggle" class="btn-icon absolute inset-y-0 right-1 my-auto h-9 w-9" aria-label="Show password" aria-pressed="false">
+                  <span class="pw-show">{% include "partials/icon.html" with name="eye" cls="h-5 w-5" %}</span>
+                  <span class="pw-hide hidden">{% include "partials/icon.html" with name="eye-slash" cls="h-5 w-5" %}</span>
+                </button>
+              </div>
+              <p id="caps-warning" class="form-help hidden items-center gap-1.5 text-amber-600 dark:text-amber-400">{% include "partials/icon.html" with name="alert" cls="h-3.5 w-3.5" %}Caps Lock is on</p>
+            </div>
+
+            <button type="submit" id="login-btn" class="btn-primary h-11 w-full">
+              <svg class="hidden h-4 w-4 animate-spin" id="login-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-opacity=".3" stroke-width="3"/><path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg>
+              <span id="login-label">Sign in</span>
+              <span id="login-arrow">{% include "partials/icon.html" with name="arrow-right" cls="h-4 w-4" %}</span>
+            </button>
+          </form>
+
+          <div class="rise rise-3 mt-8 rounded-lg border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900">
+            <div class="flex items-start gap-3">
+              <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white text-slate-500 ring-1 ring-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:ring-slate-700">{% include "partials/icon.html" with name="chat" cls="h-4 w-4" %}</span>
+              <div class="text-sm">
+                <p class="font-medium text-slate-800 dark:text-slate-200">Password ভুলে গেছেন?</p>
+                <p class="mt-0.5 text-slate-500 dark:text-slate-400">আপনার অ্যাডমিন বা <a href="https://wa.me/8801822755994" target="_blank" rel="noopener" class="link">সাপোর্টে WhatsApp করুন</a>।</p>
+              </div>
             </div>
           </div>
-          <button type="submit" class="btn-primary w-full py-3">Sign in {% include "partials/icon.html" with name="arrow-right" cls="h-4 w-4" %}</button>
-        </form>
-
-        <p class="mt-8 text-center text-xs text-slate-500 dark:text-slate-400">
-          Need help? <a href="https://wa.me/8801822755994" target="_blank" rel="noopener" class="link">Contact support</a>
-        </p>
+        </div>
       </div>
+
+      <p class="px-5 pb-6 text-center text-xs text-slate-400 lg:hidden">© {% now "Y" %} Easy Coding IT Solutions</p>
     </main>
   </div>
 
   <script>
-    document.getElementById('pw-toggle').addEventListener('click', function () {
-      const input = document.getElementById('password');
-      const show = input.type === 'password';
-      input.type = show ? 'text' : 'password';
-      this.setAttribute('aria-pressed', show);
-      this.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
-      this.classList.toggle('text-primary-600', show);
-    });
+    (function () {
+      var pw = document.getElementById('password');
+      var toggle = document.getElementById('pw-toggle');
+      toggle.addEventListener('click', function () {
+        var show = pw.type === 'password';
+        pw.type = show ? 'text' : 'password';
+        toggle.setAttribute('aria-pressed', show);
+        toggle.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
+        toggle.querySelector('.pw-show').classList.toggle('hidden', show);
+        toggle.querySelector('.pw-hide').classList.toggle('hidden', !show);
+        pw.focus();
+      });
+
+      // Caps Lock সতর্কতা
+      var caps = document.getElementById('caps-warning');
+      ['keydown', 'keyup'].forEach(function (ev) {
+        pw.addEventListener(ev, function (e) {
+          var on = e.getModifierState && e.getModifierState('CapsLock');
+          caps.classList.toggle('hidden', !on); caps.classList.toggle('flex', !!on);
+        });
+      });
+
+      // ফাঁকা ঘর হলে ফোকাস; সাবমিটে ডাবল-ক্লিক আটকাতে লোডিং অবস্থা
+      document.getElementById('login-form').addEventListener('submit', function (e) {
+        var u = document.getElementById('username');
+        if (!u.value.trim()) { e.preventDefault(); u.focus(); u.closest('div').parentNode.classList.add('has-error'); return; }
+        if (!pw.value) { e.preventDefault(); pw.focus(); pw.closest('div').parentNode.classList.add('has-error'); return; }
+        var btn = document.getElementById('login-btn');
+        btn.disabled = true;
+        document.getElementById('login-spin').classList.remove('hidden');
+        document.getElementById('login-arrow').classList.add('hidden');
+        document.getElementById('login-label').textContent = 'Signing in…';
+      });
+      ['username', 'password'].forEach(function (id) {
+        document.getElementById(id).addEventListener('input', function () { this.closest('div').parentNode.classList.remove('has-error'); });
+      });
+
+      // থিম বদল (base.html এর মতোই localStorage এ মনে রাখে)
+      document.getElementById('theme-toggle').addEventListener('click', function () {
+        var dark = document.documentElement.classList.toggle('dark');
+        try { localStorage.theme = dark ? 'dark' : 'light'; } catch (e) {}
+      });
+
+      // ব্রাউজার "back" এ ফিরলে বাটন আবার চালু
+      window.addEventListener('pageshow', function () {
+        var btn = document.getElementById('login-btn'); btn.disabled = false;
+        document.getElementById('login-spin').classList.add('hidden');
+        document.getElementById('login-arrow').classList.remove('hidden');
+        document.getElementById('login-label').textContent = 'Sign in';
+      });
+    })();
     window.addEventListener('load', function () { setTimeout(function () { document.documentElement.classList.remove('preload'); }, 150); });
   </script>
 </body>
