@@ -53,9 +53,11 @@
             </td>
             <td><span class="badge-neutral">{{ dept.get_weekly_off_day_display|default:dept.weekly_off_day }}</span></td>
             <td class="whitespace-nowrap font-mono text-xs text-slate-500">
-              {% if dept.device_ip %}
-                {% if request.user.is_superuser %}{{ dept.device_ip }}{% if dept.device_port %}:{{ dept.device_port }}{% endif %}{% else %}<span class="badge-success font-sans"><span class="badge-dot"></span>Configured</span>{% endif %}
+              {% with n=dept.devices.count %}
+              {% if n %}<span class="badge-success font-sans"><span class="badge-dot"></span>{{ n }} device{{ n|pluralize }}</span>
               {% else %}<span class="badge-warning font-sans">Not set</span>{% endif %}
+              {% endwith %}
+              {% if dept.default_shift %}<span class="badge-purple ml-1 font-sans">{{ dept.default_shift.name }}</span>{% endif %}
             </td>
             <td class="text-right">
               {% if request.user.is_superuser %}

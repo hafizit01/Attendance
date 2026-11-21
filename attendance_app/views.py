@@ -29,7 +29,8 @@ from reportlab.lib.units import inch
 from .forms import AttendanceForm, LeaveRequestForm, DepartmentForm, HolidayForm, EmployeeForm,DayAttendanceForm
 from .models import Employee, Department, Attendance, Holiday, LeaveRequest, EmployeeTransfer
 from . import scoping
-from attendance_app.utils.zk_import import import_attendance, import_pushed
+from attendance_app.utils.zk_import import import_pushed
+from attendance_app.device_views import dashboard_widgets as _dashboard_widgets
 from attendance_app.utils.attendance_helpers import generate_attendance_table
 from attendance_app.utils import attendance_helpers as att_rules
 from attendance_app.utils.params import int_param, date_param
@@ -41,6 +42,31 @@ from subscription_app.utils import is_subscription_active
 from django.utils.safestring import mark_safe
 
 # ---------- Dashboard (Optimized) ----------
+
+DASHBOARD_LOG_FIRST = 20
+DASHBOARD_LOG_PAGE = 50
+
+
+def _today_row(emp, d):
+    """ড্যাশবোর্ডের আজকের লগের এক সারি (d = build_attendance এর আজকের দিন)"""
+    if d['in_time'] and d['out_time']:
+        status_display = "Present"
+    elif d['in_time']:
+        status_display = "Present (Active)"  # মাত্র এসেছে, বা আউট দিতে ভুলে গেছে
+    else:
+        status_display = "Absent"
+    return {
+        'employee': emp,
+        'in_time': d['in_time'].time() if d['in_time'] else None,
+        'out_time': d['out_time'].time() if d['out_time'] else None,
+        'total_work_time': d['work'],
+        'late_time': d['late'],
+        'over_time': d['over'],
+        # দিন শেষ না হলে (Out নেই) কম সময় দেখাই না
+        'less_time': d['less'] if d['out_time'] else timedelta(),
+        'status': status_display,
+    }
+
 
 @login_required
 def dashboard(request):
@@ -72,9 +98,23 @@ def dashboard(request):
 
     # ব্রাঞ্চ: ম্যানেজার হলে নিজের ব্রাঞ্চ, মালিক হলে সুইচারে বাছাই করা ব্রাঞ্চ বা সব
     scope = scoping.get_scope(request)
-    employees = scoping.employees(Employee.objects.select_related('department', 'department__branch'), scope)
+    # শুধু চালু (active) কর্মচারী — Analytics ও Missing-punch চেকের সাথে একই হিসাব
+    employees = scoping.employees(
+        Employee.objects.filter(is_active=True)
+        .select_related('department', 'department__branch', 'department__default_shift'), scope).order_by('id')
     if selected_dept:
         employees = employees.filter(department__id=selected_dept)
+
+    # "Load more": শুধু আজকের হিসাব, পরের ৫০ জন (পুরো ৩০ দিনের হিসাব আবার লাগে না)
+    log_offset = int_param(request.GET, 'log_offset')
+    if log_offset is not None and request.headers.get('x-requested-with') == 'XMLHttpRequest':
+        chunk = list(employees[max(log_offset, 0):max(log_offset, 0) + DASHBOARD_LOG_PAGE])
+        rows = [_today_row(emp, days[-1]) for emp, _s, days in
+                att_rules.build_attendance(chunk, today, today, branch_id=scope.branch_id)]
+        resp = render(request, 'partials/dashboard_log_rows.html', {'rows': rows})
+        resp['X-Rows'] = str(len(rows))
+        return resp
+
     employees = list(employees)
     total_employees = len(employees)
 
@@ -84,27 +124,7 @@ def dashboard(request):
     start_date = today - timedelta(days=29)
     per_emp = att_rules.build_attendance(employees, start_date, today, branch_id=scope.branch_id)
 
-    employee_data = []
-    for emp, _shift, days in per_emp:
-        d = days[-1]  # আজ
-        if d['in_time'] and d['out_time']:
-            status_display = "Present"
-        elif d['in_time']:
-            status_display = "Present (Active)"  # মাত্র এসেছে, বা আউট দিতে ভুলে গেছে
-        else:
-            status_display = "Absent"
-
-        employee_data.append({
-            'employee': emp,
-            'in_time': d['in_time'].time() if d['in_time'] else None,
-            'out_time': d['out_time'].time() if d['out_time'] else None,
-            'total_work_time': d['work'],
-            'late_time': d['late'],
-            'over_time': d['over'],
-            # দিন শেষ না হলে (Out নেই) কম সময় দেখাই না
-            'less_time': d['less'] if d['out_time'] else timedelta(),
-            'status': status_display,
-        })
+    employee_data = [_today_row(emp, days[-1]) for emp, _shift, days in per_emp]   # days[-1] = আজ
 
     # 4) ৩০ দিনের ট্রেন্ড
     attendance_trend = []
@@ -141,6 +161,9 @@ def dashboard(request):
     context = {
         'branch_stats': branch_stats,
         'employee_data': employee_data,
+        # টেবিলে প্রথমে ২০ জন; বাকিরা "Load more" এ সার্ভার থেকে আসে (হাজার কর্মচারীতেও পেজ হালকা)
+        'employee_rows': employee_data[:DASHBOARD_LOG_FIRST],
+        'log_total': total_employees,
         'departments': departments,
         'selected_department': selected_dept,
         'total_employees': total_employees,
@@ -151,6 +174,8 @@ def dashboard(request):
         # safe JSON string for template JS
         'attendance_trend_json': mark_safe(json.dumps(attendance_trend)),
         'can_view_salary': user.has_perm('payroll.view_salarysummary'),
+        'attendance_rate': round(100 * sum(1 for e in employee_data if e['in_time']) / total_employees) if total_employees else 0,
+        **_dashboard_widgets(scope),
     }
     return render(request, 'dashboard.html', context)
 
@@ -217,77 +242,50 @@ logger = logging.getLogger(__name__)
 
 @login_required
 def sync_attendance_view(request):
-    # ইউজারের প্রোফাইল থেকে কোম্পানি নাও
-    user_company = getattr(request.user.profile, 'company', None)
-    if not user_company:
+    """
+    LAN মেশিন থেকে হাজিরা আনা। device_id = একটা মেশিন, 'all' = স্কোপের সব LAN মেশিন।
+    রিয়েল-টাইম (push) মেশিন নিজেই ডাটা পাঠায় — এখানে শুধু তাদের অবস্থা দেখানো হয়।
+    """
+    from .devices import service as device_service
+    from .models import Device
+
+    scope = scoping.get_scope(request)
+    if not scope.company:
         messages.error(request, "আপনার কোম্পানি সেট করা নেই। সিস্টেম অ্যাডমিনের সাথে যোগাযোগ করুন।")
         return redirect('attendance_app:dashboard')
 
-    # ওই কোম্পানির (ম্যানেজার হলে নিজের ব্রাঞ্চের) ডিপার্টমেন্টগুলো নাও
-    departments = scoping.departments(Department.objects.select_related('branch'), scoping.get_scope(request))
+    devices = Device.objects.select_related('department', 'department__branch').filter(company=scope.company, is_active=True)
+    if scope.branch:
+        devices = devices.filter(department__branch=scope.branch)
+    pull_devices = [d for d in devices if d.is_pull]
+    push_devices = [d for d in devices if not d.is_pull]
+    ajax = request.headers.get('x-requested-with') == 'XMLHttpRequest'
 
     if request.method == 'POST':
-        department_id = request.POST.get('department_id')
-        if not department_id:
-            error_msg = "দয়া করে একটি ডিপার্টমেন্ট সিলেক্ট করুন।"
-            if request.headers.get('x-requested-with') == 'XMLHttpRequest':
-                from django.http import JsonResponse
+        device_id = request.POST.get('device_id', '')
+        targets = pull_devices if device_id == 'all' else [d for d in pull_devices if str(d.id) == device_id]
+        if not targets:
+            error_msg = "দয়া করে একটি মেশিন সিলেক্ট করুন।"
+            if ajax:
                 return JsonResponse({'status': 'error', 'message': error_msg})
             messages.error(request, error_msg)
             return redirect('attendance_app:sync_attendance')
 
-        try:
-            department = departments.get(id=department_id)
-        except Department.DoesNotExist:
-            error_msg = "অবৈধ ডিপার্টমেন্ট সিলেক্ট করা হয়েছে।"
-            if request.headers.get('x-requested-with') == 'XMLHttpRequest':
-                from django.http import JsonResponse
-                return JsonResponse({'status': 'error', 'message': error_msg})
-            messages.error(request, error_msg)
-            return redirect('attendance_app:sync_attendance')
+        results = []
+        for device in targets:
+            try:
+                res = device_service.sync_device(device)
+                results.append({'type': 'success', 'text': f"{device.name}: ✔️ {res['message']}"})
+            except device_service.DeviceActionError as e:
+                logger.error(f"❌ Error syncing device {device.pk}: {e}")
+                results.append({'type': 'error', 'text': f"{device.name}: {e}"})
+        if ajax:
+            return JsonResponse({'status': 'success', 'messages': results})
+        for r in results:
+            (messages.success if r['type'] == 'success' else messages.error)(request, r['text'])
+        return redirect('attendance_app:sync_attendance')
 
-        # ডিপার্টমেন্ট মডেল থেকে IP ও Port নেওয়া
-        if not department.device_ip or not department.device_port:
-            error_msg = f"{department.name} ডিপার্টমেন্টের জন্য ডিভাইস IP/Port সেট করা নেই।"
-            if request.headers.get('x-requested-with') == 'XMLHttpRequest':
-                from django.http import JsonResponse
-                return JsonResponse({'status': 'error', 'message': error_msg})
-            messages.error(request, error_msg)
-            return redirect('attendance_app:sync_attendance')
-
-        try:
-            results = import_attendance([{
-                'ip': department.device_ip,
-                'port': department.device_port,
-                'department': department
-            }])
-
-            if request.headers.get('x-requested-with') == 'XMLHttpRequest':
-                messages_list = []
-                for res in results:
-                    messages_list.append({
-                        'type': 'success' if res['status'] == 'success' else 'error',
-                        'text': f"{res['department']}: {res['message']}"
-                    })
-                from django.http import JsonResponse
-                return JsonResponse({'status': 'success', 'messages': messages_list})
-            else:
-                for res in results:
-                    if res['status'] == 'success':
-                        messages.success(request, f"{res['department']}: {res['message']}")
-                    else:
-                        messages.error(request, f"{res['department']}: {res['message']}")
-        except Exception as e:
-            logger.error(f"❌ Error syncing attendance for {department.name}: {e}")
-            error_msg = f"❌ সিঙ্ক করার সময় সমস্যা হয়েছে: {e}"
-            if request.headers.get('x-requested-with') == 'XMLHttpRequest':
-                from django.http import JsonResponse
-                return JsonResponse({'status': 'error', 'message': error_msg})
-            messages.error(request, error_msg)
-
-        return redirect('attendance_app:employee_list')
-
-    return render(request, 'sync_form.html', {'departments': departments})
+    return render(request, 'sync_form.html', {'pull_devices': pull_devices, 'push_devices': push_devices})
 
 def get_monthly_report_context(request):
     """
@@ -348,6 +346,10 @@ def get_monthly_report_context(request):
 @login_required
 def monthly_work_time_report(request):
     context = get_monthly_report_context(request)
+    # অনেক কর্মচারী হলে পেজে ১০০ জন (PDF/Excel আগের মতো সবার)
+    page_obj = Paginator(context['report_data'], 100).get_page(request.GET.get('page'))
+    context.update({'page_obj': page_obj, 'report_rows': page_obj.object_list,
+                    'report_count': len(context['report_data'])})
     return render(request, 'monthly_report.html', context)
 
 @login_required
@@ -402,8 +404,12 @@ def employee_list(request):
             Q(id__icontains=query)
         )
 
+    # অনেক কর্মচারী হলেও পেজ হালকা থাকে: প্রতি পেজে ৫০ জন (সার্চ পুরো তালিকায়)
+    page_obj = Paginator(employees.order_by('id'), 50).get_page(request.GET.get('page'))
     return render(request, 'employee_list.html', {
-        'employees': employees,
+        'employees': page_obj,
+        'page_obj': page_obj,
+        'total_employees': page_obj.paginator.count,
         'query': query
     })
 from django.contrib import messages
@@ -754,7 +760,7 @@ def attendance_edit(request, pk):
     day = att_rules.local_date(anchor.timestamp)  # UTC নয়, লোকাল তারিখ
 
     # ওই দিনের সব রেকর্ড (In/Out যাই হোক, যতগুলোই থাকুক)
-    day_qs = Attendance.objects.filter(employee=emp, timestamp__date=day).order_by('timestamp')
+    day_qs = Attendance.objects.filter(employee=emp, **att_rules.day_range(day)).order_by('timestamp')
     day_punches = list(day_qs)
     # সব পেজের মতো একই নিয়ম: প্রথম পাঞ্চ = In, শেষ পাঞ্চ = Out
     first_punch = day_punches[0] if day_punches else None
@@ -817,7 +823,7 @@ def attendance_delete(request, pk):
         # ✅ সেই দিনের একই employee-র সব In/Out রেকর্ড ডিলিট
         Attendance.objects.filter(
             employee=anchor.employee,
-            timestamp__date=day
+            **att_rules.day_range(day)
         ).delete()
         return redirect('attendance_app:attendance_list')
 

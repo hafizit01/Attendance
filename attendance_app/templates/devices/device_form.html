@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+<div class="mx-auto max-w-3xl space-y-6" x-data="{ p: '{{ form.protocol.value|default:'zk_pull' }}' }">
+  <div>
+    <a href="{% if device %}{% url 'attendance_app:device_detail' device.id %}{% else %}{% url 'attendance_app:device_list' %}{% endif %}" class="btn-ghost btn-sm -ml-3 mb-2">← Back</a>
+    <h1 class="page-title">{{ title }}</h1>
+    <p class="page-subtitle">মেশিনের ধরন বাছাই করুন — শুধু দরকারি তথ্যই চাওয়া হবে।</p>
+  </div>
+
+  <form method="post" class="card overflow-hidden" novalidate autocomplete="off">
+    {% csrf_token %}
+    {% if form.non_field_errors %}
+    <div class="m-5 rounded-xl border border-rose-200 bg-rose-50 p-3.5 text-sm text-rose-700 dark:border-rose-500/20 dark:bg-rose-500/10 dark:text-rose-300" role="alert">{% for e in form.non_field_errors %}<p>{{ e }}</p>{% endfor %}</div>
+    {% endif %}
+
+    <section class="space-y-5 p-5 sm:p-6">
+      <h2 class="section-title">{% include "partials/icon.html" with name="device" cls="h-4 w-4 text-primary-500" %}Device</h2>
+      <div class="grid grid-cols-1 gap-5 sm:grid-cols-2">
+        {% include "partials/form_field.html" with field=form.name %}
+        {% include "partials/form_field.html" with field=form.department %}
+      </div>
+    </section>
+
+    <section class="space-y-4 border-t border-slate-100 p-5 sm:p-6 dark:border-white/[0.06]">
+      <h2 class="section-title">{% include "partials/icon.html" with name="signal" cls="h-4 w-4 text-primary-500" %}Machine type / connection</h2>
+      <div class="grid gap-2 sm:grid-cols-2">
+        {% for radio in form.protocol %}
+        <label class="flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 bg-white p-3.5 transition-all hover:border-primary-300 has-[:checked]:border-primary-400 has-[:checked]:bg-primary-50/70 has-[:checked]:shadow-glow/20 dark:border-slate-700 dark:bg-slate-800 dark:has-[:checked]:border-primary-500/50 dark:has-[:checked]:bg-primary-500/10">
+          <input type="radio" name="{{ radio.data.name }}" value="{{ radio.data.value }}" x-model="p" class="mt-0.5 h-4 w-4 accent-primary-600" {% if radio.data.selected %}checked{% endif %}>
+          <span class="text-sm font-medium text-slate-700 dark:text-slate-200">{{ radio.choice_label }}</span>
+        </label>
+        {% endfor %}
+      </div>
+      {% for e in form.protocol.errors %}<p class="form-error">{{ e }}</p>{% endfor %}
+    </section>
+
+    <section class="space-y-5 border-t border-slate-100 p-5 sm:p-6 dark:border-white/[0.06]">
+      <h2 class="section-title">{% include "partials/icon.html" with name="cog" cls="h-4 w-4 text-primary-500" %}Connection details</h2>
+
+      <div x-show="p === 'zk_adms'" x-cloak class="rounded-xl bg-emerald-50 p-4 text-sm text-emerald-800 dark:bg-emerald-500/10 dark:text-emerald-200">
+        মেশিন নিজেই ইন্টারনেট দিয়ে সার্ভারে ডাটা পাঠাবে। শুধু মেশিনের <b>Serial Number</b> দিন — সেভ করার পর মেশিনে কী সেট করতে হবে তা দেখানো হবে।
+      </div>
+      <div x-show="p === 'hik_push' || p === 'api'" x-cloak class="rounded-xl bg-emerald-50 p-4 text-sm text-emerald-800 dark:bg-emerald-500/10 dark:text-emerald-200">
+        সেভ করার পর এই মেশিনের জন্য একটা গোপন URL দেখানো হবে — সেটা মেশিন/সফটওয়্যারে বসালেই হবে।
+      </div>
+      <div x-show="p === 'file'" x-cloak class="rounded-xl bg-slate-50 p-4 text-sm text-slate-600 dark:bg-white/5 dark:text-slate-300">
+        এই মেশিনের ডাটা শুধু USB ফাইল আপলোড করে আনা হবে — কোনো কানেকশন তথ্য লাগবে না।
+      </div>
+
+      <div class="grid grid-cols-1 gap-5 sm:grid-cols-2">
+        <div x-show="p === 'zk_adms' || p === 'zk_pull' || p === 'hik_isapi' || p === 'hik_push'" class="sm:col-span-2">
+          {% include "partials/form_field.html" with field=form.serial_number %}
+        </div>
+        <div x-show="p === 'zk_pull' || p === 'hik_isapi' || p === 'hik_push'">{% include "partials/form_field.html" with field=form.ip %}</div>
+        <div x-show="p === 'zk_pull' || p === 'hik_isapi' || p === 'hik_push'">{% include "partials/form_field.html" with field=form.port %}</div>
+        <div x-show="p === 'zk_pull'">{% include "partials/form_field.html" with field=form.comm_key %}</div>
+        <div x-show="p === 'hik_isapi' || p === 'hik_push'">{% include "partials/form_field.html" with field=form.username %}</div>
+        <div x-show="p === 'hik_isapi' || p === 'hik_push'">{% include "partials/form_field.html" with field=form.password %}</div>
+      </div>
+      {% include "partials/form_field.html" with field=form.is_active %}
+    </section>
+
+    <div class="flex flex-col-reverse gap-3 border-t border-slate-100 bg-slate-50/60 px-5 py-4 sm:flex-row sm:justify-between sm:px-6 dark:border-white/[0.06] dark:bg-white/[0.02]">
+      <div>
+        {% if device %}
+        <button type="submit" form="delete-device" class="btn-ghost text-rose-600 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-500/10">{% include "partials/icon.html" with name="trash" cls="h-4 w-4" %}Remove device</button>
+        {% endif %}
+      </div>
+      <div class="flex flex-col-reverse gap-3 sm:flex-row">
+        <a href="{% url 'attendance_app:device_list' %}" class="btn-secondary">Cancel</a>
+        <button type="submit" class="btn-primary">{% include "partials/icon.html" with name="check-circle" cls="h-4 w-4" %}Save device</button>
+      </div>
+    </div>
+  </form>
+  {% if device %}
+  <form id="delete-device" method="post" action="{% url 'attendance_app:device_delete' device.id %}" onsubmit="return confirm('এই মেশিন সরাবেন? আগের হাজিরা ঠিক থাকবে।');">{% csrf_token %}</form>
+  {% endif %}
+</div>
+{% endblock %}

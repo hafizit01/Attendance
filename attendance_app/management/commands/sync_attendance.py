@@ -1,40 +1,42 @@
 from django.core.management.base import BaseCommand, CommandError
 
-from attendance_app.models import Department
-from attendance_app.utils.zk_import import import_attendance
+from attendance_app.models import Device
+from attendance_app.devices.service import DeviceActionError, sync_device
 
 
 class Command(BaseCommand):
-    help = "ZKTeco ডিভাইস থেকে হাজিরা সিঙ্ক করে (device IP/Port সেট করা সব ডিপার্টমেন্ট, অথবা --department দিয়ে নির্দিষ্টগুলো)"
+    help = ("LAN হাজিরা মেশিন (ZKTeco/eSSL, Hikvision) থেকে হাজিরা সিঙ্ক করে — সব active LAN মেশিন, "
+            "অথবা --device / --department দিয়ে নির্দিষ্টগুলো। Cloud push মেশিন নিজেই ডাটা পাঠায়, তাদের সিঙ্ক লাগে না।")
 
     def add_arguments(self, parser):
-        parser.add_argument(
-            "--department", type=int, action="append", dest="departments",
-            help="শুধু এই ডিপার্টমেন্ট id (একাধিকবার দেওয়া যায়)",
-        )
+        parser.add_argument("--device", type=int, action="append", dest="devices", help="শুধু এই device id (একাধিকবার দেওয়া যায়)")
+        parser.add_argument("--department", type=int, action="append", dest="departments",
+                            help="শুধু এই ডিপার্টমেন্ট id এর মেশিন (একাধিকবার দেওয়া যায়)")
+        parser.add_argument("--full", action="store_true", help="মেশিনের সব পুরনো ডাটাও আবার পড়ো")
 
-    def handle(self, *args, departments=None, **options):
-        # GenericIPAddressField ফাঁকা মান NULL হিসেবে রাখে, তাই isnull চেকই যথেষ্ট
-        qs = (Department.objects.select_related("company")
-              .exclude(device_ip__isnull=True)
-              .exclude(device_port__isnull=True))
+    def handle(self, *args, devices=None, departments=None, full=False, **options):
+        qs = (Device.objects.select_related("company", "department", "department__branch")
+              .filter(is_active=True, protocol__in=Device.PULL_PROTOCOLS)
+              .exclude(ip__isnull=True))
+        if devices:
+            qs = qs.filter(id__in=devices)
         if departments:
-            qs = qs.filter(id__in=departments)
+            qs = qs.filter(department_id__in=departments)
 
-        devices = [{"ip": d.device_ip, "port": d.device_port, "department": d} for d in qs]
-        if not devices:
-            self.stdout.write(self.style.WARNING("No department has a device IP/Port set."))
+        targets = list(qs)
+        if not targets:
+            self.stdout.write(self.style.WARNING("No active LAN device found (Devices পেজে মেশিন যোগ করুন)."))
             return
 
         failed = 0
-        for res in import_attendance(devices):
-            line = f"{res['department']}: {res['message']}"
-            if res["status"] == "success":
-                self.stdout.write(self.style.SUCCESS(line))
-            else:
+        for device in targets:
+            try:
+                res = sync_device(device, full=full)
+                self.stdout.write(self.style.SUCCESS(f"{device.name}: {res['message']}"))
+            except DeviceActionError as e:
                 failed += 1
-                self.stderr.write(self.style.ERROR(line))
+                self.stderr.write(self.style.ERROR(f"{device.name}: {e}"))
 
         if failed:
             # Task Scheduler এ ব্যর্থতা ধরা যায় এমন exit code
-            raise CommandError(f"{failed} of {len(devices)} device(s) failed to sync.")
+            raise CommandError(f"{failed} of {len(targets)} device(s) failed to sync.")

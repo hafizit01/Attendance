@@ -24,6 +24,7 @@ class DayWork:
     work: timedelta = ZERO      # সেদিনের কাজ (Out − max(In, শিফট শুরু))
     is_off: bool = False        # সাপ্তাহিক বা সরকারি ছুটি
     is_leave: bool = False      # approved leave (পুরো শিফট ক্রেডিট)
+    regular: timedelta = None   # সেদিনের শিফটের দৈর্ঘ্য (রোস্টার); None = মাসের সাধারণ শিফট
 
 
 @dataclass
@@ -48,10 +49,11 @@ def _hours(td):
     return td.total_seconds() / 3600
 
 
-def calculate_pay(base_salary, regular, working_days, days, settings=None):
+def calculate_pay(base_salary, regular, working_days, days, settings=None, expected_hours=None):
     """
     base_salary: Decimal, regular: শিফটের দৈর্ঘ্য (timedelta), working_days: কর্মদিবসের সংখ্যা,
     days: [DayWork, ...]
+    expected_hours: রোস্টারে দিনভেদে শিফট আলাদা হলে মাসের মোট প্রত্যাশিত ঘণ্টা (None = কর্মদিবস × শিফট)
     রিটার্ন: dict(earned, hourly_rate, expected, total_work, over_time, overtime_hours, overtime_pay)
     """
     settings = settings or OvertimeSettings()
@@ -61,17 +63,18 @@ def calculate_pay(base_salary, regular, working_days, days, settings=None):
     work_extra = ZERO      # কর্মদিবসে শিফটের পরের বাড়তি (ন্যূনতম সীমা পার হলে)
     holiday_work = ZERO    # ছুটির দিনের কাজ
     for d in days:
+        day_regular = d.regular if d.regular is not None else regular
         if d.is_leave:
-            normal += regular
+            normal += day_regular
         elif d.is_off:
             holiday_work += d.work
         else:
-            extra = max(d.work - regular, ZERO)
+            extra = max(d.work - day_regular, ZERO)
             normal += d.work - extra
             if extra and extra >= min_extra:
                 work_extra += extra
 
-    expected_h = working_days * _hours(regular)
+    expected_h = expected_hours if expected_hours is not None else working_days * _hours(regular)
     hourly_rate = (base_salary / Decimal(expected_h)) if expected_h > 0 else Decimal(0)
 
     holiday_pay = Decimal(0)

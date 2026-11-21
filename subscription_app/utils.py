@@ -8,8 +8,15 @@ from .models import UserSubscription
 
 
 def get_user_company(user):
-    """user -> profile -> company (না থাকলে None)"""
-    return getattr(getattr(user, "profile", None), "company", None)
+    """
+    user -> profile -> company (অ্যাডমিন/ম্যানেজার)।
+    প্রোফাইল না থাকলে: কর্মচারীর পোর্টাল লগইন (Employee.user) -> কর্মচারীর কোম্পানি — কোম্পানির
+    সাবস্ক্রিপশনই কর্মচারীর পোর্টালে প্রযোজ্য। কিছু না থাকলে None।
+    """
+    company = getattr(getattr(user, "profile", None), "company", None)
+    if company is None:
+        company = getattr(getattr(user, "employee", None), "company", None)
+    return company
 
 
 def _active_subscriptions():

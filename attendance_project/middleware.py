@@ -27,7 +27,9 @@ ALWAYS_ALLOWED_URL_NAMES = {
     "payment_details",             # e.g., bkash callback
 }
 # /admin/ এর নিজস্ব staff লগইন আছে; এটা ব্লক করলে superuser নিজেই লক হয়ে যাবে
-ALWAYS_ALLOWED_PREFIXES = ("/static/", "/media/", "/favicon.ico", "/robots.txt", "/api/webhooks/", "/admin/")
+ALWAYS_ALLOWED_PREFIXES = ("/static/", "/media/", "/favicon.ico", "/robots.txt", "/api/webhooks/", "/admin/",
+                           # কর্মচারীর পোর্টাল নিজেই কোম্পানির সাবস্ক্রিপশন দেখে "সার্ভিস বন্ধ" পেজ দেখায়
+                           "/me/", "/p/")
 
 # সাবস্ক্রিপশন EXPIRED হলে কেবল এগুলো চলবে (renew/pay/expired/display)
 EXPIRED_ALLOWED_URL_NAMES = {

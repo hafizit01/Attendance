@@ -12,6 +12,7 @@
 #   • Leave দিনে শিফটের সমান Work ক্রেডিট;  Absent দিনে পুরো শিফট Less
 #   • Status priority: Present > Public Holiday > Weekly Off > Leave > Absent
 from collections import defaultdict, namedtuple
+from functools import lru_cache
 from datetime import datetime, time, timedelta
 
 from django.utils import timezone
@@ -23,7 +24,13 @@ DEFAULT_OUT_TIME = time(20, 30)
 DEFAULT_OFF_DAY = 'Friday'
 
 Punch = namedtuple('Punch', 'ts id')
-Shift = namedtuple('Shift', 'in_time out_time off_day duration')
+# grace/brk/night/name/shift_id/color শুধু Shift মডেল থেকে আসে; ডিপার্টমেন্টের সময়ে এগুলো ডিফল্ট (আগের হিসাব হুবহু)
+Shift = namedtuple('Shift', 'in_time out_time off_day duration grace brk night name shift_id color',
+                   defaults=(timedelta(), timedelta(), False, '', None, ''))
+
+# রাতের শিফটে কোন পাঞ্চ কোন দিনের: শিফট শুরুর এত আগে থেকে ... শেষের এত পর পর্যন্ত
+NIGHT_EARLY = timedelta(hours=4)
+NIGHT_LATE = timedelta(hours=6)
 
 
 def to_local(dt):
@@ -32,15 +39,27 @@ def to_local(dt):
         return None
     if timezone.is_naive(dt):
         dt = timezone.make_aware(dt)
-    return timezone.localtime(dt)
+    # timezone.localtime(dt) এর হুবহু একই ফল, কিন্তু ~১৫ গুণ দ্রুত (অনেক পাঞ্চে বড় পার্থক্য)
+    return dt.astimezone(timezone.get_current_timezone())
+
+
+@lru_cache(maxsize=4096)
+def _weekday(day):
+    return day.strftime('%A')
+
+
+@lru_cache(maxsize=65536)
+def _local_dt(day, t, tz):
+    """make_aware(datetime.combine(day, t)) — একই দিন/সময় হাজারো কর্মচারীর জন্য একবারই হিসাব"""
+    return timezone.make_aware(datetime.combine(day, t), tz)
 
 
 def local_date(dt):
     return to_local(dt).date()
 
 
-def shift_for(employee):
-    dept = getattr(employee, 'department', None)
+def department_shift(dept):
+    """ডিপার্টমেন্টের in/out time থেকে শিফট (আগের নিয়ম — কোনো পরিবর্তন নেই)"""
     in_t = (dept.in_time if dept and dept.in_time else None) or DEFAULT_IN_TIME
     out_t = (dept.out_time if dept and dept.out_time else None) or DEFAULT_OUT_TIME
     off_day = dept.weekly_off_day if dept else DEFAULT_OFF_DAY
@@ -49,6 +68,90 @@ def shift_for(employee):
     if end <= start:  # রাতের শিফট
         end += timedelta(days=1)
     return Shift(in_t, out_t, off_day, end - start)
+
+
+def shift_from_model(s, dept=None):
+    """Shift মডেল → হিসাবের Shift (সাপ্তাহিক ছুটি খালি হলে ডিপার্টমেন্টের)"""
+    off_day = s.weekly_off_day or (dept.weekly_off_day if dept else DEFAULT_OFF_DAY)
+    return Shift(s.start_time, s.end_time, off_day, s.duration,
+                 grace=timedelta(minutes=s.grace_minutes or 0), brk=timedelta(minutes=s.break_minutes or 0),
+                 night=s.is_night, name=s.name, shift_id=s.id, color=s.color)
+
+
+def shift_for(employee):
+    """কর্মচারীর ডিফল্ট শিফট: ডিপার্টমেন্টের default_shift, না থাকলে ডিপার্টমেন্টের in/out time"""
+    dept = getattr(employee, 'department', None)
+    default = getattr(dept, 'default_shift', None) if dept and getattr(dept, 'default_shift_id', None) else None
+    if default is not None and default.is_active:
+        return shift_from_model(default, dept)
+    return department_shift(dept)
+
+
+def load_shift_assignments(employee_ids, start_date, end_date):
+    """{employee_id: [(start, end, Shift মডেল), ...]} — [start_date, end_date] এর সাথে মেলে এমন"""
+    from django.db.models import Q
+    from attendance_app.models import ShiftAssignment
+    out = defaultdict(list)
+    qs = (ShiftAssignment.objects.filter(employee_id__in=list(employee_ids), start_date__lte=end_date)
+          .filter(Q(end_date__isnull=True) | Q(end_date__gte=start_date))
+          .select_related('shift').order_by('start_date', 'id'))
+    for a in qs:
+        out[a.employee_id].append((a.start_date, a.end_date, a.shift))
+    return out
+
+
+def preload_departments(employees):
+    """
+    কর্মচারীর ডিপার্টমেন্ট ও ডিপার্টমেন্টের ডিফল্ট শিফট এক কোয়েরিতে লোড — না হলে প্রতি কর্মচারীতে আলাদা কোয়েরি
+    হতো (হাজার কর্মচারীতে হাজার কোয়েরি)। আগে থেকে লোড করা থাকলে Django আবার আনে না।
+    """
+    from django.db.models import prefetch_related_objects
+    prefetch_related_objects([e for e in employees if e.department_id], 'department__default_shift')
+
+
+class ShiftResolver:
+    """কোন দিনে কর্মচারীর কোন শিফট — তারিখসহ অ্যাসাইনমেন্ট > ডিপার্টমেন্টের ডিফল্ট শিফট > ডিপার্টমেন্টের সময়"""
+
+    def __init__(self, employees, start_date, end_date):
+        employees = list(employees)
+        preload_departments(employees)
+        self.assignments = load_shift_assignments([e.id for e in employees], start_date, end_date)
+        self._cache = {}
+
+    def base(self, emp):
+        key = ('base', emp.id)
+        if key not in self._cache:
+            self._cache[key] = shift_for(emp)
+        return self._cache[key]
+
+    def on(self, emp, day):
+        for a_start, a_end, s in reversed(self.assignments.get(emp.id, ())):
+            if a_start <= day and (a_end is None or day <= a_end):
+                key = ('shift', s.id, emp.department_id)
+                if key not in self._cache:
+                    self._cache[key] = shift_from_model(s, emp.department if emp.department_id else None)
+                return self._cache[key]
+        return self.base(emp)
+
+
+def night_window(day, shift):
+    """রাতের শিফটে এই দিনের পাঞ্চ ধরার সময়সীমা (লোকাল aware)"""
+    tz = timezone.get_current_timezone()
+    start = _local_dt(day, shift.in_time, tz) - NIGHT_EARLY
+    end = _local_dt(day + timedelta(days=1), shift.out_time, tz) + NIGHT_LATE
+    return start, end
+
+
+def day_range(start_date, end_date=None, field='timestamp'):
+    """
+    লোকাল তারিখ [start_date, end_date] → timestamp এর ফিল্টার (লোকাল মধ্যরাত থেকে পরের দিনের মধ্যরাতের আগে)।
+    timestamp__date__range এর হুবহু একই রেকর্ড দেয়, কিন্তু DB তে প্রতিটা সারির তারিখ রূপান্তর করতে হয় না —
+    (employee, timestamp) ইনডেক্স কাজে লাগে, তাই অনেক কর্মচারী/অনেক বছরের ডাটাতেও দ্রুত।
+    """
+    end_date = end_date or start_date
+    lo = timezone.make_aware(datetime.combine(start_date, time.min))
+    hi = timezone.make_aware(datetime.combine(end_date + timedelta(days=1), time.min))
+    return {f'{field}__gte': lo, f'{field}__lt': hi}
 
 
 def date_range(start_date, end_date):
@@ -65,13 +168,14 @@ def load_punches(employee_ids, start_date, end_date):
     """{(employee_id, local_date): [Punch(ts_local, id), ...] (সময় অনুযায়ী সাজানো)}"""
     rows = (Attendance.objects
             .filter(employee_id__in=list(employee_ids),
-                    # USE_TZ=True তে __date লোকাল টাইমজোনে হিসাব হয়
-                    timestamp__date__range=(start_date, end_date))
+                    # লোকাল তারিখ অনুযায়ী (ইনডেক্স ব্যবহার করে)
+                    **day_range(start_date, end_date))
             .order_by('timestamp')
             .values_list('employee_id', 'timestamp', 'id'))
     punches = defaultdict(list)
+    tz = timezone.get_current_timezone()
     for emp_id, ts, pk in rows:
-        ts = to_local(ts)
+        ts = ts.astimezone(tz) if ts.tzinfo is not None else to_local(ts)
         punches[(emp_id, ts.date())].append(Punch(ts, pk))
     return punches
 
@@ -147,18 +251,19 @@ def evaluate_day(day, punches, shift, is_holiday=False, is_leave=False, elsewher
     """
     if elsewhere:
         zero = timedelta()
-        return {'date': day, 'weekday': day.strftime('%A'), 'in_time': None, 'out_time': None,
+        return {'date': day, 'weekday': _weekday(day), 'in_time': None, 'out_time': None,
                 'late': zero, 'work': zero, 'over': zero, 'less': zero, 'is_holiday': False,
-                'is_off_day': False, 'is_elsewhere': True, 'punch_count': 0, 'attendance_id': None,
+                'is_off_day': False, 'is_elsewhere': True, 'punch_count': 0, 'attendance_id': None, 'punch_ids': (),
                 'status': 'Other Branch', 'label': 'Other branch'}
 
-    is_off_day = bool(shift.off_day) and day.strftime('%A') == shift.off_day
+    weekday = _weekday(day)
+    is_off_day = bool(shift.off_day) and weekday == shift.off_day
     is_working_day = not (is_holiday or is_off_day)
     zero = timedelta()
 
     result = {
         'date': day,
-        'weekday': day.strftime('%A'),
+        'weekday': weekday,
         'in_time': None,
         'out_time': None,
         'late': zero,
@@ -170,21 +275,24 @@ def evaluate_day(day, punches, shift, is_holiday=False, is_leave=False, elsewher
         'is_elsewhere': False,
         'punch_count': len(punches),
         'attendance_id': punches[0].id if punches else None,
+        'punch_ids': tuple(p.id for p in punches),
+        'shift': shift,
     }
 
     if punches:
         in_t = punches[0].ts
         out_t = punches[-1].ts if len(punches) > 1 else None
-        shift_start = timezone.make_aware(datetime.combine(day, shift.in_time))
+        shift_start = _local_dt(day, shift.in_time, timezone.get_current_timezone())
 
         result['in_time'] = in_t
         result['out_time'] = out_t
-        if is_working_day and in_t > shift_start:
+        # grace: শিফট শুরুর পর এই সময়ের মধ্যে এলে Late নয় (এর পরে এলে পুরো দেরিটাই Late)
+        if is_working_day and in_t > shift_start + shift.grace:
             result['late'] = in_t - shift_start
 
         actual_start = max(in_t, shift_start)
         if out_t and out_t > actual_start:
-            result['work'] = out_t - actual_start
+            result['work'] = max(out_t - actual_start - shift.brk, zero)
 
         if is_working_day:
             result['over'] = max(result['work'] - shift.duration, zero)
@@ -220,27 +328,40 @@ def build_attendance(employees, start_date, end_date, branch_id=None):
     """
     employees = list(employees)
     emp_ids = [e.id for e in employees]
-    punches = load_punches(emp_ids, start_date, end_date)
+    shifts = ShiftResolver(employees, start_date, end_date)
+    has_night = any(s.is_night for rows in shifts.assignments.values() for _a, _b, s in rows)
+    # রাতের শিফটে Out পরের দিন পড়ে, তাই একদিন বেশি পড়ি (দিনভিত্তিক হিসাবে বাড়তি দিনটা ব্যবহার হয় না)
+    punches = load_punches(emp_ids, start_date, end_date + timedelta(days=1) if has_night else end_date)
     holidays = load_holidays({e.company_id for e in employees}, start_date, end_date)
     leaves = load_leaves(emp_ids, start_date, end_date)
     transfers = load_transfers(emp_ids)
 
     out = []
     for emp in employees:
-        shift = shift_for(emp)
+        base_shift = shifts.base(emp)
         company_holidays = holidays.get(emp.company_id, {})
         current_branch = emp.department.branch_id if emp.department_id else None
         emp_transfers = transfers.get(emp.id, [])
+        night_used = set()   # রাতের শিফটে আগের দিনের হিসাবে ধরা পাঞ্চ — পরের দিনে আবার ধরা হবে না
         days = []
         for d in date_range(start_date, end_date):
+            shift = shifts.on(emp, d)
+            if shift.night:
+                w_start, w_end = night_window(d, shift)
+                day_punches = [p for dd in (d, d + timedelta(days=1)) for p in punches.get((emp.id, dd), [])
+                               if w_start <= p.ts <= w_end and p.id not in night_used]
+                night_used.update(p.id for p in day_punches)
+            else:
+                day_punches = [p for p in punches.get((emp.id, d), []) if p.id not in night_used] \
+                    if night_used else punches.get((emp.id, d), [])
             day_branch = branch_on(current_branch, emp_transfers, d)
             days.append(evaluate_day(
-                d, punches.get((emp.id, d), []), shift,
+                d, day_punches, shift,
                 is_holiday=is_holiday_for(company_holidays, d, day_branch),
                 is_leave=(emp.id, d) in leaves,
                 elsewhere=branch_id is not None and day_branch != branch_id,
             ))
-        out.append((emp, shift, days))
+        out.append((emp, base_shift, days))
     return out
 
 
@@ -250,8 +371,9 @@ def summarize(days, shift):
     counts = defaultdict(int)
     for d in days:
         counts[d['status']] += 1
-    working_days = sum(1 for d in days if not (d['is_holiday'] or d['is_off_day'] or d['is_elsewhere']))
-    expected = working_days * shift.duration
+    working = [d for d in days if not (d['is_holiday'] or d['is_off_day'] or d['is_elsewhere'])]
+    # প্রতিদিনের শিফট আলাদা হতে পারে (রোস্টার) — শিফট না থাকলে আগের মতো কর্মদিবস × শিফট
+    expected = sum(((d.get('shift') or shift).duration for d in working), zero)
     total_work = sum((d['work'] for d in days), zero)
     return {
         'present': counts['Present'],

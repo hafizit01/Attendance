@@ -17,6 +17,8 @@
          target="_blank" rel="noopener" class="btn-secondary">
         {% include "partials/icon.html" with name="download" cls="h-4 w-4" %}Export PDF
       </a>
+      <a href="{% url 'attendance_app:attendance_list_excel' %}?start_date={{ start_date }}&end_date={{ end_date }}{% if selected_employee %}&employee={{ selected_employee }}{% endif %}{% if selected_department %}&department={{ selected_department }}{% endif %}"
+         class="btn-secondary">{% include "partials/excel_icon.html" %}Export Excel</a>
     </div>
   </div>
 

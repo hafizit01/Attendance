@@ -30,18 +30,31 @@
       <div class="grid grid-cols-1 gap-5 sm:grid-cols-2">
         {% include "partials/form_field.html" with field=form.in_time %}
         {% include "partials/form_field.html" with field=form.out_time %}
+        {% include "partials/form_field.html" with field=form.default_shift wrap="sm:col-span-2" %}
+      </div>
+      <p class="form-help">আলাদা আলাদা কর্মচারীকে শিফট দিতে <a href="{% url 'attendance_app:shift_assign' %}" class="link">Assign Shift</a> ব্যবহার করুন।</p>
+    </section>
+
+    <section class="space-y-5 border-t border-slate-100 p-5 sm:p-6 dark:border-slate-800">
+      <h2 class="section-title">{% include "partials/icon.html" with name="chat" cls="h-4 w-4 text-primary-500" %}Department manager (daily SMS / WhatsApp)</h2>
+      <div class="grid grid-cols-1 gap-5 sm:grid-cols-2">
+        {% include "partials/form_field.html" with field=form.manager_name %}
+        {% include "partials/form_field.html" with field=form.manager_phone %}
       </div>
     </section>
 
     <section class="space-y-5 border-t border-slate-100 p-5 sm:p-6 dark:border-slate-800">
       <div class="flex flex-wrap items-center justify-between gap-2">
-        <h2 class="section-title">{% include "partials/icon.html" with name="sync" cls="h-4 w-4 text-primary-500" %}Attendance device (ZKTeco)</h2>
-        {% if not request.user.is_superuser %}<span class="badge-neutral">শুধু admin বদলাতে পারে</span>{% endif %}
+        <h2 class="section-title">{% include "partials/icon.html" with name="device" cls="h-4 w-4 text-primary-500" %}Attendance devices</h2>
+        <a href="{% url 'attendance_app:device_list' %}" class="btn-secondary btn-sm">Manage devices →</a>
       </div>
-      <div class="grid grid-cols-1 gap-5 sm:grid-cols-2">
-        {% include "partials/form_field.html" with field=form.device_ip %}
-        {% include "partials/form_field.html" with field=form.device_port %}
+      {% if form.instance.pk %}
+      <div class="flex flex-wrap gap-2">
+        {% for d in form.instance.devices.all %}
+          <a href="{% url 'attendance_app:device_detail' d.id %}" class="badge-info">{{ d.name }}</a>
+        {% empty %}<p class="text-sm text-slate-500">এই ডিপার্টমেন্টে কোনো মেশিন নেই।</p>{% endfor %}
       </div>
+      {% endif %}
       {% if form.instance.pk and form.instance.push_token and branch_scope.is_company_admin %}
       <div class="rounded-xl border border-slate-200 bg-slate-50/70 p-4 dark:border-slate-700 dark:bg-slate-800/40" x-data="{ copied: false }">
         <label class="form-label" for="push-token">Live push token</label>

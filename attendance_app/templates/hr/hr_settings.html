@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% block title %}HR Rules{% endblock %}
+{% block content %}
+<div class="mx-auto max-w-3xl space-y-6">
+  <div>
+    <p class="eyebrow">{% include "partials/icon.html" with name="shield" cls="h-3.5 w-3.5" %}HR settings</p>
+    <h1 class="page-title">HR <span class="text-gradient">Rules</span></h1>
+    <p class="page-subtitle">শুধু আপনার কোম্পানির জন্য। কোনো নিয়ম চালু না করলে বেতন ও হাজিরার হিসাব আগের মতোই থাকে।</p>
+  </div>
+
+  <form method="post" class="card overflow-hidden" novalidate x-data="{ late: {{ form.enable_late_deduction.value|yesno:'true,false' }} }">
+    {% csrf_token %}
+
+    {# ── Late deduction ── #}
+    <section class="space-y-5 p-5 sm:p-6">
+      <div class="flex items-start gap-3">
+        <span class="stat-icon bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-300">{% include "partials/icon.html" with name="clock" %}</span>
+        <div>
+          <h2 class="section-title">Smart late rule</h2>
+          <p class="text-sm text-slate-500">বারবার দেরি করলে বেতন থেকে দিনের বেতন কাটা — বেতনের পেজ ও PDF এ আলাদা "Late cut" কলামে দেখাবে।</p>
+        </div>
+      </div>
+      <label class="flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 bg-white p-3.5 transition hover:border-primary-200 has-[:checked]:border-amber-300 has-[:checked]:bg-amber-50/60 dark:border-slate-700 dark:bg-slate-800 dark:has-[:checked]:bg-amber-500/10">
+        <input type="checkbox" name="enable_late_deduction" class="form-checkbox mt-0.5" x-model="late" {% if form.enable_late_deduction.value %}checked{% endif %}>
+        <span><span class="block text-sm font-medium text-slate-800 dark:text-slate-100">{{ form.enable_late_deduction.label }}</span>
+          <span class="form-help block">{{ form.enable_late_deduction.help_text }}</span></span>
+      </label>
+      <div x-show="late" x-cloak class="grid grid-cols-1 gap-5 sm:grid-cols-2">
+        {% include "partials/form_field.html" with field=form.lates_equal_one_day_deduction %}
+        {% include "partials/form_field.html" with field=form.late_deduction_basis %}
+        <p class="rounded-xl bg-slate-50 p-3 text-xs leading-relaxed text-slate-600 sm:col-span-2 dark:bg-white/5 dark:text-slate-300">
+          উদাহরণ: মূল বেতন ৳২৬,০০০, মাসে ২৬ কর্মদিবস, নিয়ম "৩ দিন দেরি = ১ দিন"। কেউ ৭ দিন দেরি করলে ২ দিন × ৳১,০০০ = <b>৳২,০০০</b> কাটা যাবে।
+          শুধু কর্মদিবসের দেরি গোনা হয় (শিফটের grace এর মধ্যে এলে দেরি নয়)।
+        </p>
+      </div>
+    </section>
+
+    {# ── Missing punch ── #}
+    <section class="space-y-4 border-t border-slate-100 p-5 sm:p-6 dark:border-white/[0.06]">
+      <div class="flex items-start gap-3">
+        <span class="stat-icon bg-rose-50 text-rose-600 dark:bg-rose-500/10 dark:text-rose-300">{% include "partials/icon.html" with name="alert" %}</span>
+        <div>
+          <h2 class="section-title">Missing punch alert</h2>
+          <p class="text-sm text-slate-500">প্রতিদিন রাত ১১:৫৯ এ — যারা In দিয়েছে কিন্তু Out দেয়নি তাদের তালিকা হবে, আর মালিক/ম্যানেজার নোটিফিকেশন পাবেন। রাতের শিফটের Out পরের সকালে ধরা হয়।</p>
+        </div>
+      </div>
+      {% include "partials/form_field.html" with field=form.enable_missing_punch_alert %}
+    </section>
+
+    {# ── SMS / WhatsApp ── #}
+    <section class="space-y-4 border-t border-slate-100 p-5 sm:p-6 dark:border-white/[0.06]">
+      <div class="flex items-start gap-3">
+        <span class="stat-icon bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-300">{% include "partials/icon.html" with name="chat" %}</span>
+        <div>
+          <h2 class="section-title">SMS / WhatsApp alerts</h2>
+          <p class="text-sm text-slate-500">ম্যানেজারকে প্রতিদিনের Absent/Late তালিকা, আর কর্মচারীকে বেতন দেওয়ার SMS (পে-স্লিপের লিংকসহ)।</p>
+          <p class="mt-1 text-xs">
+            SMS gateway: {% if sms_ready %}<span class="badge-success">Connected</span>{% else %}<span class="badge-warning">Not set — বার্তা শুধু লগে থাকবে</span>{% endif %}
+            · WhatsApp: {% if wa_ready %}<span class="badge-success">Connected</span>{% else %}<span class="badge-warning">Not set</span>{% endif %}
+            · <a href="{% url 'attendance_app:message_log' %}" class="link">Message log</a>
+          </p>
+        </div>
+      </div>
+      {% include "partials/form_field.html" with field=form.alert_channel %}
+      {% include "partials/form_field.html" with field=form.enable_daily_absence_alert %}
+      {% include "partials/form_field.html" with field=form.daily_alert_time %}
+      {% include "partials/form_field.html" with field=form.enable_salary_sms %}
+    </section>
+
+    {# ── অচেনা ID ── #}
+    <section class="space-y-4 border-t border-slate-100 p-5 sm:p-6 dark:border-white/[0.06]">
+      <div class="flex items-start gap-3">
+        <span class="stat-icon bg-violet-50 text-violet-600 dark:bg-violet-500/10 dark:text-violet-300">{% include "partials/icon.html" with name="face" %}</span>
+        <div>
+          <h2 class="section-title">Unknown face / ID</h2>
+          <p class="text-sm text-slate-500">মেশিনে অচেনা ID বা মুখ এলে "Unknown punches" এ জমা হয় আর আপনি সাথে সাথে নোটিফিকেশন পান।</p>
+        </div>
+      </div>
+      {% include "partials/form_field.html" with field=form.auto_create_unknown_ids %}
+    </section>
+
+    {# ── GPS ── #}
+    <section class="space-y-4 border-t border-slate-100 p-5 sm:p-6 dark:border-white/[0.06]">
+      <div class="flex items-start gap-3">
+        <span class="stat-icon bg-sky-50 text-sky-600 dark:bg-sky-500/10 dark:text-sky-300">{% include "partials/icon.html" with name="signal" %}</span>
+        <div>
+          <h2 class="section-title">GPS + selfie attendance</h2>
+          <p class="text-sm text-slate-500">চালু করলে কর্মচারীর পোর্টালে (/me/) "Remote Punch" বাটন আসবে — মোবাইল থেকে লোকেশন ও সেলফি দিয়ে হাজিরা। যাচাই করুন: Machines → Remote Punches। সাইট https:// এ চলতে হবে (ব্রাউজার না হলে লোকেশন/ক্যামেরা দেয় না)।</p>
+        </div>
+      </div>
+      {% include "partials/form_field.html" with field=form.enable_gps_attendance %}
+    </section>
+
+    <div class="flex flex-col-reverse items-center gap-3 border-t border-slate-100 bg-slate-50/60 px-5 py-4 sm:flex-row sm:justify-between sm:px-6 dark:border-white/[0.06] dark:bg-white/[0.02]">
+      <p class="text-xs text-slate-500">{% if settings_obj.updated_by %}Last changed by {{ settings_obj.updated_by.username }} · {{ settings_obj.updated_at|date:"d M Y, h:i A" }}{% endif %}</p>
+      <button type="submit" class="btn-primary w-full sm:w-auto">{% include "partials/icon.html" with name="check-circle" cls="h-4 w-4" %}Save rules</button>
+    </div>
+  </form>
+</div>
+{% endblock %}

@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}Payslips{% endblock %}
+{% block content %}
+<div class="space-y-6">
+  {% include "payroll/_tabs.html" with tab="payslips" %}
+
+  <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+    <div>
+      <h1 class="text-2xl font-semibold tracking-tight text-slate-900 dark:text-white">Payslips · {{ month_label }}</h1>
+      <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Earnings and deductions per employee. Open to print, or download as PDF.{% if is_current %} <span class="font-medium text-amber-600">This month is still running — figures will change.</span>{% endif %}</p>
+    </div>
+    <form method="get" class="flex flex-wrap gap-2">
+      <select name="month" class="form-select w-44" onchange="this.form.submit()" aria-label="Month">{% for m in months %}<option value="{{ m|date:'Y-m' }}" {% if m|date:'Y-m' == month %}selected{% endif %}>{{ m|date:"F Y" }}</option>{% endfor %}</select>
+      <select name="department" class="form-select w-48" onchange="this.form.submit()" aria-label="Department">
+        <option value="">All departments</option>{% for d in departments %}<option value="{{ d.id }}" {% if d.id == selected_department %}selected{% endif %}>{{ d.name }}</option>{% endfor %}
+      </select>
+    </form>
+  </div>
+
+  <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
+    <div class="kpi"><p class="kpi-label">Total earnings</p><p class="kpi-value">৳{{ totals.earnings|floatformat:"0g" }}</p></div>
+    <div class="kpi"><p class="kpi-label">Total deductions</p><p class="kpi-value text-rose-600 dark:text-rose-400">−৳{{ totals.deductions|floatformat:"0g" }}</p></div>
+    <div class="kpi"><p class="kpi-label">Net payable</p><p class="kpi-value text-indigo-700 dark:text-indigo-300">৳{{ totals.net|floatformat:"0g" }}</p><p class="mt-1 text-xs text-slate-500">{{ row_count }} payslip{{ row_count|pluralize }}</p></div>
+  </div>
+
+  <div class="pcard overflow-hidden">
+    <div class="max-h-[70vh] overflow-auto">
+      <table class="w-full text-sm">
+        <thead><tr>
+          <th class="pth">Employee</th><th class="pth text-right">Earnings</th><th class="pth text-right">Deductions</th>
+          <th class="pth text-right">Net</th><th class="pth hidden sm:table-cell">Paid via</th><th class="pth text-right"><span class="sr-only">Actions</span></th>
+        </tr></thead>
+        <tbody class="divide-y divide-slate-100 dark:divide-white/[0.05]">
+          {% for r in rows %}{% with s=r.s %}
+          <tr class="hover:bg-slate-50/70 dark:hover:bg-white/[0.02]">
+            <td class="ptd">
+              <div class="flex items-center gap-3">
+                <span class="hidden h-9 w-9 shrink-0 items-center justify-center rounded-full bg-indigo-50 text-xs font-semibold uppercase text-indigo-700 sm:flex dark:bg-indigo-500/15 dark:text-indigo-300">{{ s.employee.name|slice:":2" }}</span>
+                <div class="min-w-0"><p class="max-w-[10rem] truncate font-medium text-slate-900 sm:max-w-none dark:text-white">{{ s.employee.name }}</p>
+                  <p class="text-xs text-slate-500">{{ s.present_days }} present · {{ s.absent_days }} absent</p></div>
+              </div>
+            </td>
+            <td class="ptd money">{{ r.earnings|floatformat:"0g" }}</td>
+            <td class="ptd money text-rose-600 dark:text-rose-400">{% if r.deductions %}−{{ r.deductions|floatformat:"0g" }}{% else %}0{% endif %}</td>
+            <td class="ptd money font-semibold text-slate-900 dark:text-white">৳{{ s.final_salary|floatformat:"0g" }}</td>
+            <td class="ptd hidden text-xs text-slate-500 sm:table-cell">Bank {{ s.bank_transfer|floatformat:"0g" }} · Cash {{ s.payable_cash|floatformat:"0g" }}</td>
+            <td class="ptd">
+              <div class="flex justify-end gap-0.5">
+                <a href="{% url 'payroll:payslip_view' s.employee.id month %}" target="_blank" rel="noopener" class="act" aria-label="Open payslip of {{ s.employee.name }}">{% include "partials/icon.html" with name="eye" cls="h-4 w-4" %}<span class="tip">View &amp; print</span></a>
+                <a href="{% url 'payroll:payslip_view' s.employee.id month %}?format=pdf" target="_blank" rel="noopener" class="act" aria-label="PDF payslip of {{ s.employee.name }}">{% include "partials/icon.html" with name="download" cls="h-4 w-4" %}<span class="tip">PDF</span></a>
+              </div>
+            </td>
+          </tr>
+          {% endwith %}{% empty %}
+          <tr><td colspan="6" class="p-8">{% include "partials/empty_state.html" with icon="document" title="No payslips for this month" text="Set salaries in Salary Base first." %}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% include "partials/pagination.html" with page=page_obj %}
+  </div>
+</div>
+{% endblock %}

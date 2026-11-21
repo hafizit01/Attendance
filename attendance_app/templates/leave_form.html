@@ -25,6 +25,22 @@
           {% endif %}
         {% endfor %}
       </div>
+
+      {# কর্মচারীর ছুটির ব্যালান্স (কর্মচারী বাছাই করলেই) #}
+      <div x-data="leaveBalance('{% url 'attendance_app:employee_leave_balance_json' 0 %}')" x-init="init()" x-show="rows.length" x-cloak
+           class="rounded-2xl border border-primary-100 bg-primary-50/50 p-4 dark:border-primary-500/20 dark:bg-primary-500/5">
+        <p class="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-white">{% include "partials/icon.html" with name="calendar" cls="h-4 w-4 text-primary-500" %}<span x-text="'Leave balance ' + year"></span></p>
+        <div class="grid grid-cols-2 gap-2 sm:grid-cols-3">
+          <template x-for="r in rows" :key="r.type">
+            <div class="rounded-xl bg-white p-2.5 dark:bg-slate-900">
+              <p class="text-xs text-slate-500" x-text="r.label"></p>
+              <p class="text-lg font-bold tabular-nums" :class="r.limited && r.remaining <= 0 ? 'text-rose-600' : 'text-slate-900 dark:text-white'"
+                 x-text="r.limited ? (r.remaining + ' / ' + r.allocated) : (r.used + ' used')"></p>
+              <p class="text-[11px] text-slate-400" x-show="r.pending" x-text="r.pending + ' pending'"></p>
+            </div>
+          </template>
+        </div>
+      </div>
     </div>
     <div class="flex flex-col-reverse gap-3 border-t border-slate-100 bg-slate-50/60 px-5 py-4 sm:flex-row sm:justify-end sm:px-6 dark:border-slate-800 dark:bg-slate-800/40">
       <a href="{% url 'attendance_app:leave_list' %}" class="btn-secondary">Cancel</a>
@@ -32,4 +48,29 @@
     </div>
   </form>
 </div>
+<script>
+function leaveBalance(urlTemplate) {
+  return {
+    rows: [], year: '',
+    init() {
+      const emp = document.querySelector('[name=employee]');
+      const start = document.querySelector('[name=start_date]');
+      if (!emp) return;
+      const load = async () => {
+        if (!emp.value) { this.rows = []; return; }
+        const y = start && start.value ? start.value.slice(0, 4) : '';
+        try {
+          const res = await fetch(urlTemplate.replace('/0/', '/' + emp.value + '/') + (y ? '?year=' + y : ''));
+          if (!res.ok) return;
+          const data = await res.json();
+          this.rows = data.balance; this.year = data.year;
+        } catch (e) {}
+      };
+      emp.addEventListener('change', load);
+      start && start.addEventListener('change', load);
+      load();
+    }
+  };
+}
+</script>
 {% endblock %}

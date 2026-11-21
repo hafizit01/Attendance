@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+<div class="mx-auto max-w-2xl space-y-6">
+  {% include "payroll/_tabs.html" with tab="loans" %}
+
+  <div>
+    <a href="{% if loan %}{% url 'payroll:loan_detail' loan.id %}{% else %}{% url 'payroll:loan_list' %}{% endif %}" class="btn-ghost btn-sm -ml-3 mb-2">← Back</a>
+    <h1 class="page-title">{{ title }}</h1>
+    <p class="page-subtitle">মাসিক কিস্তি খালি রাখলে মোট টাকা ÷ কিস্তির সংখ্যা হবে।</p>
+  </div>
+
+  {% if loan %}
+  <div class="flex items-start gap-2 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-200">
+    {% include "partials/icon.html" with name="alert" %}<p>টাকা, কিস্তি বা শুরুর মাস বদলালে আগের মাসের বেতনের হিসাবও নতুন করে দেখাবে। কর্মচারী হাতে টাকা ফেরত দিলে এডিট না করে লোনের পেজ থেকে "Cash repayment" যোগ করুন। ভবিষ্যতে কাটা বন্ধ করতে Status → Closed।</p>
+  </div>
+  {% endif %}
+
+  <form method="post" class="card overflow-hidden" novalidate
+        x-data="{ amount: '{{ form.amount.value|default_if_none:'' }}', emi: '{{ form.emi_count.value|default_if_none:1 }}' }">
+    {% csrf_token %}
+    {% if form.non_field_errors %}<div class="m-5 rounded-xl border border-rose-200 bg-rose-50 p-3.5 text-sm text-rose-700">{% for e in form.non_field_errors %}<p>{{ e }}</p>{% endfor %}</div>{% endif %}
+    <div class="space-y-5 p-5 sm:p-6">
+      {% include "partials/form_field.html" with field=form.employee %}
+      {% include "partials/form_field.html" with field=form.loan_type %}
+      <div class="grid grid-cols-1 gap-5 sm:grid-cols-3">
+        <div @input="amount = $event.target.value">{% include "partials/form_field.html" with field=form.amount %}</div>
+        <div @input="emi = $event.target.value">{% include "partials/form_field.html" with field=form.emi_count %}</div>
+        {% include "partials/form_field.html" with field=form.monthly_deduction %}
+      </div>
+      <p class="text-sm text-slate-600 dark:text-slate-300" x-show="amount && emi > 0">
+        ডিফল্ট কিস্তি: <b x-text="'৳' + (amount / emi).toLocaleString(undefined, {maximumFractionDigits: 2})"></b> × <span x-text="emi"></span> মাস
+      </p>
+      <div class="grid grid-cols-1 gap-5 sm:grid-cols-2">
+        {% include "partials/form_field.html" with field=form.start_month %}
+        {% include "partials/form_field.html" with field=form.status %}
+      </div>
+      {% include "partials/form_field.html" with field=form.note %}
+    </div>
+    <div class="flex flex-col-reverse gap-3 border-t border-slate-100 bg-slate-50/60 px-5 py-4 sm:flex-row sm:justify-end sm:px-6 dark:border-white/[0.06] dark:bg-white/[0.02]">
+      <a href="{% url 'payroll:loan_list' %}" class="btn-secondary">Cancel</a>
+      <button type="submit" class="btn-primary">{% include "partials/icon.html" with name="check-circle" cls="h-4 w-4" %}Save</button>
+    </div>
+  </form>
+</div>
+{% endblock %}

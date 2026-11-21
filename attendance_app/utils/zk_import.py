@@ -6,10 +6,10 @@ from types import SimpleNamespace
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.utils import timezone
-from zk import ZK
 
 from attendance_app.models import Employee, Attendance
 from attendance_app.services import create_employee_with_limit
+from attendance_app.utils import attendance_helpers as att_rules
 
 logger = logging.getLogger(__name__)
 
@@ -94,7 +94,7 @@ def _sync_attendance(attendances, department, since):
     dates = [d for _, d in day_punches]
     existing = (Attendance.objects
                 .filter(employee__in=list(emp_by_uid.values()),
-                        timestamp__date__range=(min(dates), max(dates)))
+                        **att_rules.day_range(min(dates), max(dates)))
                 .only('id', 'employee_id', 'timestamp', 'status'))
 
     db_day = defaultdict(lambda: {'In': [], 'Out': []})
@@ -141,88 +141,47 @@ def _sync_attendance(attendances, department, since):
     return len(to_create), len(to_update)
 
 
-def import_pushed(department, users, punches):
+def parse_api_punches(punches):
     """
-    Push agent (push_agent.py) থেকে আসা ডাটা — মেশিনে সরাসরি সিঙ্কের মতোই নিয়মে বসায়।
+    JSON API / push agent এর পাঞ্চ: [{"uid": 1, "time": "YYYY-MM-DD HH:MM:SS", "verify": 15 | "method": "face"}]
+    রিটার্ন: (Punch লিস্ট, বাদ পড়া সংখ্যা)
+    """
+    from attendance_app.devices.ingest import Punch, method_from_text, method_from_zk
+    out, skipped = [], 0
+    for p in punches:
+        try:
+            uid = _to_int(p.get('uid'))
+            raw = str(p.get('time')).strip().replace('T', ' ')
+            ts = None
+            for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M"):
+                try:
+                    ts = datetime.strptime(raw[:19], fmt)
+                    break
+                except ValueError:
+                    continue
+            if uid is None or ts is None:
+                raise ValueError
+        except (AttributeError, TypeError, ValueError):
+            skipped += 1
+            continue
+        verify = _to_int(p.get('verify'))
+        method = method_from_text(p.get('method')) if p.get('method') else method_from_zk(verify)
+        out.append(Punch(uid=uid, timestamp=ts, method=method, verify_code=verify, state=_to_int(p.get('state'))))
+    return out, skipped
+
+
+def import_pushed(department, users, punches, device=None, source='agent'):
+    """
+    Push agent (push_agent.py) বা JSON API থেকে আসা ডাটা — মেশিনে সরাসরি সিঙ্কের মতোই নিয়মে বসায়।
     users: [{"uid": 1, "name": "..."}], punches: [{"uid": 1, "time": "YYYY-MM-DD HH:MM:SS"}] (মেশিনের লোকাল সময়)
     রিটার্ন: result dict
     """
+    from attendance_app.devices.ingest import ingest
     user_objs = [SimpleNamespace(user_id=u.get('uid'), name=u.get('name') or '')
                  for u in users if isinstance(u, dict)]
-    punch_objs, skipped = [], 0
-    for p in punches:
-        try:
-            punch_objs.append(SimpleNamespace(user_id=p.get('uid'),
-                                              timestamp=datetime.strptime(p.get('time'), "%Y-%m-%d %H:%M:%S")))
-        except (AttributeError, TypeError, ValueError):
-            skipped += 1
-
-    new_emps, limit_skipped = _sync_users(user_objs, department, department.company)
-    created, updated = _sync_attendance(punch_objs, department, None)
-    department.last_synced_at = timezone.now()
-    department.save(update_fields=['last_synced_at'])
-    return {'status': 'success', 'employees_added': new_emps, 'employees_not_added': limit_skipped,
-            'created': created, 'updated': updated, 'skipped': skipped}
-
-
-def import_attendance(devices):
-    """
-    devices: [{'ip': ..., 'port': ..., 'department': Department}, ...]
-    প্রতি ডিভাইসের জন্য result dict রিটার্ন করে।
-    """
-    results = []
-
-    for device in devices:
-        ip = device.get('ip')
-        port = device.get('port')
-        department = device.get('department')
-        company = getattr(department, 'company', None)
-
-        zk = ZK(ip, port=port, timeout=10, force_udp=False, ommit_ping=True)
-        conn = None
-
-        try:
-            logger.info(f"🔌 Connecting to device {ip}:{port} for department {department.name}")
-            conn = zk.connect()
-            conn.disable_device()
-
-            new_emps, limit_skipped = _sync_users(conn.get_users(), department, company)
-
-            attendances = conn.get_attendance()
-            if not attendances:
-                raise Exception("No attendance data received or device offline.")
-
-            since = _sync_start_date(department)
-            created_count, updated_count = _sync_attendance(attendances, department, since)
-
-            department.last_synced_at = timezone.now()
-            department.save(update_fields=['last_synced_at'])
-
-            message = f"✔️ Synced {created_count} new, Updated {updated_count} records."
-            if new_emps:
-                message += f" Added {new_emps} employee(s)."
-            if limit_skipped:
-                message += f" ⚠️ {limit_skipped} device user(s) not added (employee limit reached)."
-            results.append({
-                'department': department.name,
-                'status': 'success',
-                'message': message,
-            })
-
-        except Exception as e:
-            logger.error(f"❌ Failed to sync {department.name}: {e}")
-            results.append({
-                'department': department.name,
-                'status': 'error',
-                'message': str(e)
-            })
-
-        finally:
-            if conn:
-                try:
-                    conn.enable_device()
-                    conn.disconnect()
-                except Exception:
-                    pass
-
-    return results
+    punch_objs, skipped = parse_api_punches(punches)
+    res = ingest(department, punch_objs, users=user_objs, device=device, source=source,
+                 # push agent প্রথম রিকোয়েস্টেই ইউজার পাঠায়; API মেশিন অনেক সময় পাঠায় না
+                 create_unknown=(None if source == 'api' and not user_objs else False))
+    res['skipped'] = skipped
+    return res

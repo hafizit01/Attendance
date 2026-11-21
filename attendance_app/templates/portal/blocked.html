@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Portal unavailable</title>
+  {% include "partials/head_assets.html" %}
+</head>
+<body class="flex min-h-screen items-center justify-center p-4">
+  <div class="card w-full max-w-md p-8 text-center">
+    <span class="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-100 text-amber-600">{% include "partials/icon.html" with name="lock" cls="h-7 w-7" %}</span>
+    <h1 class="mt-4 text-lg font-bold text-slate-900 dark:text-white">
+      {% if reason == 'subscription' %}পোর্টাল এখন বন্ধ{% elif reason == 'inactive' %}অ্যাকাউন্ট নিষ্ক্রিয়{% elif reason == 'link' %}লিংকটা আর কাজ করছে না{% else %}পোর্টাল পাওয়া যায়নি{% endif %}
+    </h1>
+    <p class="mt-2 text-sm text-slate-500">
+      {% if reason == 'subscription' %}{{ employee.company.name }} এর সফটওয়্যার সাবস্ক্রিপশন চালু নেই। অফিসে যোগাযোগ করুন।
+      {% elif reason == 'inactive' %}আপনার কর্মচারী অ্যাকাউন্ট নিষ্ক্রিয় করা আছে। অফিসে যোগাযোগ করুন।
+      {% elif reason == 'link' %}পে-স্লিপের লিংকের মেয়াদ শেষ বা লিংকটা ভুল। পোর্টালে লগইন করে পে-স্লিপ দেখুন, অথবা অফিসে যোগাযোগ করুন।
+      {% else %}এই লগইন কোনো কর্মচারীর সাথে যুক্ত নয়।{% endif %}
+    </p>
+    {% if reason == 'link' %}<a href="/login/" class="btn-secondary mt-6">Login</a>{% else %}<a href="{% url 'userapp:logout' %}" class="btn-secondary mt-6">Logout</a>{% endif %}
+  </div>
+</body>
+</html>

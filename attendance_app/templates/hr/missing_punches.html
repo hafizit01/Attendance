@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}Missing Punches{% endblock %}
+{% block content %}
+<div class="space-y-6">
+  <div class="page-header">
+    <div>
+      <p class="eyebrow">{% include "partials/icon.html" with name="alert" cls="h-3.5 w-3.5" %}Alerts</p>
+      <h1 class="page-title">Missing <span class="text-gradient">Out-Punch</span></h1>
+      <p class="page-subtitle">In দিয়েছে কিন্তু Out দেয়নি। হাজিরা ঠিক করলে বা মেশিন থেকে Out এলে পরের চেকে নিজেই Resolved হবে।</p>
+    </div>
+    <div class="flex flex-wrap items-center gap-2">
+      <div class="tabs">
+        <a href="?status=open" class="tab {% if status == 'open' %}is-active{% endif %}">Open{% if open_count %} <span class="ml-1 rounded-full bg-rose-500 px-1.5 text-[10px] font-bold text-white">{{ open_count }}</span>{% endif %}</a>
+        <a href="?status=resolved" class="tab {% if status == 'resolved' %}is-active{% endif %}">Resolved</a>
+        <a href="?status=all" class="tab {% if status == 'all' %}is-active{% endif %}">All</a>
+      </div>
+      <a href="{% url 'attendance_app:missing_queue' %}?issue=missing_out" class="btn-primary">{% include "partials/icon.html" with name="bolt" cls="h-4 w-4" %}Quick-fix queue</a>
+      {% if can_manage %}
+      <form method="post" action="{% url 'attendance_app:missing_punch_check_now' %}">{% csrf_token %}
+        <button class="btn-secondary">{% include "partials/icon.html" with name="sync" cls="h-4 w-4" %}Check now</button></form>
+      {% endif %}
+    </div>
+  </div>
+
+  {% if not alert_enabled %}
+  <div class="flex flex-col gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 sm:flex-row sm:items-center sm:justify-between dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-200">
+    <p class="flex items-center gap-2">{% include "partials/icon.html" with name="info" %}রাতের অটো চেক বন্ধ আছে। "Check now" দিয়ে হাতে চালানো যায়।</p>
+    {% if can_manage %}<a href="{% url 'attendance_app:hr_settings' %}" class="btn-secondary btn-sm">Turn on in HR Rules</a>{% endif %}
+  </div>
+  {% endif %}
+
+  <div class="card overflow-hidden">
+    <div class="overflow-x-auto">
+      <table class="responsive-table table-modern">
+        <thead><tr><th>Employee</th><th>Date</th><th>Punch in</th><th>Status</th><th class="text-right">Actions</th></tr></thead>
+        <tbody>
+          {% for m in page_obj %}
+          <tr>
+            <td class="rt-title"><div class="flex items-center gap-3"><span class="avatar">{{ m.employee.name|slice:":2" }}</span>
+              <div class="min-w-0"><p class="truncate font-semibold text-slate-900 dark:text-white">{{ m.employee.name }}</p>
+                <p class="truncate text-xs font-normal text-slate-500">ID {{ m.employee.device_user_id }} · {{ m.employee.department.name|default:"—" }}</p></div></div></td>
+            <td class="whitespace-nowrap tabular-nums">{{ m.date|date:"D, d M Y" }}</td>
+            <td class="whitespace-nowrap tabular-nums font-semibold">{{ m.in_time|date:"h:i A" }}</td>
+            <td>{% if m.status == 'open' %}<span class="badge-danger"><span class="badge-dot"></span>Missing Out-Punch</span>
+                {% else %}<span class="badge-success">Resolved</span>{% if m.resolved_by %}<span class="block text-[11px] text-slate-400">by {{ m.resolved_by.username }}</span>{% endif %}{% endif %}</td>
+            <td class="text-right">
+              <div class="flex items-center justify-end gap-2">
+                <a href="{% url 'attendance_app:employee_attendance_detail' m.employee_id %}?start_date={{ m.date|date:'Y-m-d' }}&end_date={{ m.date|date:'Y-m-d' }}" class="btn-secondary btn-sm">Fix attendance</a>
+                {% if m.status == 'open' %}
+                <form method="post" action="{% url 'attendance_app:missing_punch_resolve' m.id %}">{% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}">
+                  <button class="btn-ghost btn-sm" title="সমস্যা নেই হিসেবে চিহ্নিত করুন">Mark resolved</button></form>
+                {% endif %}
+              </div>
+            </td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="5">{% include "partials/empty_state.html" with icon="check-circle" title="কোনো Missing Out-Punch নেই" text="সবাই ঠিকমতো In ও Out দিয়েছে।" %}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% include "partials/pagination.html" with page=page_obj %}
+  </div>
+</div>
+{% endblock %}

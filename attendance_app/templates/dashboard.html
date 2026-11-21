@@ -4,28 +4,54 @@
 {% block content %}
 <div class="space-y-6">
 
-  {# ── হেডার + ফিল্টার ── #}
-  <div class="page-header">
-    <div>
-      <p class="eyebrow">Overview</p>
-      <h1 class="page-title">Attendance Dashboard</h1>
-      <p class="page-subtitle">{% if branch_scope.branch %}<span class="font-semibold text-slate-700 dark:text-slate-200">{{ branch_scope.branch.name }}</span> — {% endif %}Today's attendance at a glance, with 30-day trends.</p>
-    </div>
+  {# ── হিরো: শুভেচ্ছা + আজকের হার + ফিল্টার ── #}
+  <div class="hero">
+    <div class="relative z-10 flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+      <div class="min-w-0">
+        <p class="text-sm font-medium text-white/75">{% now "l, d F Y" %}{% if branch_scope.branch %} · {{ branch_scope.branch.name }}{% endif %}</p>
+        <h1 class="mt-1 text-2xl font-bold tracking-tight sm:text-3xl">
+          {% now "H" as hour %}{% if hour < "12" %}Good morning{% elif hour < "17" %}Good afternoon{% else %}Good evening{% endif %}, {{ request.user.get_full_name|default:request.user.username }} 👋
+        </h1>
+        <p class="mt-1.5 text-sm text-white/80">Today's attendance at a glance, with 30-day trends.</p>
+        {% if not error_message %}
+        <div class="mt-5 flex flex-wrap gap-2">
+          <a href="{% url 'attendance_app:punch_feed' %}" class="inline-flex items-center gap-2 rounded-xl bg-white/15 px-3.5 py-2 text-sm font-semibold ring-1 ring-white/25 backdrop-blur transition hover:bg-white/25">
+            {% if device_online %}<span class="live-dot"><span></span></span>{% else %}{% include "partials/icon.html" with name="signal" cls="h-4 w-4" %}{% endif %}
+            Live punches
+          </a>
+          <a href="{% url 'attendance_app:device_list' %}" class="inline-flex items-center gap-2 rounded-xl bg-white/15 px-3.5 py-2 text-sm font-semibold ring-1 ring-white/25 backdrop-blur transition hover:bg-white/25">
+            {% include "partials/icon.html" with name="device" cls="h-4 w-4" %}{{ device_online }}/{{ device_total }} devices online
+          </a>
+          <a href="{% url 'attendance_app:shift_roster' %}" class="inline-flex items-center gap-2 rounded-xl bg-white/15 px-3.5 py-2 text-sm font-semibold ring-1 ring-white/25 backdrop-blur transition hover:bg-white/25">
+            {% include "partials/icon.html" with name="grid" cls="h-4 w-4" %}Shift roster
+          </a>
+        </div>
+        {% endif %}
+      </div>
 
-    {% if not error_message %}
-    <form method="get" class="flex w-full flex-col gap-2 sm:flex-row lg:w-auto">
-      <label for="dash-dept" class="sr-only">Department</label>
-      <select id="dash-dept" name="department" class="form-select sm:w-60">
-        <option value="">All Departments</option>
-        {% for dept in departments %}
-        <option value="{{ dept.id }}" {% if selected_department == dept.id %}selected{% endif %}>{{ dept.name }}</option>
-        {% endfor %}
-      </select>
-      <button type="submit" class="btn-primary">
-        {% include "partials/icon.html" with name="filter" cls="h-4 w-4" %}Apply
-      </button>
-    </form>
-    {% endif %}
+      {% if not error_message %}
+      <div class="flex flex-col items-stretch gap-4 sm:flex-row sm:items-center">
+        <div class="flex items-center gap-4 rounded-2xl bg-white/10 p-4 ring-1 ring-white/20 backdrop-blur">
+          <div class="relative h-20 w-20 shrink-0">
+            <svg viewBox="0 0 36 36" class="h-20 w-20 -rotate-90"><circle cx="18" cy="18" r="15.5" fill="none" stroke="rgba(255,255,255,.2)" stroke-width="3.5"/>
+              <circle cx="18" cy="18" r="15.5" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round" stroke-dasharray="{{ attendance_rate }} 100" pathLength="100"/></svg>
+            <span class="absolute inset-0 flex items-center justify-center text-lg font-bold tabular-nums">{{ attendance_rate }}%</span>
+          </div>
+          <div><p class="text-xs uppercase tracking-wide text-white/70">Present rate</p><p class="text-lg font-bold">{{ present }} / {{ total_employees }}</p></div>
+        </div>
+        <form method="get" class="flex flex-col gap-2">
+          <label for="dash-dept" class="sr-only">Department</label>
+          <select id="dash-dept" name="department" class="form-select border-white/20 bg-white/95 sm:w-56" onchange="this.form.submit()">
+            <option value="">All Departments</option>
+            {% for dept in departments %}
+            <option value="{{ dept.id }}" {% if selected_department == dept.id %}selected{% endif %}>{{ dept.name }}</option>
+            {% endfor %}
+          </select>
+          <noscript><button type="submit" class="btn bg-white text-primary-700">Apply</button></noscript>
+        </form>
+      </div>
+      {% endif %}
+    </div>
   </div>
 
   {% if error_message %}
@@ -164,6 +190,28 @@
     </div>
   </div>
 
+  {# ── সর্বশেষ মেশিন পাঞ্চ (মেশিন থাকলে) ── #}
+  {% if recent_punches %}
+  <div class="card overflow-hidden">
+    <div class="card-header">
+      <h2 class="card-title"><span class="live-dot"><span></span></span>Latest punches from machines</h2>
+      <a href="{% url 'attendance_app:punch_feed' %}" class="link text-sm">Live view →</a>
+    </div>
+    <div class="grid grid-cols-1 divide-y divide-slate-100 sm:grid-cols-2 sm:divide-y-0 xl:grid-cols-3 dark:divide-white/[0.05]">
+      {% for p in recent_punches %}
+      <div class="flex items-center gap-3 px-5 py-3">
+        {% include "devices/_method_icon.html" with method=p.method %}
+        <div class="min-w-0 flex-1">
+          <p class="truncate text-sm font-semibold text-slate-900 dark:text-white">{% if p.employee %}{{ p.employee.name }}{% else %}Unknown ID {{ p.device_user_id }}{% endif %}</p>
+          <p class="truncate text-xs text-slate-500">{{ p.device.name|default:"—" }} · {{ p.get_method_display }}</p>
+        </div>
+        <div class="text-right"><p class="text-sm font-semibold tabular-nums text-slate-900 dark:text-white">{{ p.timestamp|date:"h:i A" }}</p><p class="text-[11px] text-slate-500">{{ p.timestamp|date:"d M" }}</p></div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
   {# ── আজকের লগ ── #}
   <div class="card overflow-hidden">
     <div class="card-header">
@@ -186,35 +234,8 @@
           </tr>
         </thead>
         <tbody id="employeeTableBody">
-          {% for data in employee_data %}
-          <tr class="{% if forloop.counter > 10 %}hidden-row hidden{% endif %}">
-            <td class="rt-title">
-              <div class="flex items-center gap-3">
-                <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary-50 text-xs font-bold text-primary-700 dark:bg-primary-500/10 dark:text-primary-300">{{ data.employee.name|slice:":1"|upper }}</span>
-                <div class="min-w-0">
-                  <p class="truncate font-semibold text-slate-900 dark:text-white">{{ data.employee.name }}</p>
-                  <p class="truncate text-xs font-normal text-slate-500">{{ data.employee.department.name|default:"—" }}</p>
-                </div>
-              </div>
-            </td>
-            <td class="whitespace-nowrap tabular-nums">{% if data.in_time %}<span class="font-medium text-slate-900 dark:text-white">{{ data.in_time|time:"h:i A" }}</span>{% else %}<span class="text-slate-400">—</span>{% endif %}</td>
-            <td class="whitespace-nowrap tabular-nums">{% if data.out_time %}<span class="font-medium text-slate-900 dark:text-white">{{ data.out_time|time:"h:i A" }}</span>{% else %}<span class="text-slate-400">—</span>{% endif %}</td>
-            <td class="whitespace-nowrap text-center font-mono text-xs tabular-nums text-slate-600 dark:text-slate-300">{{ data.total_work_time }}</td>
-            <td class="whitespace-nowrap text-center font-mono text-xs tabular-nums {% if data.late_time.total_seconds > 0 %}text-amber-600 dark:text-amber-400{% else %}text-slate-400{% endif %}">{{ data.late_time }}</td>
-            <td class="whitespace-nowrap text-center font-mono text-xs tabular-nums {% if data.less_time.total_seconds > 0 %}text-rose-600 dark:text-rose-400{% else %}text-slate-400{% endif %}">{{ data.less_time }}</td>
-            <td class="whitespace-nowrap text-center font-mono text-xs tabular-nums {% if data.over_time.total_seconds > 0 %}text-violet-600 dark:text-violet-400{% else %}text-slate-400{% endif %}">{{ data.over_time }}</td>
-            <td class="text-right">
-              {% if data.status == 'Present' %}
-                <span class="badge-success"><span class="badge-dot"></span>Completed</span>
-              {% elif data.status == 'Present (Active)' %}
-                <span class="badge-info"><span class="badge-dot animate-pulse"></span>On duty</span>
-              {% else %}
-                <span class="badge-danger"><span class="badge-dot"></span>Absent</span>
-              {% endif %}
-              {% if data.late_time.total_seconds > 0 %}<span class="badge-warning ml-1">Late</span>{% endif %}
-            </td>
-          </tr>
-          {% empty %}
+          {% include "partials/dashboard_log_rows.html" with rows=employee_rows %}
+          {% if not employee_rows %}
           <tr>
             <td colspan="8" class="px-6 py-16 text-center">
               <div class="flex flex-col items-center gap-2 text-slate-500">
@@ -224,16 +245,17 @@
               </div>
             </td>
           </tr>
-          {% endfor %}
+          {% endif %}
         </tbody>
       </table>
     </div>
 
-    {% if employee_data|length > 10 %}
-    <div class="border-t border-slate-100 p-4 text-center dark:border-slate-800">
-      <button id="loadMoreBtn" type="button" class="btn-secondary">
+    {% if log_total > employee_rows|length %}
+    <div class="flex flex-col items-center gap-1 border-t border-slate-100 p-4 dark:border-slate-800">
+      <button id="loadMoreBtn" type="button" class="btn-secondary" data-offset="{{ employee_rows|length }}" data-total="{{ log_total }}">
         Load more {% include "partials/icon.html" with name="chevron-down" cls="h-4 w-4" %}
       </button>
+      <p class="text-xs text-slate-400" id="loadMoreInfo">Showing {{ employee_rows|length }} of {{ log_total }}</p>
     </div>
     {% endif %}
   </div>
@@ -246,14 +268,23 @@
 <script>
 document.addEventListener("DOMContentLoaded", function () {
   // Load More: প্রতি ক্লিকে আরও ১০টা সারি
+  // Load more: সার্ভার থেকে পরের ৫০ জন (শুধু আজকের হিসাব) — হাজার কর্মচারীতেও পেজ হালকা থাকে
   const loadMoreBtn = document.getElementById("loadMoreBtn");
   if (loadMoreBtn) {
-    const hiddenRows = document.querySelectorAll("#employeeTableBody .hidden-row");
-    let shownHidden = 0;
-    loadMoreBtn.addEventListener("click", function () {
-      for (let i = shownHidden; i < hiddenRows.length && i < shownHidden + 10; i++) hiddenRows[i].classList.remove("hidden");
-      shownHidden = Math.min(shownHidden + 10, hiddenRows.length);
-      if (shownHidden >= hiddenRows.length) loadMoreBtn.parentElement.remove();
+    loadMoreBtn.addEventListener("click", async function () {
+      const offset = +loadMoreBtn.dataset.offset, total = +loadMoreBtn.dataset.total;
+      const params = new URLSearchParams(location.search); params.set("log_offset", offset);
+      loadMoreBtn.disabled = true;
+      try {
+        const r = await fetch("?" + params.toString(), { headers: { "X-Requested-With": "XMLHttpRequest" } });
+        if (!r.ok) throw new Error(r.status);
+        document.getElementById("employeeTableBody").insertAdjacentHTML("beforeend", await r.text());
+        const shown = Math.min(offset + +(r.headers.get("X-Rows") || 0), total);
+        loadMoreBtn.dataset.offset = shown;
+        document.getElementById("loadMoreInfo").textContent = "Showing " + shown + " of " + total;
+        if (shown >= total || r.headers.get("X-Rows") === "0") loadMoreBtn.parentElement.remove();
+      } catch (e) { loadMoreBtn.textContent = "Couldn't load — try again"; }
+      finally { loadMoreBtn.disabled = false; }
     });
   }
 

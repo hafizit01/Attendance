@@ -1,0 +1,4 @@
+# ঐচ্ছিক: রাতের Missing punch চেক Celery Beat দিয়ে চালাতে (Redis সার্ভার লাগবে)
+# Celery ছাড়াও চলে: python manage.py check_missing_punches (cron / Task Scheduler)
+celery==5.4.0
+redis==5.0.8

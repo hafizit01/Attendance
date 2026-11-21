@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block title %}Live Punches{% endblock %}
+{% block content %}
+<div class="space-y-6" x-data="liveFeed()" x-init="start()">
+  <div class="page-header">
+    <div>
+      <p class="eyebrow"><span class="live-dot"><span></span></span>Live</p>
+      <h1 class="page-title">Live <span class="text-gradient">Punches</span></h1>
+      <p class="page-subtitle">মেশিনে ফেস / ফিঙ্গার / কার্ড দিলেই এখানে চলে আসে — প্রতি ১০ সেকেন্ডে আপডেট।</p>
+    </div>
+    <div class="flex items-center gap-3">
+      {% if live %}
+      <label class="flex cursor-pointer items-center gap-2 text-sm font-medium text-slate-600 dark:text-slate-300">
+        <input type="checkbox" x-model="auto" class="form-checkbox"> Auto refresh
+      </label>
+      <span class="text-xs text-slate-400" x-text="updated ? 'Updated ' + updated : ''"></span>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="grid grid-cols-2 gap-4 lg:grid-cols-4">
+    <div class="stat-card"><p class="stat-label">Punches today</p><p class="stat-value">{{ today_total }}</p></div>
+    <div class="stat-card"><p class="stat-label">People punched today</p><p class="stat-value text-emerald-600 dark:text-emerald-400">{{ today_people }}</p></div>
+    <div class="stat-card col-span-2">
+      <p class="stat-label">Today by method</p>
+      <div class="mt-3 flex flex-wrap gap-3">
+        {% for m in today_by_method %}
+          <div class="flex items-center gap-2 rounded-xl bg-slate-50 py-1.5 pl-1.5 pr-3 dark:bg-white/[0.04]">{% include "devices/_method_icon.html" with method=m.method %}<span class="text-sm font-semibold capitalize">{{ m.method }}</span><span class="text-sm tabular-nums text-slate-500">{{ m.n }}</span></div>
+        {% empty %}<p class="text-sm text-slate-400">আজ এখনো কোনো পাঞ্চ নেই</p>{% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <form method="get" class="card flex flex-col gap-3 p-4 sm:flex-row sm:items-end">
+    <div class="sm:w-64">
+      <label class="form-label" for="f-device">Device</label>
+      <select id="f-device" name="device" class="form-select" onchange="this.form.submit()">
+        <option value="">All devices</option>
+        {% for d in devices %}<option value="{{ d.id }}" {% if d.id == selected_device %}selected{% endif %}>{{ d.name }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="sm:w-48">
+      <label class="form-label" for="f-method">Method</label>
+      <select id="f-method" name="method" class="form-select" onchange="this.form.submit()">
+        <option value="">All methods</option>
+        {% for v, l in methods %}<option value="{{ v }}" {% if v == selected_method %}selected{% endif %}>{{ l }}</option>{% endfor %}
+      </select>
+    </div>
+    <label class="flex items-center gap-2 pb-2.5 text-sm font-medium text-slate-600 dark:text-slate-300">
+      <input type="checkbox" name="unknown" value="1" class="form-checkbox" {% if unknown_only %}checked{% endif %} onchange="this.form.submit()"> Unknown IDs only
+    </label>
+  </form>
+
+  <div class="card overflow-hidden">
+    <div class="overflow-x-auto">
+      <table class="responsive-table table-modern">
+        <thead><tr><th>Employee</th><th>Time</th><th>Method</th><th>Device</th><th>Source</th></tr></thead>
+        <tbody x-ref="rows">{% include "devices/_punch_rows.html" %}</tbody>
+      </table>
+    </div>
+    {% include "partials/pagination.html" with page=page_obj %}
+  </div>
+</div>
+
+<script>
+function liveFeed() {
+  return {
+    auto: {% if live %}true{% else %}false{% endif %}, updated: '', timer: null,
+    start() {
+      this.timer = setInterval(() => { if (this.auto && !document.hidden) this.refresh(); }, 10000);
+    },
+    async refresh() {
+      const url = new URL(window.location.href);
+      url.searchParams.set('partial', '1');
+      try {
+        const res = await fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+        if (!res.ok) return;
+        this.$refs.rows.innerHTML = await res.text();
+        if (window.labelResponsiveTables) labelResponsiveTables(this.$refs.rows.closest('table').parentNode);
+        this.updated = new Date().toLocaleTimeString();
+      } catch (e) {}
+    }
+  };
+}
+</script>
+{% endblock %}

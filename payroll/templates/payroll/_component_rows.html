@@ -1,0 +1,28 @@
+<ul class="divide-y divide-slate-100 dark:divide-white/[0.05]">
+  {% for c in items %}
+  <li class="flex flex-wrap items-center justify-between gap-3 px-5 py-3.5 {% if not c.is_active %}opacity-50{% endif %}">
+    <div class="min-w-0">
+      <p class="font-medium text-slate-900 dark:text-white">{{ c.name }} {% if not c.is_active %}<span class="pill-muted ml-1">Inactive</span>{% endif %}</p>
+      <p class="text-xs text-slate-500">
+        Default {% if c.calc_type == 'percent' %}{{ c.default_value|floatformat:"-2" }}% of basic{% else %}৳{{ c.default_value|floatformat:"0g" }}{% endif %}
+        {% if c.kind == 'earning' %} · {% if c.prorate %}attendance-based{% else %}fixed every month{% endif %}{% endif %}
+      </p>
+    </div>
+    <div class="flex items-center gap-4">
+      <div class="text-right">
+        <p class="text-sm font-semibold tabular-nums text-slate-900 dark:text-white">৳{{ c.total|default:0|floatformat:"0g" }}</p>
+        <p class="text-[11px] text-slate-500">{{ c.staff }} employee{{ c.staff|pluralize }}</p>
+      </div>
+      {% if can_manage %}
+      <div class="flex gap-0.5">
+        <a href="{% url 'payroll:component_edit' c.id %}" class="act" aria-label="Edit {{ c.name }}">{% include "partials/icon.html" with name="pencil" cls="h-4 w-4" %}<span class="tip">Edit</span></a>
+        <form method="post" action="{% url 'payroll:component_delete' c.id %}" onsubmit="return confirm('“{{ c.name|escapejs }}” মুছবেন? কর্মচারীদের বেতনে থাকলে শুধু বন্ধ হবে।');">{% csrf_token %}
+          <button class="act hover:!text-rose-600" aria-label="Delete {{ c.name }}">{% include "partials/icon.html" with name="trash" cls="h-4 w-4" %}<span class="tip">Delete</span></button></form>
+      </div>
+      {% endif %}
+    </div>
+  </li>
+  {% empty %}
+  <li class="px-5 py-6 text-center text-sm text-slate-500">None yet</li>
+  {% endfor %}
+</ul>

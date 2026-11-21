@@ -2,6 +2,8 @@
 {% block title %}Salary Summary{% endblock %}
 {% block content %}
 <div class="space-y-6">
+  {% include "payroll/_tabs.html" with tab="run" %}
+
 
   <div class="page-header">
     <div>
@@ -9,12 +11,23 @@
       <h1 class="page-title">Salary Summary</h1>
       <p class="page-subtitle">{% if branch_name %}<span class="font-semibold text-slate-700 dark:text-slate-200">{{ branch_name }}</span> · {% endif %}Monthly payroll breakdown{% if selected_month %} for <span class="font-semibold text-slate-700 dark:text-slate-200">{{ selected_month }}</span>{% endif %}.</p>
     </div>
-    {% if summaries %}
-    <a href="{% url 'payroll:salary_summary_pdf' %}?month={{ selected_month }}{% if selected_department %}&department={{ selected_department }}{% endif %}{% if selected_employee %}&employee={{ selected_employee }}{% endif %}"
-       target="_blank" rel="noopener" class="btn-success self-start lg:self-auto">
-      {% include "partials/icon.html" with name="download" cls="h-4 w-4" %}Export PDF
-    </a>
-    {% endif %}
+    <div class="flex flex-wrap gap-2 self-start lg:self-auto">
+      <a href="{% url 'payroll:loan_list' %}" class="btn-secondary">{% include "partials/icon.html" with name="money" cls="h-4 w-4" %}Loans & advances</a>
+      {% if summaries %}
+      {% if can_change_settings and salary_sms_enabled %}
+      <form method="post" action="{% url 'payroll:send_salary_sms' %}" onsubmit="return confirm('{{ selected_month }} মাসের বেতন দেওয়ার SMS সব কর্মচারীকে পাঠাবেন? (একজনকে একবারই যায়)');">
+        {% csrf_token %}<input type="hidden" name="month" value="{{ selected_month }}">
+        <button class="btn-secondary">{% include "partials/icon.html" with name="chat" cls="h-4 w-4" %}Send salary SMS</button>
+      </form>
+      {% endif %}
+      <a href="{% url 'payroll:salary_summary_excel' %}?month={{ selected_month }}{% if selected_department %}&department={{ selected_department }}{% endif %}{% if selected_employee %}&employee={{ selected_employee }}{% endif %}"
+         class="btn-secondary">{% include "partials/excel_icon.html" %}Export Excel</a>
+      <a href="{% url 'payroll:salary_summary_pdf' %}?month={{ selected_month }}{% if selected_department %}&department={{ selected_department }}{% endif %}{% if selected_employee %}&employee={{ selected_employee }}{% endif %}"
+         target="_blank" rel="noopener" class="btn-success">
+        {% include "partials/icon.html" with name="download" cls="h-4 w-4" %}Export PDF
+      </a>
+      {% endif %}
+    </div>
   </div>
 
   {# ── মোট হিসাব ── #}
@@ -25,7 +38,7 @@
         <div class="min-w-0"><p class="stat-label">Total Base Salary</p><p class="stat-value text-2xl">৳{{ total_base_salary|floatformat:"0g" }}</p></div>
         <span class="stat-icon bg-primary-50 text-primary-600 dark:bg-primary-500/10 dark:text-primary-400">{% include "partials/icon.html" with name="money" %}</span>
       </div>
-      <p class="mt-3 text-xs text-slate-500">{{ summaries|length }} employee{{ summaries|length|pluralize }}</p>
+      <p class="mt-3 text-xs text-slate-500">{{ summary_count }} employee{{ summary_count|pluralize }}</p>
     </div>
     <div class="stat-card">
       <div class="flex items-start justify-between gap-3">
@@ -90,6 +103,8 @@
         <div class="flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
           <span>ফিগার মিল:</span>
           {% if rounding_enabled %}<span class="badge-success">চালু</span>{% else %}<span class="badge-neutral">বন্ধ</span>{% endif %}
+          <span>· Late cut:</span>
+          {% if late_deduction_enabled %}<span class="badge-warning">{{ lates_per_day }} দিন দেরি = ১ দিন</span>{% else %}<span class="badge-neutral">বন্ধ</span>{% endif %}
         </div>
         <p class="text-xs leading-relaxed text-slate-500 dark:text-slate-400">
           ওভারটাইম: {{ company.get_ot_calculation_display }} · ×{{ ot_settings.ot_multiplier|floatformat:"-2" }}
@@ -107,7 +122,7 @@
 
   {# ── মোবাইল: প্রতি কর্মচারীর কার্ড ── #}
   <div class="space-y-3 md:hidden">
-    {% for s in summaries %}
+    {% for s in page_rows %}
     <details class="card group overflow-hidden">
       <summary class="flex cursor-pointer list-none items-start justify-between gap-3 p-4 [&::-webkit-details-marker]:hidden">
         <div class="flex min-w-0 items-center gap-3">
@@ -129,6 +144,7 @@
       </div>
       <div class="flex flex-wrap gap-1.5 px-4 pb-3">
         <span class="badge-success">{{ s.present_days }} present</span>
+        {% if s.late_deduction %}<span class="badge-warning">Late cut −৳{{ s.late_deduction|floatformat:"0g" }}</span>{% endif %}
         {% if s.absent_days %}<span class="badge-danger">{{ s.absent_days }} absent</span>{% endif %}
         {% if s.leave_days %}<span class="badge-info">{{ s.leave_days }} leave</span>{% endif %}
         {% if s.late_time != "00:00" %}<span class="badge-warning">Late {{ s.late_time }}</span>{% endif %}
@@ -147,6 +163,8 @@
         <dt class="text-slate-500">Time diff</dt><dd class="text-right font-mono text-xs tabular-nums {% if s.time_difference_val < 0 %}text-rose-600{% else %}text-emerald-600{% endif %}">{{ s.time_difference_str }}</dd>
         <dt class="text-slate-500">Earned</dt><dd class="text-right tabular-nums">৳{{ s.earned_salary|floatformat:"0g" }}</dd>
         <dt class="text-slate-500">Bonus</dt><dd class="text-right tabular-nums">{% if s.bonus_amount %}৳{{ s.bonus_amount|floatformat:"0g" }}{% else %}—{% endif %}</dd>
+        {% if s.loan_deduction %}<dt class="text-slate-500">Loan deduction</dt><dd class="text-right tabular-nums text-sky-700 dark:text-sky-300">−৳{{ s.loan_deduction|floatformat:"0g" }}</dd>{% endif %}
+        {% if late_deduction_enabled %}<dt class="text-slate-500">Late cut ({{ s.late_days }} late → {{ s.late_deduction_days }} day)</dt><dd class="text-right tabular-nums text-amber-700 dark:text-amber-300">{% if s.late_deduction %}−৳{{ s.late_deduction|floatformat:"0g" }}{% else %}—{% endif %}</dd>{% endif %}
         {% if s.rounding_adjustment %}<dt class="text-slate-500">Rounded (from ৳{{ s.payable_cash_raw|floatformat:2 }})</dt><dd class="text-right tabular-nums">+{{ s.rounding_adjustment|floatformat:2 }}</dd>{% endif %}
       </dl>
     </details>
@@ -154,6 +172,7 @@
 
     <div class="card grid grid-cols-2 gap-3 p-4 text-sm">
       <div><p class="text-xs text-slate-500">Total final</p><p class="text-lg font-bold tabular-nums text-emerald-600 dark:text-emerald-400">৳{{ total_final_salary|floatformat:"0g" }}</p></div>
+      {% if page_obj.paginator.num_pages > 1 %}<p class="col-span-2 -mb-1 text-[11px] text-slate-400">Totals: all {{ summary_count }} employees</p>{% endif %}
       <div class="text-right"><p class="text-xs text-slate-500">Total payable cash</p><p class="text-lg font-bold tabular-nums text-rose-600 dark:text-rose-400">৳{{ total_payable_cash|floatformat:"0g" }}</p></div>
     </div>
   </div>
@@ -181,15 +200,17 @@
             <th class="text-center">Diff</th>
             <th class="text-right">Earned</th>
             <th class="text-right">Bonus</th>
+            {% if late_deduction_enabled %}<th class="text-right !bg-amber-50 !text-amber-800 dark:!bg-amber-500/10 dark:!text-amber-300" title="প্রতি {{ lates_per_day }} দিন দেরি = ১ দিনের বেতন কাটা">Late cut</th>{% endif %}
+            {% if loan_deduction_any %}<th class="text-right !bg-sky-50 !text-sky-800 dark:!bg-sky-500/10 dark:!text-sky-300" title="লোন / অগ্রিমের মাসিক কিস্তি">Loan deduction</th>{% endif %}
             <th class="text-right !bg-emerald-50 !text-emerald-700 dark:!bg-emerald-500/10 dark:!text-emerald-300">Final</th>
             <th class="text-right !bg-rose-50 !text-rose-700 dark:!bg-rose-500/10 dark:!text-rose-300">Payable</th>
             <th class="text-right">± Base</th>
           </tr>
         </thead>
         <tbody class="tabular-nums text-slate-700 dark:text-slate-300">
-          {% for s in summaries %}
+          {% for s in page_rows %}
           <tr class="group [&>td]:whitespace-nowrap [&>td]:border-b [&>td]:border-slate-100 [&>td]:px-3 [&>td]:py-3 [&>td]:transition-colors [&>td]:duration-200 hover:[&>td]:bg-gray-50 dark:[&>td]:border-slate-800 dark:hover:[&>td]:bg-slate-800/60">
-            <td class="sticky left-0 z-10 bg-white text-center text-slate-400 dark:bg-slate-900">{{ forloop.counter }}</td>
+            <td class="sticky left-0 z-10 bg-white text-center text-slate-400 dark:bg-slate-900">{{ forloop.counter|add:page_offset }}</td>
             <td class="sticky left-10 z-10 max-w-[14rem] bg-white shadow-[6px_0_8px_-6px_rgba(15,23,42,0.15)] dark:bg-slate-900" title="{{ s.employee.name }}">
               <p class="truncate text-sm font-semibold text-slate-900 dark:text-white">{{ s.employee.name }}</p>
               <p class="truncate text-[11px] text-slate-400">{{ s.employee.department.name|default:"—" }}</p>
@@ -209,6 +230,8 @@
             <td class="text-center font-mono font-semibold {% if s.time_difference_val < 0 %}text-rose-600 dark:text-rose-400{% else %}text-emerald-600 dark:text-emerald-400{% endif %}">{{ s.time_difference_str }}</td>
             <td class="text-right">{{ s.earned_salary|floatformat:"0g" }}</td>
             <td class="text-right">{% if s.bonus_amount %}<span class="badge-warning px-2 py-0.5">{{ s.bonus_amount|floatformat:"0g" }}</span>{% else %}<span class="text-slate-300 dark:text-slate-600">—</span>{% endif %}</td>
+            {% if late_deduction_enabled %}<td class="text-right" title="{{ s.late_days }} দিন দেরি">{% if s.late_deduction %}<span class="font-semibold text-amber-700 dark:text-amber-300">−{{ s.late_deduction|floatformat:"0g" }}</span><span class="block text-[10px] font-normal text-slate-400">{{ s.late_days }} late → {{ s.late_deduction_days }} day{{ s.late_deduction_days|pluralize }}</span>{% else %}<span class="text-slate-300 dark:text-slate-600">{% if s.late_days %}{{ s.late_days }} late{% else %}—{% endif %}</span>{% endif %}</td>{% endif %}
+            {% if loan_deduction_any %}<td class="text-right">{% if s.loan_deduction or s.loan_shortfall %}<span class="font-semibold text-sky-700 dark:text-sky-300">−{{ s.loan_deduction|floatformat:"0g" }}</span>{% for i in s.loan_items %}<span class="block text-[10px] font-normal text-slate-400">{{ i.loan.get_loan_type_display }} · বাকি {{ i.remaining|floatformat:"0g" }}</span>{% endfor %}{% if s.loan_shortfall %}<span class="block text-[10px] font-semibold text-rose-500">বেতন কম: {{ s.loan_shortfall|floatformat:"0g" }} কাটা যায়নি</span>{% endif %}{% else %}<span class="text-slate-300 dark:text-slate-600">—</span>{% endif %}</td>{% endif %}
             <td class="bg-emerald-50/50 text-right text-sm font-bold text-emerald-700 dark:bg-emerald-500/5 dark:text-emerald-300">{{ s.final_salary|floatformat:"0g" }}</td>
             <td class="bg-rose-50/50 text-right text-sm font-bold text-rose-700 dark:bg-rose-500/5 dark:text-rose-300" {% if s.rounding_adjustment %}title="আসল: {{ s.payable_cash_raw|floatformat:2 }}"{% endif %}>
               {{ s.payable_cash|floatformat:"0g" }}
@@ -220,13 +243,15 @@
         </tbody>
         <tfoot class="tabular-nums text-sm font-bold text-slate-900 dark:text-white">
           <tr class="[&>td]:whitespace-nowrap [&>td]:bg-slate-50 [&>td]:px-3 [&>td]:py-3.5 dark:[&>td]:bg-slate-800">
-            <td colspan="2" class="sticky left-0 z-10 text-right text-xs uppercase tracking-wider text-slate-500 shadow-[6px_0_8px_-6px_rgba(15,23,42,0.15)]">Total</td>
+            <td colspan="2" class="sticky left-0 z-10 text-right text-xs uppercase tracking-wider text-slate-500 shadow-[6px_0_8px_-6px_rgba(15,23,42,0.15)]">Total{% if page_obj.paginator.num_pages > 1 %} <span class="block text-[10px] font-normal normal-case tracking-normal">all {{ summary_count }} employees</span>{% endif %}</td>
             <td class="text-right">{{ total_base_salary|floatformat:"0g" }}</td>
             <td class="text-right">{{ total_bank_transfer|floatformat:"0g" }}</td>
             <td class="text-right">{{ total_cash_amount|floatformat:"0g" }}</td>
             <td colspan="10"></td>
             <td class="text-right">{{ total_earned|floatformat:"0g" }}</td>
             <td class="text-right">{{ total_bonus|floatformat:"0g" }}</td>
+            {% if late_deduction_enabled %}<td class="text-right text-amber-700 dark:text-amber-300">{% if total_late_deduction %}−{{ total_late_deduction|floatformat:"0g" }}{% else %}0{% endif %}</td>{% endif %}
+            {% if loan_deduction_any %}<td class="text-right text-sky-700 dark:text-sky-300">−{{ total_loan_deduction|floatformat:"0g" }}</td>{% endif %}
             <td class="!bg-emerald-50 text-right text-emerald-700 dark:!bg-emerald-500/10 dark:text-emerald-300">{{ total_final_salary|floatformat:"0g" }}</td>
             <td class="!bg-rose-50 text-right text-rose-700 dark:!bg-rose-500/10 dark:text-rose-300">
               {{ total_payable_cash|floatformat:"0g" }}
@@ -237,6 +262,7 @@
         </tfoot>
       </table>
     </div>
+    {% include "partials/pagination.html" with page=page_obj %}
   </div>
 
   {% else %}

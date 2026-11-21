@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}{{ employee.name }} · Shifts{% endblock %}
+{% block content %}
+<div class="mx-auto max-w-3xl space-y-6">
+  <div>
+    <a href="{% url 'attendance_app:shift_roster' %}" class="btn-ghost btn-sm -ml-3 mb-2">← Roster</a>
+    <h1 class="page-title">{{ employee.name }}</h1>
+    <p class="page-subtitle">ID {{ employee.device_user_id }} · {{ employee.department.name|default:"—" }} — শিফটের ইতিহাস</p>
+  </div>
+
+  <div class="card p-5">
+    <p class="kv-label">Default (no assignment)</p>
+    <p class="kv-value">{% if base_shift.name %}{{ base_shift.name }} · {% endif %}{{ base_shift.in_time|time:"h:i A" }} – {{ base_shift.out_time|time:"h:i A" }} · Off: {{ base_shift.off_day }}</p>
+  </div>
+
+  <div class="card overflow-hidden">
+    <div class="card-header"><p class="card-title">{% include "partials/icon.html" with name="calendar" cls="h-4 w-4 text-primary-500" %}Assignments</p>
+      <a href="{% url 'attendance_app:shift_assign' %}?department={{ employee.department_id|default:'' }}" class="btn-primary btn-sm">{% include "partials/icon.html" with name="plus" cls="h-4 w-4" %}Assign</a></div>
+    <ol class="relative space-y-0 p-5">
+      {% for a in assignments %}
+      <li class="relative flex gap-4 pb-6 last:pb-0">
+        <span class="relative z-10 mt-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-{{ a.shift.color }}-100 text-sm font-bold text-{{ a.shift.color }}-700 dark:bg-{{ a.shift.color }}-500/15 dark:text-{{ a.shift.color }}-300">{{ a.shift.short }}</span>
+        {% if not forloop.last %}<span class="absolute left-[1.1rem] top-11 h-[calc(100%-2.75rem)] w-px bg-slate-200 dark:bg-white/10"></span>{% endif %}
+        <div class="min-w-0 flex-1">
+          <div class="flex items-start justify-between gap-3">
+            <div>
+              <p class="font-semibold text-slate-900 dark:text-white">{{ a.shift.name }} <span class="font-normal text-slate-500">· {{ a.shift.start_time|time:"h:i A" }}–{{ a.shift.end_time|time:"h:i A" }}</span></p>
+              <p class="text-sm text-slate-600 dark:text-slate-300">{{ a.start_date|date:"d M Y" }} → {% if a.end_date %}{{ a.end_date|date:"d M Y" }}{% else %}<span class="badge-success">Ongoing</span>{% endif %}</p>
+              <p class="mt-0.5 text-xs text-slate-400">by {{ a.created_by.username|default:"—" }} · {{ a.created_at|date:"d M Y" }}</p>
+            </div>
+            <form method="post" action="{% url 'attendance_app:shift_assignment_delete' a.id %}" onsubmit="return confirm('এই অ্যাসাইনমেন্ট মুছবেন? ওই সময়ের হিসাব ডিফল্ট শিফটে হবে।');">{% csrf_token %}
+              <button class="btn-icon h-8 w-8 hover:bg-rose-50 hover:text-rose-600" title="Remove">{% include "partials/icon.html" with name="trash" cls="h-4 w-4" %}</button>
+            </form>
+          </div>
+        </div>
+      </li>
+      {% empty %}
+      <li>{% include "partials/empty_state.html" with icon="calendar" title="No shift assigned" text="ডিফল্ট শিফট/অফিস টাইম অনুযায়ী হিসাব হচ্ছে।" %}</li>
+      {% endfor %}
+    </ol>
+  </div>
+</div>
+{% endblock %}

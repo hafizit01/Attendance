@@ -34,7 +34,7 @@
       <th class="grp" colspan="3">Base salary (৳)</th>
       <th class="grp" colspan="5">Days</th>
       <th class="grp" colspan="5">Hours (hh:mm)</th>
-      <th class="grp" colspan="5">Payment (৳)</th>
+      <th class="grp" colspan="{% if late_deduction_enabled and loan_deduction_any %}7{% elif late_deduction_enabled or loan_deduction_any %}6{% else %}5{% endif %}">Payment (৳)</th>
     </tr>
     <tr>
       <th style="width:2.5%">#</th>
@@ -42,7 +42,7 @@
       <th class="num sep">Base</th><th class="num">Bank</th><th class="num">Cash</th>
       <th class="ctr sep">Pres</th><th class="ctr">Leave</th><th class="ctr">Abs</th><th class="ctr">Off</th><th class="ctr">Hol</th>
       <th class="num sep">Late</th><th class="num">OT</th><th class="num">Exp</th><th class="num">Work</th><th class="num">Diff</th>
-      <th class="num sep">Earned</th><th class="num">Bonus</th><th class="num">Final</th><th class="num">Payable</th><th class="num">Sal. diff</th>
+      <th class="num sep">Earned</th><th class="num">Bonus</th>{% if late_deduction_enabled %}<th class="num">Late cut</th>{% endif %}{% if loan_deduction_any %}<th class="num">Loan</th>{% endif %}<th class="num">Final</th><th class="num">Payable</th><th class="num">Sal. diff</th>
     </tr>
   </thead>
   <tbody>
@@ -65,6 +65,8 @@
       <td class="num {% if s.time_difference_val < 0 %}neg{% endif %}">{{ s.time_difference_str }}</td>
       <td class="num sep">{{ s.earned_salary|floatformat:"0g" }}</td>
       <td class="num {% if not s.bonus_amount %}muted{% endif %}">{{ s.bonus_amount|floatformat:"0g" }}</td>
+      {% if late_deduction_enabled %}<td class="num {% if s.late_deduction %}neg{% else %}muted{% endif %}">{% if s.late_deduction %}−{{ s.late_deduction|floatformat:"0g" }}<div class="sub">{{ s.late_days }} late → {{ s.late_deduction_days }}d</div>{% else %}0{% endif %}</td>{% endif %}
+      {% if loan_deduction_any %}<td class="num {% if s.loan_deduction %}neg{% else %}muted{% endif %}">{% if s.loan_deduction %}−{{ s.loan_deduction|floatformat:"0g" }}{% for i in s.loan_items %}<div class="sub">left {{ i.remaining|floatformat:"0g" }}</div>{% endfor %}{% else %}0{% endif %}</td>{% endif %}
       <td class="num hl-final">{{ s.final_salary|floatformat:"0g" }}</td>
       <td class="num hl-pay">{{ s.payable_cash|floatformat:"0g" }}{% if s.rounding_adjustment %}<div class="sub">+{{ s.rounding_adjustment|floatformat:2 }}</div>{% endif %}</td>
       <td class="num {% if s.salary_difference < 0 %}neg{% else %}pos{% endif %}">{{ s.salary_difference|floatformat:"0g" }}</td>
@@ -83,6 +85,8 @@
       <td colspan="10" class="sep"></td>
       <td class="num sep">{{ total_earned|floatformat:"0g" }}</td>
       <td class="num">{{ total_bonus|floatformat:"0g" }}</td>
+      {% if late_deduction_enabled %}<td class="num neg">{% if total_late_deduction %}−{{ total_late_deduction|floatformat:"0g" }}{% else %}0{% endif %}</td>{% endif %}
+      {% if loan_deduction_any %}<td class="num neg">−{{ total_loan_deduction|floatformat:"0g" }}</td>{% endif %}
       <td class="num">{{ total_final_salary|floatformat:"0g" }}</td>
       <td class="num">{{ total_payable_cash|floatformat:"0g" }}</td>
       <td class="num {% if total_salary_difference < 0 %}neg{% endif %}">{{ total_salary_difference|floatformat:"0g" }}</td>
@@ -91,6 +95,9 @@
   {% endif %}
 </table>
 
+{% if late_deduction_enabled and summaries %}
+<p class="note">* Late cut: every {{ lates_per_day }} late working days = 1 day's basic salary deducted. Total deducted: ৳{{ total_late_deduction|floatformat:2 }}.</p>
+{% endif %}
 {% if rounding_enabled and summaries %}
 <p class="note">* Payable cash is rounded up to the nearest 50 / 100 ৳ (last two digits 1–50 → 50, 51–99 → 100). Total rounding: ৳{{ total_rounding_adjustment|floatformat:2 }}.</p>
 {% endif %}

@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}Assign Shift{% endblock %}
+{% block content %}
+<div class="space-y-6">
+  <div class="page-header">
+    <div>
+      <p class="eyebrow">{% include "partials/icon.html" with name="users" cls="h-3.5 w-3.5" %}Shift management</p>
+      <h1 class="page-title">Assign <span class="text-gradient">Shift</span></h1>
+      <p class="page-subtitle">কর্মচারী বাছাই করে তারিখসহ শিফট দিন। আগের তারিখের হিসাব বদলায় না — শুধু এই তারিখ থেকে নতুন শিফট।</p>
+    </div>
+    <a href="{% url 'attendance_app:shift_roster' %}" class="btn-secondary">{% include "partials/icon.html" with name="grid" cls="h-4 w-4" %}View roster</a>
+  </div>
+
+  {% if not has_shifts %}
+  <div class="card p-8 text-center">
+    <p class="font-semibold text-slate-900 dark:text-white">আগে একটা শিফট বানান</p>
+    <a href="{% url 'attendance_app:shift_add' %}" class="btn-primary mt-4">{% include "partials/icon.html" with name="plus" cls="h-4 w-4" %}New shift</a>
+  </div>
+  {% else %}
+  <form method="post" class="grid grid-cols-1 gap-6 lg:grid-cols-3" x-data="{ q: '', all: false }">
+    {% csrf_token %}
+    <input type="hidden" name="department" value="{{ selected_department|default:'' }}">
+
+    <div class="card h-fit space-y-5 p-5 lg:sticky lg:top-24">
+      <p class="card-title">{% include "partials/icon.html" with name="swap" cls="h-4 w-4 text-primary-500" %}Shift & dates</p>
+      {% include "partials/form_field.html" with field=form.shift %}
+      {% include "partials/form_field.html" with field=form.start_date %}
+      {% include "partials/form_field.html" with field=form.end_date %}
+      {% for e in form.employees.errors %}<p class="form-error">{{ e }}</p>{% endfor %}
+      <button type="submit" class="btn-primary w-full">{% include "partials/icon.html" with name="check-circle" cls="h-4 w-4" %}Assign to selected</button>
+    </div>
+
+    <div class="card overflow-hidden lg:col-span-2">
+      <div class="flex flex-col gap-3 border-b border-slate-100 p-4 sm:flex-row sm:items-center dark:border-white/[0.06]">
+        <select class="form-select sm:w-60" onchange="window.location='?department=' + this.value">
+          <option value="">All departments</option>
+          {% for d in departments %}<option value="{{ d.id }}" {% if d.id == selected_department %}selected{% endif %}>{% if d.branch %}{{ d.branch.name }} · {% endif %}{{ d.name }}</option>{% endfor %}
+        </select>
+        <input type="search" x-model="q" placeholder="Search name or ID…" class="form-input sm:flex-1">
+        <label class="flex items-center gap-2 whitespace-nowrap text-sm font-medium text-slate-600 dark:text-slate-300">
+          <input type="checkbox" class="form-checkbox" x-model="all"
+                 @change="$root.querySelectorAll('input[name=employees]').forEach(c => { if (c.closest('label').style.display !== 'none') c.checked = all })"> Select all
+        </label>
+      </div>
+      <div class="grid max-h-[65vh] grid-cols-1 gap-2 overflow-y-auto p-4 sm:grid-cols-2">
+        {% for emp, sh in rows %}
+        <label class="flex cursor-pointer items-center gap-3 rounded-xl border border-slate-200 p-3 transition hover:border-primary-300 has-[:checked]:border-primary-400 has-[:checked]:bg-primary-50/60 dark:border-slate-700 dark:has-[:checked]:bg-primary-500/10"
+               x-show="!q || '{{ emp.name|lower|escapejs }} {{ emp.device_user_id }}'.includes(q.toLowerCase())">
+          <input type="checkbox" name="employees" value="{{ emp.id }}" class="form-checkbox">
+          <span class="avatar">{{ emp.name|slice:":2" }}</span>
+          <span class="min-w-0 flex-1">
+            <span class="block truncate text-sm font-semibold text-slate-900 dark:text-white">{{ emp.name }}</span>
+            <span class="block truncate text-xs text-slate-500">ID {{ emp.device_user_id }} · {{ emp.department.name|default:"—" }}</span>
+          </span>
+          {% if sh.name %}<span class="badge bg-{{ sh.color }}-50 text-{{ sh.color }}-700 ring-{{ sh.color }}-600/20 dark:bg-{{ sh.color }}-500/10 dark:text-{{ sh.color }}-300">{{ sh.name }}</span>
+          {% else %}<span class="badge-neutral" title="ডিপার্টমেন্টের সময়">{{ sh.in_time|time:"h:i A" }}</span>{% endif %}
+        </label>
+        {% empty %}
+        <div class="sm:col-span-2">{% include "partials/empty_state.html" with icon="users" title="No active employees" %}</div>
+        {% endfor %}
+      </div>
+    </div>
+  </form>
+  {% endif %}
+</div>
+{% endblock %}

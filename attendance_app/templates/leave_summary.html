@@ -10,6 +10,8 @@
     </div>
     <a href="{% url 'attendance_app:leave_summary_pdf' %}?q={{ q|urlencode }}&status={{ status }}&department={{ department }}&date_from={{ date_from|date:'Y-m-d' }}&date_to={{ date_to|date:'Y-m-d' }}"
        target="_blank" rel="noopener" class="btn-secondary self-start lg:self-auto">{% include "partials/icon.html" with name="download" cls="h-4 w-4" %}Export PDF</a>
+    <a href="{% url 'attendance_app:leave_summary_excel' %}?q={{ q|urlencode }}&status={{ status }}&department={{ department }}&date_from={{ date_from|date:'Y-m-d' }}&date_to={{ date_to|date:'Y-m-d' }}"
+       class="btn-secondary self-start lg:self-auto">{% include "partials/excel_icon.html" %}Export Excel</a>
   </div>
 
   <div class="card p-4 sm:p-5">

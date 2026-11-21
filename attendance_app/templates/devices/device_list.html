@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% block title %}Devices{% endblock %}
+{% block content %}
+<div class="space-y-6">
+  <div class="page-header">
+    <div>
+      <p class="eyebrow">{% include "partials/icon.html" with name="device" cls="h-3.5 w-3.5" %}Machines</p>
+      <h1 class="page-title">Attendance <span class="text-gradient">Devices</span></h1>
+      <p class="page-subtitle">ফেস, ফিঙ্গার, কার্ড, পাম — ZKTeco, eSSL, Hikvision ও অন্যান্য মেশিন এক জায়গায়।</p>
+    </div>
+    <div class="flex flex-wrap gap-2">
+      <a href="{% url 'attendance_app:punch_feed' %}" class="btn-secondary">{% include "partials/icon.html" with name="signal" cls="h-4 w-4" %}Live punches</a>
+      {% if can_manage %}
+      <a href="{% url 'attendance_app:device_add' %}" class="btn-primary">{% include "partials/icon.html" with name="plus" cls="h-4 w-4" %}Add device</a>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="grid grid-cols-2 gap-4 lg:grid-cols-4">
+    <div class="stat-card">
+      <div class="flex items-center justify-between"><p class="stat-label">Total devices</p><span class="stat-icon bg-primary-50 text-primary-600 dark:bg-primary-500/10 dark:text-primary-300">{% include "partials/icon.html" with name="device" %}</span></div>
+      <p class="stat-value">{{ devices|length }}</p>
+    </div>
+    <div class="stat-card">
+      <div class="flex items-center justify-between"><p class="stat-label">Online now</p><span class="stat-icon bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-300">{% include "partials/icon.html" with name="signal" %}</span></div>
+      <p class="stat-value text-emerald-600 dark:text-emerald-400">{{ online_count }}</p>
+    </div>
+    <div class="stat-card">
+      <div class="flex items-center justify-between"><p class="stat-label">Offline / not seen</p><span class="stat-icon bg-slate-100 text-slate-500 dark:bg-white/5">{% include "partials/icon.html" with name="power" %}</span></div>
+      <p class="stat-value">{{ offline_count }}</p>
+    </div>
+    <div class="stat-card">
+      <div class="flex items-center justify-between"><p class="stat-label">Punches today</p><span class="stat-icon bg-fuchsia-50 text-fuchsia-600 dark:bg-fuchsia-500/10 dark:text-fuchsia-300">{% include "partials/icon.html" with name="bolt" %}</span></div>
+      <p class="stat-value">{{ punches_today }}</p>
+    </div>
+  </div>
+
+  {% if devices %}
+  <div class="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+    {% for d in devices %}
+    <a href="{% url 'attendance_app:device_detail' d.id %}" class="card card-hover group flex flex-col p-5">
+      <div class="flex items-start justify-between gap-3">
+        <div class="flex min-w-0 items-center gap-3">
+          <span class="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl {% if d.brand == 'hikvision' %}bg-gradient-to-br from-rose-500 to-orange-500{% elif d.brand == 'zkteco' %}bg-gradient-to-br from-primary-500 to-violet-600{% else %}bg-gradient-to-br from-slate-500 to-slate-700{% endif %} text-white shadow-lg">
+            {% include "partials/icon.html" with name="device" cls="h-6 w-6" %}
+          </span>
+          <div class="min-w-0">
+            <p class="truncate font-semibold text-slate-900 group-hover:text-primary-600 dark:text-white dark:group-hover:text-primary-300">{{ d.name }}</p>
+            <p class="truncate text-xs text-slate-500">{% if d.department.branch %}{{ d.department.branch.name }} · {% endif %}{{ d.department.name }}</p>
+          </div>
+        </div>
+        {% if not d.is_active %}
+          <span class="badge-neutral">Disabled</span>
+        {% elif d.is_online %}
+          <span class="badge-success"><span class="live-dot"><span></span></span>Online</span>
+        {% else %}
+          <span class="badge-neutral"><span class="off-dot"></span>Offline</span>
+        {% endif %}
+      </div>
+
+      <p class="mt-4 text-xs font-medium text-slate-500 dark:text-slate-400">{{ d.get_protocol_display }}</p>
+
+      <div class="mt-4 grid grid-cols-3 gap-2 text-center">
+        <div class="rounded-xl bg-slate-50 py-2 dark:bg-white/[0.04]"><p class="text-[11px] text-slate-500">Today</p><p class="font-semibold tabular-nums text-slate-900 dark:text-white">{{ d.punches_today }}</p></div>
+        <div class="rounded-xl bg-slate-50 py-2 dark:bg-white/[0.04]"><p class="text-[11px] text-slate-500">Users</p><p class="font-semibold tabular-nums text-slate-900 dark:text-white">{{ d.user_count|default:"—" }}</p></div>
+        <div class="rounded-xl bg-slate-50 py-2 dark:bg-white/[0.04]"><p class="text-[11px] text-slate-500">Faces</p><p class="font-semibold tabular-nums text-slate-900 dark:text-white">{{ d.face_count|default:"—" }}</p></div>
+      </div>
+
+      <div class="mt-4 flex items-center justify-between border-t border-slate-100 pt-3 text-xs text-slate-500 dark:border-white/[0.06]">
+        <span>{% if d.last_seen_at %}Last seen {{ d.last_seen_at|timesince }} ago{% else %}Never connected{% endif %}</span>
+        {% if d.last_error %}<span class="badge-danger" title="{{ d.last_error }}">Error</span>{% endif %}
+      </div>
+    </a>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="card p-8 sm:p-12">
+    <div class="mx-auto max-w-xl text-center">
+      <span class="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-gradient-to-br from-primary-500 to-fuchsia-500 text-white shadow-glow">{% include "partials/icon.html" with name="device" cls="h-8 w-8" %}</span>
+      <h2 class="mt-5 text-lg font-bold text-slate-900 dark:text-white">এখনো কোনো মেশিন যোগ করা হয়নি</h2>
+      <p class="mt-2 text-sm text-slate-500">ফেস/ফিঙ্গার মেশিন যোগ করলে হাজিরা নিজে থেকেই সফটওয়্যারে চলে আসবে।</p>
+      {% if can_manage %}<a href="{% url 'attendance_app:device_add' %}" class="btn-primary mt-6">{% include "partials/icon.html" with name="plus" cls="h-4 w-4" %}Add your first device</a>{% endif %}
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="grid grid-cols-1 gap-4 lg:grid-cols-3">
+    <div class="card p-5">
+      <p class="section-title">{% include "partials/icon.html" with name="bolt" cls="h-4 w-4 text-emerald-500" %}Real-time (সবচেয়ে ভালো)</p>
+      <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">ZKTeco/eSSL এর <b>Cloud Server (ADMS)</b> বা Hikvision এর <b>HTTP push</b> — মেশিন ইন্টারনেট দিয়ে নিজেই লাইভ সার্ভারে পাঞ্চ পাঠায়। কোনো PC লাগে না।</p>
+    </div>
+    <div class="card p-5">
+      <p class="section-title">{% include "partials/icon.html" with name="sync" cls="h-4 w-4 text-primary-500" %}LAN sync</p>
+      <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">সার্ভার ও মেশিন একই নেটওয়ার্কে থাকলে IP দিয়ে সরাসরি পড়া যায় (পুরনো সব ZKTeco মডেল)। ঘণ্টায় একবার অটো সিঙ্ক।</p>
+    </div>
+    <div class="card p-5">
+      <p class="section-title">{% include "partials/icon.html" with name="upload" cls="h-4 w-4 text-fuchsia-500" %}USB file</p>
+      <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">নেটওয়ার্ক নেই? মেশিন থেকে USB তে attlog.dat নিয়ে ডিভাইস পেজে আপলোড করুন।</p>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,6 +1,7 @@
 from django import forms
 from django.core.exceptions import ValidationError
 from .models import *
+from .utils.attendance_helpers import day_range
 
 # employees/forms.py
 from django import forms
@@ -114,14 +115,13 @@ class DepartmentForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         user = kwargs.pop('user', None)
         super().__init__(*args, **kwargs)
-        # ডিভাইসের IP/Port শুধু superuser বদলাতে পারে। disabled ফিল্ডে Django POST এর মান উপেক্ষা করে
-        # আগের মান রাখে — HTML disabled এর মতো সেভ করলে খালি হয়ে যায় না
-        if user is not None and not user.is_superuser:
-            for name in ("device_ip", "device_port"):
-                self.fields[name].disabled = True
-
         # ব্রাঞ্চ: মালিক কোম্পানির যেকোনো ব্রাঞ্চ বাছতে পারে; ম্যানেজারের জন্য নিজের ব্রাঞ্চে লক
         company = _user_company(user) if user is not None else None
+        # হাজিরা মেশিন এখন আলাদা Devices পেজে; এখানে ঐচ্ছিক ডিফল্ট শিফট
+        shift_field = self.fields['default_shift']
+        shift_field.queryset = (Shift.objects.filter(company=company, is_active=True) if company
+                                else Shift.objects.none())
+        shift_field.empty_label = "— None (use office start/end time above) —"
         branch_field = self.fields['branch']
         branch_field.required = True
         branch_field.empty_label = "Select a branch"
@@ -137,7 +137,8 @@ class DepartmentForm(forms.ModelForm):
     class Meta:
         model = Department
         # company ভিউ থেকে user এর কোম্পানি বসায়; ফর্মে রাখলে সব কোম্পানির নাম ড্রপডাউনে দেখা যেত
-        fields = ["branch", "name", "weekly_off_day", "in_time", "out_time", "device_ip", "device_port"]
+        fields = ["branch", "name", "weekly_off_day", "in_time", "out_time", "default_shift",
+                  "manager_name", "manager_phone"]
         widgets = {
             "company": forms.Select(attrs={
                 "class": "w-full border rounded px-3 py-2",
@@ -210,7 +211,7 @@ class AttendanceForm(forms.ModelForm):
             # আজকের দিনের সকল attendance status বের করি
             attendance_qs = Attendance.objects.filter(
                 employee=employee,
-                timestamp__date=date
+                **day_range(date)
             )
 
             # যদি edit mode হয়, তাহলে নিজের টা বাদ দিয়ে হিসাব করব
@@ -273,6 +274,26 @@ class LeaveRequestForm(forms.ModelForm):
                 self.fields['employee'].queryset = Employee.objects.none()
                 self.fields['company'].queryset = Company.objects.none()
                 self.fields['approved_by'].queryset = User.objects.none()
+
+    def clean(self):
+        from .hr.leave_balance import validate_request
+        cleaned = super().clean()
+        emp, lt = cleaned.get('employee'), cleaned.get('leave_type')
+        start, end, status = cleaned.get('start_date'), cleaned.get('end_date'), cleaned.get('status')
+        if start and end and end < start:
+            self.add_error('end_date', "শেষ তারিখ শুরুর তারিখের আগে হতে পারে না।")
+            return cleaned
+        if not (emp and lt and start and end) or status == 'Rejected':
+            return cleaned
+        # আগে থেকে থাকা ছুটি এডিট: একই ধরন আর দিন না বাড়লে নতুন করে আটকাই না (শুধু কারণ/স্ট্যাটাস বদল)
+        inst = self.instance
+        if inst.pk and inst.status in ('Approved', 'Pending') and inst.leave_type == lt and inst.employee_id == emp.id \
+                and (end - start) <= (inst.end_date - inst.start_date) and start >= inst.start_date and end <= inst.end_date:
+            return cleaned
+        error = validate_request(emp, lt, start, end, exclude_id=inst.pk)
+        if error:
+            raise ValidationError(error)
+        return cleaned
 
 
 

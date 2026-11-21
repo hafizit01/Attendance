@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}Bonus & Overtime{% endblock %}
+{% block content %}
+<div class="space-y-6">
+  {% include "payroll/_tabs.html" with tab="bonus" %}
+
+  <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+    <div>
+      <h1 class="text-2xl font-semibold tracking-tight text-slate-900 dark:text-white">Bonus &amp; overtime</h1>
+      <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Overtime rules for the whole company, and yearly bonuses configured per employee.</p>
+    </div>
+    {% if can_change %}<a href="{% url 'payroll:payroll_settings' %}?next={{ request.get_full_path|urlencode }}" class="btn-indigo">{% include "partials/icon.html" with name="cog" cls="h-4 w-4" %}Edit payroll rules</a>{% endif %}
+  </div>
+
+  <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+    <div class="kpi"><p class="kpi-label">Overtime method</p><p class="mt-2 text-sm font-semibold text-slate-900 dark:text-white">{{ company.get_ot_calculation_display }}</p></div>
+    <div class="kpi"><p class="kpi-label">OT rate</p><p class="kpi-value">× {{ company.ot_multiplier|floatformat:"-2" }}</p>
+      <p class="mt-1 text-xs text-slate-500">{% if company.ot_min_minutes %}counted after {{ company.ot_min_minutes }} min{% else %}every extra minute counts{% endif %}</p></div>
+    <div class="kpi"><p class="kpi-label">Holiday work rate</p><p class="kpi-value">{% if company.holiday_ot_multiplier is not None %}× {{ company.holiday_ot_multiplier|floatformat:"-2" }}{% else %}<span class="text-base font-medium text-slate-400">Same as normal</span>{% endif %}</p></div>
+    <div class="kpi"><p class="kpi-label">Yearly bonus commitment</p><p class="kpi-value">৳{{ total_bonus|floatformat:"0g" }}</p><p class="mt-1 text-xs text-slate-500">{{ rows|length }} employee{{ rows|length|pluralize }}</p></div>
+  </div>
+
+  <div class="grid grid-cols-1 gap-6 xl:grid-cols-3">
+    <div class="pcard overflow-hidden xl:col-span-2">
+      <div class="flex items-center justify-between border-b border-slate-200/80 px-5 py-3.5 dark:border-white/[0.07]">
+        <p class="text-sm font-semibold text-slate-900 dark:text-white">Yearly bonuses</p>
+        <a href="{% url 'payroll:add_salary' %}" class="text-xs font-medium text-indigo-600 hover:underline dark:text-indigo-300">Set in Salary Base →</a>
+      </div>
+      <div class="max-h-[60vh] overflow-auto">
+        <table class="w-full text-sm">
+          <thead><tr><th class="pth">Employee</th><th class="pth text-right">Rule</th><th class="pth text-right">Amount</th><th class="pth">Paid in</th></tr></thead>
+          <tbody class="divide-y divide-slate-100 dark:divide-white/[0.05]">
+            {% for r in rows %}
+            <tr>
+              <td class="ptd"><p class="font-medium text-slate-900 dark:text-white">{{ r.emp.name }}</p><p class="text-xs text-slate-500">{{ r.emp.department.name|default:"—" }}</p></td>
+              <td class="ptd money text-slate-600 dark:text-slate-300">{% if r.percent %}{{ r.percent|floatformat:"-2" }}% of basic{% else %}Fixed{% endif %}</td>
+              <td class="ptd money font-semibold text-slate-900 dark:text-white">৳{{ r.amount|floatformat:"0g" }}</td>
+              <td class="ptd"><span class="pill-muted">{{ r.month }}</span></td>
+            </tr>
+            {% empty %}<tr><td colspan="4" class="p-8">{% include "partials/empty_state.html" with icon="bolt" title="No yearly bonuses configured" text="Open an employee in Salary Base → Yearly bonus." %}</td></tr>{% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="pcard h-fit overflow-hidden">
+      <p class="border-b border-slate-200/80 px-5 py-3.5 text-sm font-semibold text-slate-900 dark:border-white/[0.07] dark:text-white">Bonus by payout month</p>
+      <ul class="divide-y divide-slate-100 dark:divide-white/[0.05]">
+        {% for m, amt in by_month %}<li class="flex justify-between px-5 py-3 text-sm"><span>{{ m }}</span><b class="tabular-nums">৳{{ amt|floatformat:"0g" }}</b></li>
+        {% empty %}<li class="px-5 py-4 text-sm text-slate-500">—</li>{% endfor %}
+      </ul>
+    </div>
+  </div>
+</div>
+{% endblock %}

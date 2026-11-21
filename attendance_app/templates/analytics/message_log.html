@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Message log{% endblock %}
+{% block content %}
+<div class="space-y-6">
+  <div class="page-header">
+    <div>
+      <p class="eyebrow">{% include "partials/icon.html" with name="chat" cls="h-3.5 w-3.5" %}SMS / WhatsApp</p>
+      <h1 class="page-title">Message log</h1>
+      <p class="page-subtitle">কাকে কী পাঠানো হয়েছে। "Logged only" মানে SMS গেটওয়ে সেট করা নেই — বার্তা যায়নি, শুধু এখানে লেখা আছে।</p>
+    </div>
+    <a href="{% url 'attendance_app:hr_settings' %}" class="btn-secondary">{% include "partials/icon.html" with name="shield" cls="h-4 w-4" %}HR Rules</a>
+  </div>
+  <div class="card overflow-hidden">
+    <div class="overflow-x-auto">
+      <table class="responsive-table table-modern">
+        <thead><tr><th>Time</th><th>Type</th><th>To</th><th>Message</th><th>Status</th></tr></thead>
+        <tbody>
+          {% for m in page_obj %}
+          <tr>
+            <td class="whitespace-nowrap tabular-nums text-sm">{{ m.created_at|date:"d M, h:i A" }}</td>
+            <td><span class="badge-neutral">{{ m.get_kind_display }}</span> <span class="text-xs uppercase text-slate-400">{{ m.channel }}</span></td>
+            <td class="font-mono text-xs">{{ m.to }}</td>
+            <td class="max-w-md text-sm text-slate-600 dark:text-slate-300"><p class="line-clamp-2 whitespace-pre-line" title="{{ m.text }}">{{ m.text }}</p></td>
+            <td>{% if m.status == 'sent' %}<span class="badge-success">Sent</span>{% elif m.status == 'logged' %}<span class="badge-warning">Logged only</span>{% elif m.status == 'skipped' %}<span class="badge-neutral" title="{{ m.response }}">Skipped</span>{% else %}<span class="badge-danger" title="{{ m.response }}">Failed</span>{% endif %}</td>
+          </tr>
+          {% empty %}<tr><td colspan="5">{% include "partials/empty_state.html" with icon="chat" title="এখনো কোনো বার্তা পাঠানো হয়নি" %}</td></tr>{% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% include "partials/pagination.html" with page=page_obj %}
+  </div>
+</div>
+{% endblock %}

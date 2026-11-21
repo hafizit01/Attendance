@@ -111,3 +111,91 @@ class AttendanceAdmin(admin.ModelAdmin):
 
 admin.site.register(Holiday)
 
+
+from .models import (Device, DeviceCommand, HRSettings, MissingPunch, Notification, PunchLog,  # noqa: E402
+                     Shift, ShiftAssignment)
+
+
+from .models import LeaveAllocation  # noqa: E402
+
+
+from .models import MessageLog, UnknownPunch  # noqa: E402
+
+
+@admin.register(UnknownPunch)
+class UnknownPunchAdmin(admin.ModelAdmin):
+    list_display = ['raw_id', 'reason', 'timestamp', 'device', 'status', 'company']
+    list_filter = ['company', 'reason', 'status']
+
+
+@admin.register(MessageLog)
+class MessageLogAdmin(admin.ModelAdmin):
+    list_display = ['created_at', 'kind', 'channel', 'to', 'status', 'provider', 'company']
+    list_filter = ['company', 'kind', 'status', 'channel']
+    search_fields = ['to', 'text']
+
+
+@admin.register(LeaveAllocation)
+class LeaveAllocationAdmin(admin.ModelAdmin):
+    list_display = ['company', 'employee', 'leave_type', 'days_per_year']
+    list_filter = ['company', 'leave_type']
+    raw_id_fields = ['employee']
+
+
+@admin.register(HRSettings)
+class HRSettingsAdmin(admin.ModelAdmin):
+    list_display = ['company', 'enable_late_deduction', 'lates_equal_one_day_deduction',
+                    'enable_missing_punch_alert', 'enable_gps_attendance', 'updated_at']
+
+
+@admin.register(MissingPunch)
+class MissingPunchAdmin(admin.ModelAdmin):
+    list_display = ['employee', 'date', 'in_time', 'status', 'company']
+    list_filter = ['company', 'status']
+    date_hierarchy = 'date'
+    raw_id_fields = ['employee']
+
+
+@admin.register(Notification)
+class NotificationAdmin(admin.ModelAdmin):
+    list_display = ['user', 'title', 'kind', 'is_read', 'created_at']
+    list_filter = ['kind', 'is_read']
+
+
+@admin.register(Device)
+class DeviceAdmin(admin.ModelAdmin):
+    list_display = ['name', 'company', 'department', 'protocol', 'serial_number', 'ip', 'is_active', 'last_seen_at']
+    list_filter = ['company', 'protocol', 'is_active']
+    search_fields = ['name', 'serial_number', 'ip']
+    readonly_fields = ['push_token', 'last_seen_at', 'last_synced_at', 'last_error', 'last_ip_seen', 'firmware',
+                       'model_name', 'user_count', 'finger_count', 'face_count', 'record_count',
+                       'adms_att_stamp', 'adms_op_stamp']
+
+
+@admin.register(DeviceCommand)
+class DeviceCommandAdmin(admin.ModelAdmin):
+    list_display = ['device', 'label', 'status', 'return_code', 'created_at', 'done_at']
+    list_filter = ['status']
+
+
+@admin.register(PunchLog)
+class PunchLogAdmin(admin.ModelAdmin):
+    list_display = ['device_user_id', 'employee', 'timestamp', 'method', 'source', 'device', 'company']
+    list_filter = ['company', 'method', 'source']
+    search_fields = ['employee__name', 'device_user_id']
+    date_hierarchy = 'timestamp'
+    raw_id_fields = ['employee', 'device', 'department', 'branch']
+
+
+@admin.register(Shift)
+class ShiftAdmin(admin.ModelAdmin):
+    list_display = ['name', 'company', 'branch', 'start_time', 'end_time', 'grace_minutes', 'break_minutes', 'is_active']
+    list_filter = ['company', 'is_active']
+
+
+@admin.register(ShiftAssignment)
+class ShiftAssignmentAdmin(admin.ModelAdmin):
+    list_display = ['employee', 'shift', 'start_date', 'end_date']
+    list_filter = ['shift']
+    raw_id_fields = ['employee']
+

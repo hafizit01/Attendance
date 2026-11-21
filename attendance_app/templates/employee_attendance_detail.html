@@ -13,9 +13,12 @@
         <p class="page-subtitle">Device ID {{ employee.device_user_id }} · {{ employee.department.name|default:"No department" }}</p>
       </div>
     </div>
-    <a href="{% url 'attendance_app:attendance_pdf' employee.id %}?start_date={{ start_date }}&end_date={{ end_date }}" target="_blank" rel="noopener" class="btn-secondary self-start lg:self-auto">
-      {% include "partials/icon.html" with name="download" cls="h-4 w-4" %}Download PDF
-    </a>
+    <div class="flex flex-wrap gap-2 self-start lg:self-auto">
+      <a href="{% url 'attendance_app:employee_attendance_excel' employee.id %}?start_date={{ start_date }}&end_date={{ end_date }}" class="btn-secondary">{% include "partials/excel_icon.html" %}Excel</a>
+      <a href="{% url 'attendance_app:attendance_pdf' employee.id %}?start_date={{ start_date }}&end_date={{ end_date }}" target="_blank" rel="noopener" class="btn-secondary">
+        {% include "partials/icon.html" with name="download" cls="h-4 w-4" %}Download PDF
+      </a>
+    </div>
   </div>
 
   <div class="grid grid-cols-2 gap-4 lg:grid-cols-5">

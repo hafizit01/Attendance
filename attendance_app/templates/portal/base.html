@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en" class="preload" x-data="{ darkMode: document.documentElement.classList.contains('dark') }"
+      x-init="$watch('darkMode', v => localStorage.theme = v ? 'dark' : 'light')" :class="{ 'dark': darkMode }">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#4f46e5">
+  <title>{% block title %}My Portal{% endblock %} · {{ employee.company.name }}</title>
+  {% include "partials/head_assets.html" %}
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.1/dist/cdn.min.js"></script>
+  <style>
+    .pnav { display:flex; flex-direction:column; align-items:center; gap:2px; padding:.4rem 0; font-size:11px; font-weight:600; color:#64748b; border-radius:.9rem; transition:all .2s; }
+    .pnav.is-active { color:#4f46e5; background:rgba(99,102,241,.08); }
+    .dark .pnav.is-active { color:#a5b4fc; background:rgba(99,102,241,.15); }
+  </style>
+</head>
+<body class="min-h-screen pb-24">
+  <header class="relative overflow-hidden bg-gradient-to-br from-primary-600 via-violet-600 to-fuchsia-600 pb-16 pt-[max(env(safe-area-inset-top),1rem)] text-white">
+    <div class="pointer-events-none absolute -right-16 -top-24 h-64 w-64 rounded-full bg-white/10 blur-2xl"></div>
+    <div class="relative mx-auto flex max-w-3xl items-center justify-between gap-3 px-4 pt-2">
+      <div class="flex min-w-0 items-center gap-3">
+        <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white/20 text-lg font-bold ring-1 ring-white/30">{{ employee.name|slice:":1"|upper }}</span>
+        <div class="min-w-0">
+          <p class="truncate text-base font-bold">{{ employee.name }}</p>
+          <p class="truncate text-xs text-white/75">{{ employee.company.name }}{% if employee.department %} · {{ employee.department.name }}{% endif %} · ID {{ employee.device_user_id }}</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-1">
+        <button type="button" class="flex h-10 w-10 items-center justify-center rounded-xl hover:bg-white/15" @click="darkMode = !darkMode" aria-label="Toggle theme">
+          <span x-show="!darkMode">{% include "partials/icon.html" with name="moon" %}</span><span x-show="darkMode" x-cloak>{% include "partials/icon.html" with name="sun" %}</span>
+        </button>
+        {% if is_admin_too %}<a href="{% url 'attendance_app:dashboard' %}" class="flex h-10 items-center rounded-xl px-3 text-xs font-semibold hover:bg-white/15">Admin</a>{% endif %}
+        <a href="{% url 'userapp:logout' %}" onclick="return confirm('লগআউট করবেন?');" class="flex h-10 w-10 items-center justify-center rounded-xl hover:bg-white/15" aria-label="Logout">{% include "partials/icon.html" with name="logout" %}</a>
+      </div>
+    </div>
+  </header>
+
+  <main class="relative mx-auto -mt-12 max-w-3xl space-y-5 px-4">
+    {% if messages %}
+      {% for message in messages %}
+      <div x-data="{ show: true }" x-show="show" class="flex items-start gap-3 rounded-2xl border p-4 text-sm shadow-soft
+        {% if message.tags == 'success' %}border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-500/20 dark:bg-emerald-950 dark:text-emerald-300
+        {% elif message.tags == 'error' %}border-rose-200 bg-rose-50 text-rose-800 dark:border-rose-500/20 dark:bg-rose-950 dark:text-rose-300
+        {% else %}border-blue-200 bg-blue-50 text-blue-800 dark:border-blue-500/20 dark:bg-blue-950 dark:text-blue-300{% endif %}">
+        <span class="flex-1 font-medium">{{ message }}</span>
+        <button type="button" @click="show = false" class="opacity-60 hover:opacity-100" aria-label="Dismiss">{% include "partials/icon.html" with name="x" cls="h-4 w-4" %}</button>
+      </div>
+      {% endfor %}
+    {% endif %}
+    {% block content %}{% endblock %}
+  </main>
+
+  <nav class="fixed inset-x-0 bottom-0 z-30 border-t border-slate-200/70 bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl dark:border-slate-800 dark:bg-slate-900/95" aria-label="Portal">
+    <div class="mx-auto grid max-w-md {% if gps_enabled %}grid-cols-4{% else %}grid-cols-3{% endif %} gap-1 px-3 py-1.5">
+      <a href="{% url 'portal:home' %}" class="pnav {% if active_tab == 'home' %}is-active{% endif %}">{% include "partials/icon.html" with name="home" cls="h-6 w-6" %}Home</a>
+      {% if gps_enabled %}<a href="{% url 'portal:punch' %}" class="pnav {% if active_tab == 'punch' %}is-active{% endif %}">{% include "partials/icon.html" with name="face" cls="h-6 w-6" %}Punch</a>{% endif %}
+      <a href="{% url 'portal:leave' %}" class="pnav {% if active_tab == 'leave' %}is-active{% endif %}">{% include "partials/icon.html" with name="calendar" cls="h-6 w-6" %}Leave</a>
+      <a href="{% url 'portal:payslips' %}" class="pnav {% if active_tab == 'payslips' %}is-active{% endif %}">{% include "partials/icon.html" with name="money" cls="h-6 w-6" %}Payslips</a>
+    </div>
+  </nav>
+  <script>window.addEventListener('load', () => setTimeout(() => document.documentElement.classList.remove('preload'), 150));</script>
+  {% block extra_scripts %}{% endblock %}
+</body>
+</html>

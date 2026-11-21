@@ -4,6 +4,7 @@
 # Local data
 db.sqlite3
 media/
+private_media/
 
 # Logs
 *.log

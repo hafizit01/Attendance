@@ -1,0 +1,239 @@
+{% extends "base.html" %}
+{% block title %}Bulk & Official Duty Attendance{% endblock %}
+{% block content %}
+{{ people|json_script:"ops-people" }}
+{{ departments|json_script:"ops-depts" }}
+<div class="space-y-6" x-data="bulkEntry()" x-init="init()">
+  <div class="page-header">
+    <div>
+      <p class="eyebrow">{% include "partials/icon.html" with name="users" cls="h-3.5 w-3.5" %}Operator tools</p>
+      <h1 class="page-title">Bulk &amp; Official Duty <span class="text-gradient">Attendance</span></h1>
+      <p class="page-subtitle">ফিল্ড/অফিসের বাইরের কর্মচারীদের একসাথে কয়েক দিনের হাজিরা। সময় খালি রাখলে প্রত্যেকের নিজের শিফটের সময় বসবে।</p>
+    </div>
+  </div>
+
+  {% include "attendance_ops/_tabs.html" %}
+
+  <div class="grid gap-6 lg:grid-cols-5">
+    {# ───────── কর্মচারী বাছাই ───────── #}
+    <section class="ops-card flex flex-col lg:col-span-2">
+      <div class="flex items-center justify-between gap-3 border-b border-slate-100 px-5 py-4 dark:border-white/[0.06]">
+        <h2 class="text-sm font-semibold text-slate-900 dark:text-white">1 · Employees</h2>
+        <span class="rounded-full bg-indigo-50 px-2.5 py-0.5 text-xs font-semibold tabular-nums text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-300"
+              x-text="count + ' selected'"></span>
+      </div>
+      <div class="space-y-3 px-5 pt-4">
+        <input type="search" x-model="q" class="ops-input" placeholder="Search name or ID…" aria-label="Search employees">
+        <div class="flex gap-2">
+          <select x-model="dept" class="ops-input" aria-label="Department filter">
+            <option value="">All departments</option>
+            <template x-for="d in depts" :key="d.id"><option :value="String(d.id)" x-text="d.name"></option></template>
+          </select>
+          <button type="button" class="ops-btn-light shrink-0" @click="selectVisible()" :title="dept ? 'এই ডিপার্টমেন্টের সবাইকে বাছাই' : 'তালিকার সবাইকে বাছাই'">
+            <span x-text="dept ? 'Select dept' : 'Select all'"></span></button>
+        </div>
+        <div class="flex items-center justify-between text-xs text-slate-500">
+          <span x-text="visible.length + ' shown'"></span>
+          <button type="button" class="font-medium text-indigo-600 hover:underline disabled:opacity-40" @click="clearAll()" :disabled="!count">Clear selection</button>
+        </div>
+      </div>
+      <ul class="mx-2 mb-3 mt-2 max-h-[26rem] min-h-[12rem] flex-1 overflow-y-auto px-3" role="listbox" aria-multiselectable="true">
+        <template x-for="p in visible" :key="p.id">
+          <li>
+            <label class="flex cursor-pointer items-center gap-3 rounded-lg px-2 py-2 transition hover:bg-slate-50 dark:hover:bg-white/[0.03]"
+                   :class="sel[p.id] && 'bg-indigo-50/60 dark:bg-indigo-500/10'">
+              <input type="checkbox" class="form-checkbox" :checked="!!sel[p.id]" @change="toggle(p.id)">
+              <span class="avatar !h-8 !w-8 !text-[11px]" x-text="p.name.slice(0, 2)"></span>
+              <span class="min-w-0 flex-1">
+                <span class="block truncate text-sm font-medium text-slate-900 dark:text-white" x-text="p.name"></span>
+                <span class="block truncate text-xs text-slate-500" x-text="'ID ' + p.device_id + ' · ' + p.dept + ' · ' + p.shift"></span>
+              </span>
+            </label>
+          </li>
+        </template>
+        <li x-show="!visible.length" class="py-10 text-center text-sm text-slate-400">কাউকে পাওয়া যায়নি</li>
+      </ul>
+    </section>
+
+    {# ───────── ডিউটির তথ্য ───────── #}
+    <section class="ops-card lg:col-span-3">
+      <div class="border-b border-slate-100 px-5 py-4 dark:border-white/[0.06]">
+        <h2 class="text-sm font-semibold text-slate-900 dark:text-white">2 · Duty details</h2>
+      </div>
+      <div class="space-y-5 p-5">
+        <div>
+          <div class="grid gap-3 sm:grid-cols-2">
+            <div><label class="ops-label" for="b-from">From date</label><input id="b-from" type="date" x-model="from" class="ops-input tabular-nums"></div>
+            <div><label class="ops-label" for="b-to">To date</label><input id="b-to" type="date" x-model="to" :min="from" class="ops-input tabular-nums"></div>
+          </div>
+          <div class="mt-2 flex flex-wrap gap-1.5">
+            <button type="button" class="ops-chip" @click="quick(0, 0)">Today</button>
+            <button type="button" class="ops-chip" @click="quick(-1, -1)">Yesterday</button>
+            <button type="button" class="ops-chip" @click="quick(0, 6)">Next 7 days</button>
+            <button type="button" class="ops-chip" @click="thisMonth()">This month</button>
+          </div>
+        </div>
+
+        <div>
+          <span class="ops-label">Status</span>
+          <div class="grid grid-cols-2 gap-2 sm:grid-cols-4" role="radiogroup">
+            {% for value, label in status_choices %}
+            <button type="button" role="radio" class="ops-seg" :class="status === '{{ value }}' && 'is-on'" :aria-checked="status === '{{ value }}'" @click="status = '{{ value }}'">
+              <span class="font-semibold text-slate-900 dark:text-white">{{ label }}</span>
+            </button>
+            {% endfor %}
+          </div>
+          <p class="form-help" x-show="status === 'half_day'">Out time খালি রাখলে In থেকে শিফটের অর্ধেক সময় ধরা হবে — বাকি অর্ধেক কম কাজ হিসেবে কাটবে।</p>
+        </div>
+
+        <div class="grid gap-3 sm:grid-cols-2">
+          <div>
+            <label class="ops-label" for="b-in">Default in time</label>
+            <input id="b-in" x-model="inTime" @blur="inTime = fix(inTime)" class="ops-input tabular-nums" placeholder="Shift time (e.g. 09:00)" inputmode="numeric" autocomplete="off">
+          </div>
+          <div>
+            <label class="ops-label" for="b-out">Default out time</label>
+            <input id="b-out" x-model="outTime" @blur="outTime = fix(outTime)" class="ops-input tabular-nums" :placeholder="status === 'half_day' ? 'Auto: half shift' : 'Shift time (e.g. 18:00)'" inputmode="numeric" autocomplete="off">
+          </div>
+          <p class="form-help sm:col-span-2 !mt-0">খালি = প্রত্যেকের নিজের শিফট/ডিপার্টমেন্টের সময়। "930" লিখলে 09:30, "6:30p" লিখলে 18:30।</p>
+        </div>
+
+        <div class="space-y-2.5 rounded-xl bg-slate-50 p-4 dark:bg-white/[0.03]">
+          <label class="flex cursor-pointer items-start gap-3">
+            <input type="checkbox" class="form-checkbox mt-0.5" x-model="skip">
+            <span><span class="block text-sm font-medium text-slate-900 dark:text-white">Skip weekends / holidays automatically</span>
+              <span class="block text-xs text-slate-500">প্রত্যেকের সাপ্তাহিক ছুটি ও ঘোষিত ছুটির দিনে কিছু লেখা হবে না।</span></span>
+          </label>
+          <label class="flex cursor-pointer items-start gap-3">
+            <input type="checkbox" class="form-checkbox mt-0.5" x-model="overwrite">
+            <span><span class="block text-sm font-medium text-slate-900 dark:text-white">Overwrite existing records if any</span>
+              <span class="block text-xs text-slate-500">বন্ধ থাকলে যেদিন মেশিনে পাঞ্চ আছে বা ছুটি approved সেদিন বাদ যাবে।</span></span>
+          </label>
+        </div>
+
+        <div>
+          <label class="ops-label" for="b-rem">Remarks / Reason</label>
+          <input id="b-rem" x-model="remarks" maxlength="255" class="ops-input" placeholder="Field Visit / Client Meeting">
+          <div class="mt-2 flex flex-wrap gap-1.5">
+            <template x-for="s in ['Field Visit', 'Client Meeting', 'Outstation', 'Training', 'Machine not working']">
+              <button type="button" class="ops-chip" @click="remarks = s" x-text="s"></button>
+            </template>
+          </div>
+        </div>
+      </div>
+
+      {# প্রিভিউ + সেভ #}
+      <div class="sticky bottom-[4.75rem] z-10 rounded-b-2xl border-t border-slate-200 bg-white/95 px-5 py-4 backdrop-blur md:bottom-0 dark:border-white/[0.06] dark:bg-slate-900/95">
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div class="min-w-0" aria-live="polite">
+            <template x-if="error"><p class="text-sm font-medium text-rose-600" x-text="error"></p></template>
+            <template x-if="!error && preview">
+              <div>
+                <span class="inline-flex items-center gap-2 rounded-full px-3 py-1 text-sm font-semibold tabular-nums"
+                      :class="preview.records ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-300' : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300'">
+                  <span class="h-1.5 w-1.5 rounded-full bg-current" :class="loading && 'animate-pulse'"></span>
+                  <span x-text="headline()"></span>
+                </span>
+                <p class="mt-1.5 text-xs text-slate-500" x-text="details()"></p>
+              </div>
+            </template>
+            <template x-if="!error && !preview"><p class="text-sm text-slate-500">কর্মচারী ও তারিখ বাছাই করলে এখানে হিসাব দেখাবে।</p></template>
+          </div>
+          <button type="button" class="ops-btn-primary px-5" @click="save()" :disabled="saving || loading || !preview || !preview.records">
+            <svg x-show="saving" class="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" opacity=".25"/><path d="M22 12a10 10 0 0 1-10 10" stroke="currentColor" stroke-width="3"/></svg>
+            <span x-text="saving ? 'Saving…' : 'Save attendance'"></span>
+          </button>
+        </div>
+      </div>
+    </section>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+function bulkEntry() {
+  const iso = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  const today = new Date('{{ today }}T00:00:00');
+  return {
+    people: JSON.parse(document.getElementById('ops-people').textContent),
+    depts: JSON.parse(document.getElementById('ops-depts').textContent),
+    q: '', dept: '', sel: {}, count: 0,
+    from: '{{ today }}', to: '{{ today }}', status: 'official_duty',
+    inTime: '', outTime: '', skip: true, overwrite: false, remarks: '',
+    preview: null, error: '', loading: false, saving: false, _t: null, _seq: 0,
+
+    init() {
+      ['from', 'to', 'status', 'inTime', 'outTime', 'skip', 'overwrite'].forEach(k => this.$watch(k, () => this.schedule()));
+    },
+    get visible() {
+      const q = this.q.trim().toLowerCase();
+      return this.people.filter(p => (!this.dept || String(p.dept_id) === this.dept) &&
+        (!q || p.name.toLowerCase().includes(q) || String(p.device_id) === q));
+    },
+    toggle(id) { this.sel[id] ? delete this.sel[id] : this.sel[id] = true; this.changed(); },
+    selectVisible() { this.visible.forEach(p => this.sel[p.id] = true); this.changed(); },
+    clearAll() { this.sel = {}; this.changed(); },
+    changed() { this.count = Object.keys(this.sel).length; this.schedule(); },
+    fix(v) { const t = window.opsNormTime(v); return t === null ? v : t; },
+    quick(a, b) { const s = new Date(today), e = new Date(today); s.setDate(s.getDate() + a); e.setDate(e.getDate() + b); this.from = iso(s); this.to = iso(e); },
+    thisMonth() { const s = new Date(today.getFullYear(), today.getMonth(), 1), e = new Date(today.getFullYear(), today.getMonth() + 1, 0); this.from = iso(s); this.to = iso(e); },
+
+    payload() {
+      return { employee_ids: Object.keys(this.sel).map(Number), from_date: this.from, to_date: this.to, status: this.status,
+               in_time: this.fix(this.inTime), out_time: this.fix(this.outTime), skip_off_days: this.skip, overwrite: this.overwrite,
+               remarks: this.remarks };
+    },
+    schedule() {
+      clearTimeout(this._t);
+      if (!this.count || !this.from || !this.to) { this.preview = null; this.error = ''; return; }
+      for (const v of [this.inTime, this.outTime]) if (window.opsNormTime(v) === null) { this.error = 'সময় ঠিকমতো লিখুন, যেমন 09:00 বা 18:30'; this.preview = null; return; }
+      this.loading = true;
+      this._t = setTimeout(() => this.runPreview(), 350);
+    },
+    async runPreview() {
+      const seq = ++this._seq;
+      try {
+        const d = await window.opsPost('{% url "attendance_app:bulk_attendance_preview" %}', this.payload());
+        if (seq === this._seq) { this.preview = d; this.error = ''; }
+      } catch (e) { if (seq === this._seq) { this.error = e.message; this.preview = null; } }
+      finally { if (seq === this._seq) this.loading = false; }
+    },
+    plural(n, w) { return n + ' ' + w + (n === 1 ? '' : 's'); },
+    headline() {
+      const p = this.preview;
+      if (!p.records) return 'কোনো দিনে লেখার কিছু নেই';
+      if (p.days_each) return `Will apply to ${this.plural(p.employees, 'employee')} × ${this.plural(p.days_each, 'working day')} = ${this.plural(p.records, 'record')}`;
+      return `Will apply ${this.plural(p.records, 'record')} across ${this.plural(p.employees, 'employee')}`;
+    },
+    details() {
+      const p = this.preview, out = [];
+      if (p.skipped_weekly_off) out.push(this.plural(p.skipped_weekly_off, 'weekend') + ' skipped');
+      if (p.skipped_holiday) out.push(this.plural(p.skipped_holiday, 'holiday') + ' skipped');
+      if (p.skipped_existing) out.push(p.skipped_existing + ' already punched (kept)');
+      if (p.skipped_leave) out.push(p.skipped_leave + ' on approved leave');
+      if (p.replaced) out.push(p.replaced + ' existing day(s) will be replaced');
+      if (p.selected > p.employees && p.records) out.push((p.selected - p.employees) + ' selected employee(s) have nothing to add');
+      return out.join(' · ') || 'প্রতিটা রেকর্ড = ঐ দিনের একটা In ও একটা Out পাঞ্চ';
+    },
+    async save() {
+      const p = this.preview;
+      if (p.replaced && !confirm(`${p.replaced} দিনের আগের পাঞ্চ মুছে নতুন সময় বসবে। চালিয়ে যাবেন?`)) return;
+      this.saving = true;
+      try {
+        const d = await window.opsPost('{% url "attendance_app:bulk_attendance_apply" %}', this.payload());
+        const skipped = [];
+        if (d.skipped_weekly_off) skipped.push(this.plural(d.skipped_weekly_off, 'weekend') + ' skipped');
+        if (d.skipped_holiday) skipped.push(this.plural(d.skipped_holiday, 'holiday') + ' skipped');
+        if (d.skipped_existing) skipped.push(d.skipped_existing + ' already punched');
+        if (d.skipped_leave) skipped.push(d.skipped_leave + ' on leave');
+        window.opsToast('ok', `${this.plural(d.saved, 'attendance record')} saved` + (skipped.length ? ', ' + skipped.join(', ') : ''),
+                        d.replaced ? d.replaced + ' existing day(s) replaced.' : '');
+        this.runPreview();
+      } catch (e) { window.opsToast('err', 'Save হয়নি', e.message); }
+      finally { this.saving = false; }
+    },
+  };
+}
+</script>
+{% endblock %}

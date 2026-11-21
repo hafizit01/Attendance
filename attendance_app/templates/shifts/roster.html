@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% block title %}Shift Roster{% endblock %}
+{% block content %}
+<div class="space-y-6">
+  <div class="page-header">
+    <div>
+      <p class="eyebrow">{% include "partials/icon.html" with name="grid" cls="h-3.5 w-3.5" %}Weekly roster</p>
+      <h1 class="page-title">Shift <span class="text-gradient">Roster</span></h1>
+      <p class="page-subtitle">{{ days.0|date:"d M" }} – {{ days.6|date:"d M Y" }} · কে কোন দিন কোন শিফটে</p>
+    </div>
+    <div class="flex flex-wrap items-center gap-2">
+      <select class="form-select w-auto" onchange="window.location='?week={{ days.0|date:'Y-m-d' }}&department=' + this.value">
+        <option value="">All departments</option>
+        {% for d in departments %}<option value="{{ d.id }}" {% if d.id == selected_department %}selected{% endif %}>{{ d.name }}</option>{% endfor %}
+      </select>
+      <div class="tabs">
+        <a class="tab" href="?week={{ prev_week|date:'Y-m-d' }}&department={{ selected_department|default:'' }}">← Prev</a>
+        <a class="tab is-active" href="?department={{ selected_department|default:'' }}">This week</a>
+        <a class="tab" href="?week={{ next_week|date:'Y-m-d' }}&department={{ selected_department|default:'' }}">Next →</a>
+      </div>
+      <a href="{% url 'attendance_app:shift_assign' %}{% if selected_department %}?department={{ selected_department }}{% endif %}" class="btn-primary">{% include "partials/icon.html" with name="plus" cls="h-4 w-4" %}Assign</a>
+    </div>
+  </div>
+
+  {% if legend %}
+  <div class="flex flex-wrap gap-2">
+    {% for s in legend %}<span class="badge bg-{{ s.color }}-50 text-{{ s.color }}-700 ring-{{ s.color }}-600/20 dark:bg-{{ s.color }}-500/10 dark:text-{{ s.color }}-300"><b>{{ s.short }}</b> {{ s.name }} · {{ s.start_time|time:"h:i A" }}–{{ s.end_time|time:"h:i A" }}</span>{% endfor %}
+    <span class="badge-neutral">— Office time (no shift)</span>
+  </div>
+  {% endif %}
+
+  <div class="card overflow-hidden">
+    <div class="overflow-x-auto">
+      <table class="w-full min-w-[56rem] text-sm">
+        <thead>
+          <tr class="border-b border-slate-200 bg-slate-50/80 dark:border-white/[0.06] dark:bg-white/[0.03]">
+            <th class="sticky left-0 z-10 bg-slate-50 px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:bg-slate-900">Employee</th>
+            {% for d in days %}
+            <th class="px-2 py-3 text-center {% if d == today %}text-primary-600 dark:text-primary-300{% else %}text-slate-500{% endif %}">
+              <p class="text-[11px] font-semibold uppercase tracking-wider">{{ d|date:"D" }}</p>
+              <p class="mt-0.5 text-base font-bold tabular-nums {% if d == today %}text-primary-600 dark:text-primary-300{% else %}text-slate-900 dark:text-white{% endif %}">{{ d|date:"d" }}</p>
+            </th>
+            {% endfor %}
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100 dark:divide-white/[0.05]">
+          {% for emp, cells in grid %}
+          <tr class="hover:bg-slate-50/60 dark:hover:bg-white/[0.02]">
+            <td class="sticky left-0 z-10 bg-white px-4 py-2.5 dark:bg-slate-900">
+              <a href="{% url 'attendance_app:employee_shift_history' emp.id %}" class="block min-w-[10rem]">
+                <p class="truncate font-semibold text-slate-900 hover:text-primary-600 dark:text-white">{{ emp.name }}</p>
+                <p class="truncate text-xs text-slate-500">ID {{ emp.device_user_id }} · {{ emp.department.name|default:"—" }}</p>
+              </a>
+            </td>
+            {% for c in cells %}
+            <td class="px-1.5 py-2 text-center {% if c.date == today %}bg-primary-50/40 dark:bg-primary-500/5{% endif %}">
+              {% if c.holiday %}
+                <span class="inline-flex w-full flex-col items-center rounded-xl bg-rose-50 px-1 py-1.5 text-[11px] font-semibold text-rose-600 dark:bg-rose-500/10 dark:text-rose-300">Holiday</span>
+              {% elif c.off %}
+                <span class="inline-flex w-full flex-col items-center rounded-xl bg-slate-100 px-1 py-1.5 text-[11px] font-semibold text-slate-500 dark:bg-white/5">Off</span>
+              {% elif c.shift.name %}
+                <span class="inline-flex w-full flex-col items-center rounded-xl bg-{{ c.shift.color }}-100 px-1 py-1.5 text-{{ c.shift.color }}-800 dark:bg-{{ c.shift.color }}-500/15 dark:text-{{ c.shift.color }}-200" title="{{ c.shift.name }}">
+                  <span class="text-xs font-bold">{{ c.shift.name|truncatechars:10 }}</span>
+                  <span class="text-[10px] tabular-nums opacity-80">{{ c.shift.in_time|time:"h:i A" }}</span>
+                </span>
+              {% else %}
+                <span class="inline-flex w-full flex-col items-center rounded-xl border border-dashed border-slate-200 px-1 py-1.5 text-slate-500 dark:border-slate-700">
+                  <span class="text-[10px] tabular-nums">{{ c.shift.in_time|time:"h:i A" }}</span>
+                  <span class="text-[10px] tabular-nums opacity-70">{{ c.shift.out_time|time:"h:i A" }}</span>
+                </span>
+              {% endif %}
+            </td>
+            {% endfor %}
+          </tr>
+          {% empty %}
+          <tr><td colspan="8">{% include "partials/empty_state.html" with icon="users" title="No active employees" %}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% if truncated %}<p class="border-t border-slate-100 px-5 py-3 text-xs text-slate-500 dark:border-white/[0.06]">প্রথম ৩০০ জন দেখানো হচ্ছে — ডিপার্টমেন্ট বাছাই করুন।</p>{% endif %}
+  </div>
+</div>
+{% endblock %}

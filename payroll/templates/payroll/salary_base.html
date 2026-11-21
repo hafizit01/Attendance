@@ -1,0 +1,378 @@
+{% extends "base.html" %}
+{% block title %}Salary Base{% endblock %}
+{% block content %}
+<div class="space-y-6" x-data="salaryDrawer()" @keydown.escape.window="close()">
+  {% include "payroll/_tabs.html" with tab="base" %}
+
+  <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+    <div>
+      <h1 class="text-2xl font-semibold tracking-tight text-slate-900 dark:text-white">Salary Base</h1>
+      <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Basic salary, allowances and fixed deductions for each employee. Payroll uses these every month.</p>
+    </div>
+    <div class="flex flex-wrap gap-2">
+      <a href="{% url 'payroll:salary_bulk_edit' %}" class="btn-secondary">{% include "partials/icon.html" with name="grid" cls="h-4 w-4" %}Bulk edit</a>
+      <button type="button" class="btn-indigo" @click="openPicker()">{% include "partials/icon.html" with name="plus" cls="h-4 w-4" %}Set Salary Structure</button>
+    </div>
+  </div>
+
+  {# ── KPI ── #}
+  <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+    <div class="kpi">
+      <div class="flex items-center justify-between"><p class="kpi-label">Monthly payroll commitment</p>
+        <span class="flex h-9 w-9 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-300">{% include "partials/icon.html" with name="money" cls="h-5 w-5" %}</span></div>
+      <p class="kpi-value">৳{{ kpi.commitment|floatformat:"0g" }}</p>
+      <p class="mt-1 text-xs text-slate-500">Gross · net ৳{{ kpi.net_total|floatformat:"0g" }}</p>
+    </div>
+    <div class="kpi">
+      <div class="flex items-center justify-between"><p class="kpi-label">Configured staff</p>
+        <span class="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-300">{% include "partials/icon.html" with name="check-circle" cls="h-5 w-5" %}</span></div>
+      <p class="kpi-value">{{ kpi.configured }}<span class="text-base font-medium text-slate-400"> / {{ kpi.staff }}</span></p>
+      <div class="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-100 dark:bg-white/10"><div class="h-full rounded-full bg-emerald-500" style="width: {% widthratio kpi.configured kpi.staff|default:1 100 %}%"></div></div>
+    </div>
+    <div class="kpi">
+      <div class="flex items-center justify-between"><p class="kpi-label">Average gross salary</p>
+        <span class="flex h-9 w-9 items-center justify-center rounded-lg bg-sky-50 text-sky-600 dark:bg-sky-500/10 dark:text-sky-300">{% include "partials/icon.html" with name="chart" cls="h-5 w-5" %}</span></div>
+      <p class="kpi-value">৳{{ kpi.average|floatformat:"0g" }}</p>
+      <p class="mt-1 text-xs text-slate-500">per configured employee</p>
+    </div>
+    <a href="?status=not_set" class="kpi transition hover:border-amber-300 dark:hover:border-amber-500/40">
+      <div class="flex items-center justify-between"><p class="kpi-label">Not configured</p>
+        <span class="flex h-9 w-9 items-center justify-center rounded-lg bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-300">{% include "partials/icon.html" with name="alert" cls="h-5 w-5" %}</span></div>
+      <p class="kpi-value {% if kpi.not_set %}text-amber-600 dark:text-amber-400{% endif %}">{{ kpi.not_set }}</p>
+      <p class="mt-1 text-xs text-slate-500">{% if kpi.not_set %}Not included in payroll · view →{% else %}Everyone is set up{% endif %}</p>
+    </a>
+  </div>
+
+  {# ── ফিল্টার ── #}
+  <form method="get" class="pcard flex flex-col gap-3 p-3 sm:flex-row sm:flex-wrap sm:items-center" role="search">
+    <div class="relative min-w-0 flex-1 sm:min-w-[14rem]">
+      <span class="pointer-events-none absolute inset-y-0 left-3 flex items-center text-slate-400">{% include "partials/icon.html" with name="filter" cls="h-4 w-4" %}</span>
+      <input type="search" name="q" value="{{ q }}" placeholder="Search name, ID or designation…" class="form-input pl-9" aria-label="Search employees">
+    </div>
+    <select name="department" class="form-select sm:w-48" aria-label="Department" onchange="this.form.submit()">
+      <option value="">All departments</option>
+      {% for d in departments %}<option value="{{ d.id }}" {% if d.id == selected_department %}selected{% endif %}>{{ d.name }}</option>{% endfor %}
+    </select>
+    <select name="type" class="form-select sm:w-44" aria-label="Salary type" onchange="this.form.submit()">
+      <option value="">All payment types</option>
+      {% for v, l in pay_types %}<option value="{{ v }}" {% if v == pay_type %}selected{% endif %}>{{ l }}</option>{% endfor %}
+    </select>
+    <select name="status" class="form-select sm:w-40" aria-label="Status" onchange="this.form.submit()">
+      <option value="">All status</option>
+      <option value="configured" {% if status == 'configured' %}selected{% endif %}>Configured</option>
+      <option value="not_set" {% if status == 'not_set' %}selected{% endif %}>Not set</option>
+    </select>
+    {% if q or selected_department or pay_type or status %}<a href="?" class="btn-ghost btn-sm">Clear</a>{% endif %}
+  </form>
+
+  {# ── ডেস্কটপ টেবিল ── #}
+  <div class="pcard hidden overflow-hidden md:block">
+    <div class="max-h-[70vh] overflow-auto">
+      <table class="w-full text-sm">
+        <thead>
+          <tr>
+            <th class="pth">Employee</th>
+            <th class="pth text-right">Basic</th>
+            <th class="pth text-right">Allowances</th>
+            <th class="pth text-right">Deductions</th>
+            <th class="pth text-right">Net payable</th>
+            <th class="pth">Payment</th>
+            <th class="pth">Status</th>
+            <th class="pth text-right"><span class="sr-only">Actions</span></th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100 dark:divide-white/[0.05]">
+          {% for r in rows %}
+          <tr class="transition-colors hover:bg-slate-50/70 dark:hover:bg-white/[0.02]">
+            <td class="ptd">
+              <div class="flex items-center gap-3">
+                <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-indigo-50 text-xs font-semibold uppercase text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-300">{{ r.name|slice:":2" }}</span>
+                <div class="min-w-0">
+                  <p class="truncate font-medium text-slate-900 dark:text-white">{{ r.name }}</p>
+                  <p class="truncate text-xs text-slate-500">{% if r.designation %}{{ r.designation }} · {% endif %}{{ r.dept|default:"—" }} · #{{ r.uid }}</p>
+                </div>
+              </div>
+            </td>
+            <td class="ptd money text-slate-700 dark:text-slate-200">{% if r.configured %}{{ r.basic|floatformat:"0g" }}{% else %}<span class="text-slate-300 dark:text-slate-600">—</span>{% endif %}</td>
+            <td class="ptd money text-slate-700 dark:text-slate-200">{% if r.configured %}{% if r.allowances %}+{{ r.allowances|floatformat:"0g" }}{% else %}<span class="text-slate-300 dark:text-slate-600">0</span>{% endif %}{% else %}<span class="text-slate-300 dark:text-slate-600">—</span>{% endif %}</td>
+            <td class="ptd money text-slate-700 dark:text-slate-200">{% if r.configured %}{% if r.deductions %}−{{ r.deductions|floatformat:"0g" }}{% else %}<span class="text-slate-300 dark:text-slate-600">0</span>{% endif %}{% else %}<span class="text-slate-300 dark:text-slate-600">—</span>{% endif %}</td>
+            <td class="ptd money font-semibold text-slate-900 dark:text-white">{% if r.configured %}৳{{ r.net|floatformat:"0g" }}{% else %}<span class="font-normal text-slate-300 dark:text-slate-600">—</span>{% endif %}</td>
+            <td class="ptd text-slate-600 dark:text-slate-300">{% if r.pay_type == 'bank' %}Bank{% elif r.pay_type == 'cash' %}Cash{% elif r.pay_type == 'mixed' %}Bank ৳{{ r.bank|floatformat:"0g" }} + Cash{% else %}<span class="text-slate-300 dark:text-slate-600">—</span>{% endif %}</td>
+            <td class="ptd">{% if r.configured %}<span class="pill-ok"><span class="h-1.5 w-1.5 rounded-full bg-current"></span>Configured</span>{% else %}<span class="pill-warn"><span class="h-1.5 w-1.5 rounded-full bg-current"></span>Not set</span>{% endif %}</td>
+            <td class="ptd">
+              <div class="flex items-center justify-end gap-0.5">
+                <button type="button" class="act" @click="edit({{ r.id }})" aria-label="Edit salary of {{ r.name }}">{% include "partials/icon.html" with name="pencil" cls="h-4 w-4" %}<span class="tip">Edit</span></button>
+                {% if r.configured %}
+                <button type="button" class="act" @click="edit({{ r.id }}, 'breakdown')" aria-label="View breakdown for {{ r.name }}">{% include "partials/icon.html" with name="eye" cls="h-4 w-4" %}<span class="tip">View breakdown</span></button>
+                <button type="button" class="act" @click="edit({{ r.id }}, 'history')" aria-label="Salary history of {{ r.name }}">{% include "partials/icon.html" with name="clock" cls="h-4 w-4" %}<span class="tip">History</span></button>
+                {% endif %}
+              </div>
+            </td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="8" class="p-8">{% include "partials/empty_state.html" with icon="users" title="No employees match these filters" %}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% include "partials/pagination.html" with page=page_obj %}
+  </div>
+
+  {# ── মোবাইল কার্ড ── #}
+  <div class="space-y-3 md:hidden">
+    {% for r in rows %}
+    <div class="pcard p-4">
+      <div class="flex items-start justify-between gap-3">
+        <div class="flex min-w-0 items-center gap-3">
+          <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-indigo-50 text-xs font-semibold uppercase text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-300">{{ r.name|slice:":2" }}</span>
+          <div class="min-w-0"><p class="truncate font-medium text-slate-900 dark:text-white">{{ r.name }}</p>
+            <p class="truncate text-xs text-slate-500">{% if r.designation %}{{ r.designation }} · {% endif %}{{ r.dept|default:"—" }}</p></div>
+        </div>
+        {% if r.configured %}<span class="pill-ok">Configured</span>{% else %}<span class="pill-warn">Not set</span>{% endif %}
+      </div>
+      {% if r.configured %}
+      <dl class="mt-4 grid grid-cols-3 gap-2 text-center">
+        <div class="rounded-xl bg-slate-50 py-2 dark:bg-white/[0.04]"><dt class="text-[11px] text-slate-500">Basic</dt><dd class="text-sm font-semibold tabular-nums text-slate-900 dark:text-white">{{ r.basic|floatformat:"0g" }}</dd></div>
+        <div class="rounded-xl bg-slate-50 py-2 dark:bg-white/[0.04]"><dt class="text-[11px] text-slate-500">Allow. / Ded.</dt><dd class="text-sm font-semibold tabular-nums text-slate-900 dark:text-white">+{{ r.allowances|floatformat:"0g" }} / −{{ r.deductions|floatformat:"0g" }}</dd></div>
+        <div class="rounded-xl bg-indigo-50 py-2 dark:bg-indigo-500/10"><dt class="text-[11px] text-indigo-600 dark:text-indigo-300">Net</dt><dd class="text-sm font-semibold tabular-nums text-indigo-700 dark:text-indigo-200">৳{{ r.net|floatformat:"0g" }}</dd></div>
+      </dl>
+      {% endif %}
+      <div class="mt-3 flex gap-2">
+        <button type="button" class="btn-secondary btn-sm flex-1" @click="edit({{ r.id }})">{% if r.configured %}Edit{% else %}Set salary{% endif %}</button>
+        {% if r.configured %}<button type="button" class="btn-ghost btn-sm" @click="edit({{ r.id }}, 'breakdown')">Breakdown</button>
+        <button type="button" class="btn-ghost btn-sm" @click="edit({{ r.id }}, 'history')">History</button>{% endif %}
+      </div>
+    </div>
+    {% empty %}
+    <div class="pcard p-6">{% include "partials/empty_state.html" with icon="users" title="No employees match these filters" %}</div>
+    {% endfor %}
+    {% include "partials/pagination.html" with page=page_obj %}
+  </div>
+
+  {# ════════ স্লাইড-ওভার ড্রয়ার ════════ #}
+  <div x-show="open" x-cloak class="fixed inset-0 z-[80] !mt-0" role="dialog" aria-modal="true" aria-labelledby="drawer-title">
+    <div class="absolute inset-0 bg-slate-900/40 backdrop-blur-[2px]" x-show="open" x-transition.opacity @click="close()"></div>
+    <div class="absolute inset-y-0 right-0 flex w-full max-w-lg" x-show="open"
+         x-transition:enter="transform transition ease-out duration-300" x-transition:enter-start="translate-x-full" x-transition:enter-end="translate-x-0"
+         x-transition:leave="transform transition ease-in duration-200" x-transition:leave-start="translate-x-0" x-transition:leave-end="translate-x-full">
+      <div class="flex w-full flex-col bg-white shadow-2xl dark:bg-slate-900">
+        {# হেডার #}
+        <div class="flex items-start justify-between gap-3 border-b border-slate-200/80 px-5 py-4 dark:border-white/10">
+          <div class="min-w-0">
+            <p class="text-xs font-semibold uppercase tracking-wide text-indigo-600 dark:text-indigo-300">Salary structure</p>
+            <h2 id="drawer-title" class="truncate text-lg font-semibold text-slate-900 dark:text-white" x-text="emp ? emp.name : 'Choose employee'"></h2>
+            <p class="truncate text-xs text-slate-500" x-show="emp" x-text="emp ? ([emp.designation, emp.dept, '#' + emp.uid].filter(Boolean).join(' · ')) : ''"></p>
+          </div>
+          <button type="button" class="btn-icon h-9 w-9" @click="close()" aria-label="Close">{% include "partials/icon.html" with name="x" %}</button>
+        </div>
+
+        {# কর্মচারী বাছাই (নতুন) #}
+        <div class="flex-1 overflow-y-auto" x-show="!emp">
+          <div class="p-5">
+            <input type="search" x-model="pick" placeholder="Search employee on this page…" class="form-input" x-ref="pickInput">
+            <ul class="mt-3 divide-y divide-slate-100 dark:divide-white/5">
+              <template x-for="r in pickList()" :key="r.id">
+                <li><button type="button" class="flex w-full items-center justify-between gap-3 py-3 text-left hover:text-indigo-600" @click="edit(r.id)">
+                  <span class="min-w-0"><span class="block truncate text-sm font-medium" x-text="r.name"></span><span class="block truncate text-xs text-slate-500" x-text="r.dept"></span></span>
+                  <span :class="r.configured ? 'pill-ok' : 'pill-warn'" x-text="r.configured ? 'Configured' : 'Not set'"></span></button></li>
+              </template>
+            </ul>
+            <p class="mt-3 text-xs text-slate-500">অন্য পেজের কর্মচারী খুঁজতে উপরের সার্চ ব্যবহার করুন।</p>
+          </div>
+        </div>
+
+        <template x-if="emp">
+        <div class="flex min-h-0 flex-1 flex-col">
+          <div class="flex gap-1 border-b border-slate-200/80 px-5 dark:border-white/10">
+            <button type="button" class="ptab" :class="view === 'edit' && 'is-active'" @click="view = 'edit'">Edit</button>
+            <button type="button" class="ptab" :class="view === 'breakdown' && 'is-active'" @click="view = 'breakdown'">Breakdown</button>
+            <button type="button" class="ptab" :class="view === 'history' && 'is-active'" @click="view = 'history'; loadHistory()">History</button>
+          </div>
+
+          <div class="flex-1 overflow-y-auto px-5 py-5">
+            {# ── লাইভ প্রিভিউ ── #}
+            <div class="rounded-2xl border border-indigo-100 bg-gradient-to-br from-indigo-50 to-white p-4 dark:border-indigo-500/20 dark:from-indigo-500/10 dark:to-slate-900" x-show="view !== 'history'">
+              <p class="text-xs font-semibold uppercase tracking-wide text-indigo-700 dark:text-indigo-300">Live net salary preview</p>
+              <div class="mt-3 grid grid-cols-3 gap-2 text-center">
+                <div><p class="text-[11px] text-slate-500">Gross</p><p class="text-lg font-semibold tabular-nums text-slate-900 dark:text-white" x-text="money(gross())"></p></div>
+                <div><p class="text-[11px] text-slate-500">Deductions</p><p class="text-lg font-semibold tabular-nums text-rose-600 dark:text-rose-400" x-text="'−' + money(deductions())"></p></div>
+                <div class="rounded-xl bg-indigo-600 py-1 text-white"><p class="text-[11px] text-indigo-100">Net / month</p><p class="text-lg font-bold tabular-nums" x-text="money(net())"></p></div>
+              </div>
+              <div class="mt-3 flex items-center justify-between text-xs text-slate-600 dark:text-slate-300">
+                <span>Bank <b class="tabular-nums" x-text="money(num(f.bank))"></b> · Cash <b class="tabular-nums" x-text="money(Math.max(net() - num(f.bank), 0))"></b></span>
+                <span x-show="num(f.bank) > net()" class="font-semibold text-rose-600">Bank &gt; Net!</span>
+              </div>
+              <p class="mt-2 text-[11px] text-slate-500">অনুপস্থিতি, দেরি, ওভারটাইম ও লোনের হিসাব মাসের বেতন তৈরির সময় যোগ/বাদ হবে।</p>
+            </div>
+
+            {# ── এডিট ফর্ম ── #}
+            <form x-show="view === 'edit'" class="mt-5 space-y-5" @submit.prevent="save()" novalidate>
+              <div>
+                <label class="form-label" for="f-basic">Basic salary <span class="text-rose-500">*</span></label>
+                <div class="relative"><span class="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm text-slate-400">৳</span>
+                  <input id="f-basic" type="number" min="0" step="0.01" inputmode="decimal" x-model="f.basic" @input="applyPercents()" class="form-input pl-7 text-right tabular-nums" required></div>
+              </div>
+
+              <fieldset>
+                <legend class="mb-2 text-sm font-semibold text-slate-900 dark:text-white">Allowances</legend>
+                <div class="space-y-2">
+                  <template x-for="c in comps.filter(c => c.kind === 'earning')" :key="c.id">
+                    <div class="flex items-center gap-3">
+                      <label class="w-32 shrink-0 text-sm text-slate-600 dark:text-slate-300" :for="'c' + c.id" x-text="c.name"></label>
+                      <div class="relative flex-1"><span class="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm text-slate-400">৳</span>
+                        <input :id="'c' + c.id" type="number" min="0" step="0.01" inputmode="decimal" x-model="f.components[c.id]" class="form-input pl-7 text-right tabular-nums"></div>
+                      <span class="w-14 text-right text-[11px] text-slate-400" x-text="c.calc === 'percent' && num(c.value) > 0 ? num(c.value) + '%' : ''"></span>
+                    </div>
+                  </template>
+                </div>
+              </fieldset>
+
+              <fieldset>
+                <legend class="mb-2 text-sm font-semibold text-slate-900 dark:text-white">Fixed deductions</legend>
+                <div class="space-y-2">
+                  <template x-for="c in comps.filter(c => c.kind === 'deduction')" :key="c.id">
+                    <div class="flex items-center gap-3">
+                      <label class="w-32 shrink-0 text-sm text-slate-600 dark:text-slate-300" :for="'c' + c.id" x-text="c.name"></label>
+                      <div class="relative flex-1"><span class="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm text-slate-400">৳</span>
+                        <input :id="'c' + c.id" type="number" min="0" step="0.01" inputmode="decimal" x-model="f.components[c.id]" class="form-input pl-7 text-right tabular-nums"></div>
+                      <span class="w-14 text-right text-[11px] text-slate-400" x-text="c.calc === 'percent' && num(c.value) > 0 ? num(c.value) + '%' : ''"></span>
+                    </div>
+                  </template>
+                </div>
+                {% if can_manage_components %}<a href="{% url 'payroll:components' %}" class="mt-2 inline-block text-xs font-medium text-indigo-600 hover:underline dark:text-indigo-300">Manage components →</a>{% endif %}
+              </fieldset>
+
+              <div>
+                <label class="form-label" for="f-bank">Paid to bank</label>
+                <div class="relative"><span class="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm text-slate-400">৳</span>
+                  <input id="f-bank" type="number" min="0" step="0.01" inputmode="decimal" x-model="f.bank" class="form-input pl-7 text-right tabular-nums"></div>
+                <p class="form-help">বাকিটা নগদ। ০ = পুরোটাই নগদ।</p>
+              </div>
+
+              <details class="rounded-xl border border-slate-200/80 p-3 dark:border-white/10">
+                <summary class="cursor-pointer text-sm font-semibold text-slate-900 dark:text-white">Yearly bonus</summary>
+                <div class="mt-3 grid grid-cols-3 gap-3">
+                  <div><label class="form-label" for="f-bp">% of salary</label><input id="f-bp" type="number" min="0" max="100" step="0.01" x-model="f.bonus_percent" class="form-input text-right tabular-nums"></div>
+                  <div><label class="form-label" for="f-bf">or fixed ৳</label><input id="f-bf" type="number" min="0" step="0.01" x-model="f.bonus_fixed" class="form-input text-right tabular-nums"></div>
+                  <div><label class="form-label" for="f-bm">Month</label>
+                    <select id="f-bm" x-model.number="f.bonus_month" class="form-select">
+                      <template x-for="(m, i) in monthNames" :key="i"><option :value="i + 1" x-text="m"></option></template></select></div>
+                </div>
+              </details>
+
+              <p x-show="error" x-text="error" class="rounded-xl bg-rose-50 p-3 text-sm text-rose-700 dark:bg-rose-500/10 dark:text-rose-300"></p>
+            </form>
+
+            {# ── ব্রেকডাউন ── #}
+            <div x-show="view === 'breakdown'" class="mt-5 space-y-4">
+              <div class="pcard overflow-hidden">
+                <p class="border-b border-slate-100 bg-slate-50 px-4 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:border-white/5 dark:bg-white/[0.03]">Earnings</p>
+                <dl class="divide-y divide-slate-100 text-sm dark:divide-white/5">
+                  <div class="flex justify-between px-4 py-2"><dt>Basic salary</dt><dd class="tabular-nums" x-text="money(num(f.basic))"></dd></div>
+                  <template x-for="c in comps.filter(c => c.kind === 'earning' && num(f.components[c.id]) > 0)" :key="c.id">
+                    <div class="flex justify-between px-4 py-2"><dt x-text="c.name"></dt><dd class="tabular-nums" x-text="money(num(f.components[c.id]))"></dd></div>
+                  </template>
+                  <div class="flex justify-between bg-slate-50 px-4 py-2 font-semibold dark:bg-white/[0.03]"><dt>Gross</dt><dd class="tabular-nums" x-text="money(gross())"></dd></div>
+                </dl>
+              </div>
+              <div class="pcard overflow-hidden">
+                <p class="border-b border-slate-100 bg-slate-50 px-4 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:border-white/5 dark:bg-white/[0.03]">Deductions</p>
+                <dl class="divide-y divide-slate-100 text-sm dark:divide-white/5">
+                  <template x-for="c in comps.filter(c => c.kind === 'deduction' && num(f.components[c.id]) > 0)" :key="c.id">
+                    <div class="flex justify-between px-4 py-2"><dt x-text="c.name"></dt><dd class="tabular-nums text-rose-600" x-text="'−' + money(num(f.components[c.id]))"></dd></div>
+                  </template>
+                  <div x-show="deductions() === 0" class="px-4 py-2 text-slate-400">No fixed deductions</div>
+                  <div class="flex justify-between bg-indigo-50 px-4 py-2 font-semibold text-indigo-800 dark:bg-indigo-500/10 dark:text-indigo-200"><dt>Net payable</dt><dd class="tabular-nums" x-text="money(net())"></dd></div>
+                </dl>
+              </div>
+            </div>
+
+            {# ── ইতিহাস ── #}
+            <div x-show="view === 'history'" class="space-y-3">
+              <p x-show="historyLoading" class="text-sm text-slate-500">Loading…</p>
+              <p x-show="!historyLoading && !history.length" class="text-sm text-slate-500">এখনো কোনো পরিবর্তনের ইতিহাস নেই (এই পেজ থেকে সেভ করলে এখানে জমা হয়)।</p>
+              <ol class="relative space-y-4 border-l border-slate-200 pl-5 dark:border-white/10">
+                <template x-for="h in history" :key="h.at">
+                  <li class="relative">
+                    <span class="absolute -left-[1.6rem] top-1 h-2.5 w-2.5 rounded-full bg-indigo-500 ring-4 ring-white dark:ring-slate-900"></span>
+                    <p class="text-sm font-semibold tabular-nums text-slate-900 dark:text-white">Net <span x-text="money(num(h.net))"></span> <span class="font-normal text-slate-400">· basic <span x-text="money(num(h.basic))"></span></span></p>
+                    <p class="text-xs text-slate-500"><span x-text="h.at"></span> · by <span x-text="h.by"></span></p>
+                    <p class="mt-1 text-xs text-slate-500" x-text="Object.entries(h.detail).map(([k, v]) => k + ' ' + v).join(' · ')"></p>
+                  </li>
+                </template>
+              </ol>
+            </div>
+          </div>
+
+          <div class="flex gap-2 border-t border-slate-200/80 bg-slate-50/80 px-5 py-4 dark:border-white/10 dark:bg-white/[0.02]" x-show="view === 'edit'">
+            <button type="button" class="btn-secondary flex-1" @click="close()">Cancel</button>
+            <button type="button" class="btn-indigo flex-1" :disabled="saving" @click="save()"><span x-text="saving ? 'Saving…' : 'Save structure'"></span></button>
+          </div>
+        </div>
+        </template>
+      </div>
+    </div>
+  </div>
+</div>
+
+{{ components_data|json_script:"comp-data" }}
+{{ rows_data|json_script:"rows-data" }}
+<script>
+function salaryDrawer() {
+  const comps = JSON.parse(document.getElementById('comp-data').textContent);
+  const rows = JSON.parse(document.getElementById('rows-data').textContent);
+  return {
+    open: false, emp: null, view: 'edit', f: {}, comps, rows, pick: '', error: '', saving: false,
+    history: [], historyLoading: false, touched: {},
+    monthNames: ['January','February','March','April','May','June','July','August','September','October','November','December'],
+    num(v) { const n = parseFloat(v); return isNaN(n) ? 0 : n; },
+    money(v) { return '৳' + (Math.round(v * 100) / 100).toLocaleString('en-IN', { maximumFractionDigits: 2 }); },
+    gross() { return this.num(this.f.basic) + comps.filter(c => c.kind === 'earning').reduce((s, c) => s + this.num(this.f.components[c.id]), 0); },
+    deductions() { return comps.filter(c => c.kind === 'deduction').reduce((s, c) => s + this.num(this.f.components[c.id]), 0); },
+    net() { return this.gross() - this.deductions(); },
+    pickList() { const q = this.pick.toLowerCase(); return Object.values(rows).filter(r => !q || r.name.toLowerCase().includes(q) || String(r.uid) === q); },
+    openPicker() { this.emp = null; this.open = true; this.$nextTick(() => this.$refs.pickInput && this.$refs.pickInput.focus()); },
+    edit(id, view) {
+      const r = rows[id]; if (!r) return;
+      this.emp = r; this.view = view || 'edit'; this.error = ''; this.history = [];
+      const fm = JSON.parse(JSON.stringify(r.form));
+      // নতুন হলে কম্পোনেন্টের ডিফল্ট (Fixed টাকা বা Basic এর %) বসাও
+      this.isNew = !r.configured;
+      comps.forEach(c => { if (fm.components[c.id] === null || fm.components[c.id] === undefined) fm.components[c.id] = c.calc === 'fixed' ? c.value : ''; });
+      this.f = fm; this.open = true;
+      if (this.view === 'history') this.loadHistory();
+      document.body.classList.add('overflow-hidden');
+    },
+    applyPercents() {
+      if (!this.isNew) return;   // পুরনো কাঠামো বদলানোর সময় নিজে থেকে কিছু বদলাই না
+      comps.filter(c => c.calc === 'percent').forEach(c => { this.f.components[c.id] = (this.num(this.f.basic) * this.num(c.value) / 100).toFixed(2); });
+    },
+    close() { this.open = false; document.body.classList.remove('overflow-hidden'); },
+    async loadHistory() {
+      if (!this.emp || this.history.length) return;
+      this.historyLoading = true;
+      try { const r = await fetch('{% url "payroll:salary_history" 0 %}'.replace('/0/', '/' + this.emp.id + '/')); this.history = (await r.json()).history; } catch (e) {}
+      this.historyLoading = false;
+    },
+    async save() {
+      this.error = '';
+      if (this.num(this.f.basic) <= 0) { this.error = 'Basic salary দিন।'; return; }
+      if (this.num(this.f.bank) > this.net()) { this.error = 'ব্যাংকে পাঠানো টাকা Net বেতনের বেশি হতে পারে না।'; return; }
+      this.saving = true;
+      const fd = new FormData();
+      fd.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+      fd.append('employee', this.emp.id);
+      ['basic', 'bank', 'bonus_percent', 'bonus_fixed', 'bonus_month'].forEach(k => fd.append(k, this.f[k] ?? ''));
+      comps.forEach(c => fd.append('component_' + c.id, this.f.components[c.id] || 0));
+      try {
+        const r = await fetch('{% url "payroll:salary_base_save" %}', { method: 'POST', body: fd, headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+        const d = await r.json();
+        if (d.status === 'success') { window.location.reload(); return; }
+        this.error = d.message;
+      } catch (e) { this.error = 'Network error — আবার চেষ্টা করুন।'; }
+      this.saving = false;
+    }
+  };
+}
+</script>
+{% endblock %}

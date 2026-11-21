@@ -26,6 +26,10 @@ def post_login_router(request):
     """
     user = request.user
 
+    from attendance_app.portal.access import portal_employee
+    if portal_employee(user) is not None:
+        return redirect('portal:home')
+
     # চাইলে staff/superuser bypass করো
     if user.is_superuser or user.is_staff:
         return redirect('attendance_app:dashboard')

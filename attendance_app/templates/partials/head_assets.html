@@ -26,8 +26,18 @@
             primary: { 50: '#eef2ff', 100: '#e0e7ff', 200: '#c7d2fe', 300: '#a5b4fc', 400: '#818cf8', 500: '#6366f1', 600: '#4f46e5', 700: '#4338ca', 800: '#3730a3', 900: '#312e81' }
           },
           boxShadow: {
-            soft: '0 1px 2px 0 rgba(16, 24, 40, 0.05), 0 1px 3px 0 rgba(16, 24, 40, 0.04)',
-            lift: '0 12px 24px -12px rgba(16, 24, 40, 0.18)',
+            soft: '0 1px 2px 0 rgba(16, 24, 40, 0.04), 0 4px 12px -4px rgba(16, 24, 40, 0.06)',
+            lift: '0 18px 40px -16px rgba(30, 27, 75, 0.28)',
+            glow: '0 8px 24px -6px rgba(99, 102, 241, 0.55)',
+          },
+          keyframes: {
+            fadeUp: { '0%': { opacity: 0, transform: 'translateY(8px)' }, '100%': { opacity: 1, transform: 'none' } },
+            pulseRing: { '0%': { transform: 'scale(.8)', opacity: .7 }, '100%': { transform: 'scale(2.2)', opacity: 0 } },
+            shimmer: { '100%': { transform: 'translateX(100%)' } },
+          },
+          animation: {
+            'fade-up': 'fadeUp .45s cubic-bezier(.2,.7,.2,1) both',
+            'pulse-ring': 'pulseRing 1.6s cubic-bezier(.2,.7,.2,1) infinite',
           }
         }
       }
@@ -41,20 +51,27 @@
       body { @apply bg-slate-50 text-slate-800 antialiased dark:bg-slate-950 dark:text-slate-200; font-feature-settings: "cv11", "ss01"; }
     }
     @layer components {
-      /* কার্ড */
-      .card { @apply rounded-xl border border-slate-200 bg-white shadow-soft transition-all duration-300 ease-in-out dark:border-slate-800 dark:bg-slate-900; }
-      .card-header { @apply flex items-center justify-between gap-3 border-b border-slate-100 px-5 py-3.5 dark:border-slate-800; }
+      /* কার্ড — নরম কাচের মতো সাদা, হালকা ছায়া */
+      .card { @apply rounded-2xl border border-slate-200/70 bg-white shadow-soft transition-all duration-300 ease-in-out dark:border-white/[0.06] dark:bg-slate-900/80; }
+      .card-hover { @apply hover:-translate-y-0.5 hover:border-primary-200 hover:shadow-lift dark:hover:border-primary-500/30; }
+      .card-header { @apply flex items-center justify-between gap-3 border-b border-slate-100 px-5 py-4 dark:border-white/[0.06]; }
       .card-title { @apply flex items-center gap-2 text-[0.95rem] font-semibold text-slate-900 dark:text-white; }
 
       /* পেজ হেডার */
       .page-header { @apply flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between; }
-      .page-title { @apply text-xl font-semibold tracking-tight text-slate-900 sm:text-2xl dark:text-white; }
-      .page-subtitle { @apply mt-1 text-sm text-slate-500 dark:text-slate-400; }
-      .eyebrow { @apply mb-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-primary-600 dark:text-primary-400; }
+      .page-title { @apply text-2xl font-bold tracking-tight text-slate-900 sm:text-[1.75rem] dark:text-white; }
+      .page-subtitle { @apply mt-1.5 text-sm text-slate-500 dark:text-slate-400; }
+      .eyebrow { @apply mb-1.5 inline-flex items-center gap-1.5 rounded-full bg-primary-50 px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-primary-700 ring-1 ring-inset ring-primary-600/10 dark:bg-primary-500/10 dark:text-primary-300 dark:ring-primary-400/20; }
+      .text-gradient { @apply bg-gradient-to-r from-primary-600 via-violet-600 to-fuchsia-500 bg-clip-text text-transparent dark:from-primary-300 dark:via-violet-300 dark:to-fuchsia-300; }
+
+      /* হিরো ব্যানার (ড্যাশবোর্ড/বড় পেজের মাথায়) */
+      .hero { @apply relative overflow-hidden rounded-3xl bg-gradient-to-br from-primary-600 via-violet-600 to-fuchsia-600 p-6 text-white shadow-lift sm:p-8; }
+      .hero::after { content: ""; @apply pointer-events-none absolute -right-16 -top-24 h-72 w-72 rounded-full bg-white/10 blur-2xl; }
+      .hero::before { content: ""; @apply pointer-events-none absolute -bottom-24 left-1/3 h-56 w-56 rounded-full bg-fuchsia-300/20 blur-3xl; }
 
       /* বাটন */
-      .btn { @apply inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg px-4 py-2.5 text-sm font-semibold transition-all duration-200 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 active:scale-95 disabled:pointer-events-none disabled:opacity-50 dark:focus-visible:ring-offset-slate-900; }
-      .btn-primary { @apply btn bg-primary-600 text-white shadow-sm hover:bg-primary-700 focus-visible:ring-primary-500; }
+      .btn { @apply inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl px-4 py-2.5 text-sm font-semibold transition-all duration-200 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 active:scale-95 disabled:pointer-events-none disabled:opacity-50 dark:focus-visible:ring-offset-slate-900; }
+      .btn-primary { @apply btn bg-gradient-to-r from-primary-600 to-violet-600 text-white shadow-glow hover:from-primary-500 hover:to-violet-500 hover:shadow-lg focus-visible:ring-primary-500; }
       .btn-success { @apply btn bg-emerald-600 text-white shadow-sm hover:bg-emerald-700 focus-visible:ring-emerald-500; }
       .btn-danger { @apply btn bg-rose-600 text-white shadow-sm hover:bg-rose-700 focus-visible:ring-rose-500; }
       .btn-secondary { @apply btn border border-slate-300 bg-white text-slate-700 shadow-sm hover:border-slate-400 hover:bg-slate-50 focus-visible:ring-primary-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700; }
@@ -64,7 +81,7 @@
 
       /* ফর্ম */
       .form-label { @apply mb-1.5 block text-[13px] font-medium text-slate-700 dark:text-slate-300; }
-      .form-input { @apply block w-full rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-slate-800 shadow-sm placeholder:text-slate-400 transition-all duration-200 ease-in-out focus:border-primary-500 focus:outline-none focus:ring-4 focus:ring-primary-500/15 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500; }
+      .form-input { @apply block w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-slate-800 shadow-sm placeholder:text-slate-400 transition-all duration-200 ease-in-out focus:border-primary-500 focus:outline-none focus:ring-4 focus:ring-primary-500/15 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500; }
       /* ড্রপডাউন তীর: data-URL @apply এ চলে না, তাই সাধারণ CSS */
       .form-select {
         @apply form-input appearance-none pr-10;
@@ -88,7 +105,7 @@
       .page-link.is-disabled { @apply pointer-events-none opacity-40; }
       .link { @apply font-medium text-primary-600 underline-offset-4 transition hover:text-primary-700 hover:underline dark:text-primary-400; }
 
-      .badge { @apply inline-flex items-center gap-1.5 whitespace-nowrap rounded-md px-2 py-0.5 text-xs font-medium ring-1 ring-inset; }
+      .badge { @apply inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset; }
       .badge-dot { @apply h-1.5 w-1.5 rounded-full bg-current; }
       .badge-success { @apply badge bg-emerald-50 text-emerald-700 ring-emerald-600/20 dark:bg-emerald-500/10 dark:text-emerald-300 dark:ring-emerald-500/25; }
       .badge-danger { @apply badge bg-rose-50 text-rose-700 ring-rose-600/20 dark:bg-rose-500/10 dark:text-rose-300 dark:ring-rose-500/25; }
@@ -99,29 +116,42 @@
 
       /* টেবিল */
       .table-modern { @apply w-full text-left text-sm; }
-      .table-modern thead th { @apply whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:border-slate-800 dark:bg-slate-800/60 dark:text-slate-400; }
-      .table-modern tbody tr { @apply transition-colors duration-150 hover:bg-slate-50/70 dark:hover:bg-slate-800/50; }
-      .table-modern tbody td { @apply px-5 py-3 align-middle; }
-      .table-modern tbody tr + tr { @apply border-t border-slate-100 dark:border-slate-800; }
+      .table-modern thead th { @apply whitespace-nowrap border-b border-slate-200/80 bg-slate-50/80 px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:border-white/[0.06] dark:bg-white/[0.03] dark:text-slate-400; }
+      .table-modern tbody tr { @apply transition-colors duration-150 hover:bg-primary-50/40 dark:hover:bg-white/[0.03]; }
+      .table-modern tbody td { @apply px-5 py-3.5 align-middle; }
+      .table-modern tbody tr + tr { @apply border-t border-slate-100 dark:border-white/[0.05]; }
 
-      /* স্ট্যাট কার্ড */
-      .stat-card { @apply card relative overflow-hidden p-5; }
-      .stat-icon { @apply flex h-10 w-10 items-center justify-center rounded-lg; }
+      /* স্ট্যাট কার্ড — কোণে রঙিন আভা */
+      .stat-card { @apply card relative overflow-hidden p-5 hover:-translate-y-0.5 hover:shadow-lift; }
+      .stat-card::after { content: ""; @apply pointer-events-none absolute -right-10 -top-10 h-28 w-28 rounded-full bg-gradient-to-br from-primary-400/15 to-fuchsia-400/10 blur-xl; }
+      .stat-icon { @apply flex h-11 w-11 items-center justify-center rounded-xl; }
       .stat-label { @apply text-[13px] font-medium text-slate-500 dark:text-slate-400; }
-      .stat-value { @apply mt-1.5 text-[1.75rem] font-semibold tabular-nums tracking-tight text-slate-900 dark:text-white; }
+      .stat-value { @apply mt-1.5 text-[1.85rem] font-bold tabular-nums tracking-tight text-slate-900 dark:text-white; }
+
+      /* লাইভ/অনলাইন বিন্দু */
+      .live-dot { @apply relative inline-flex h-2.5 w-2.5 shrink-0; }
+      .live-dot > span { @apply relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-500; }
+      .live-dot::before { content: ""; @apply absolute inset-0 animate-pulse-ring rounded-full bg-emerald-400; }
+      .off-dot { @apply inline-flex h-2.5 w-2.5 shrink-0 rounded-full bg-slate-300 dark:bg-slate-600; }
+
+      /* সেগমেন্টেড ট্যাব */
+      .tabs { @apply inline-flex rounded-xl bg-slate-100 p-1 dark:bg-white/5; }
+      .tab { @apply rounded-lg px-3.5 py-1.5 text-sm font-medium text-slate-500 transition-all hover:text-slate-900 dark:hover:text-white; }
+      .tab.is-active { @apply bg-white text-slate-900 shadow-sm dark:bg-slate-800 dark:text-white; }
 
       /* সাইডবার */
-      .nav-section { @apply mb-1.5 mt-6 px-3 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500 first:mt-0; }
-      .nav-link { @apply flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-slate-600 transition-all duration-200 ease-in-out hover:bg-slate-100 hover:text-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white; }
-      /* সাইডবার সবসময় গাঢ় নেভি — তাই এর ভেতরের লিংক আলাদা রঙে */
-      .sb .nav-link { @apply relative text-slate-400 hover:bg-white/5 hover:text-white dark:hover:bg-white/5; }
+      .nav-section { @apply mb-1.5 mt-6 px-3 text-[10.5px] font-semibold uppercase tracking-[0.12em] text-slate-500/90 first:mt-0; }
+      .nav-link { @apply flex w-full items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium text-slate-600 transition-all duration-200 ease-in-out hover:bg-slate-100 hover:text-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white; }
+      /* সাইডবার সবসময় গাঢ় — তাই এর ভেতরের লিংক আলাদা রঙে */
+      .sb .nav-link { @apply relative text-slate-400 hover:translate-x-0.5 hover:bg-white/[0.06] hover:text-white dark:hover:bg-white/[0.06]; }
       .sb .nav-link svg { @apply text-slate-500 transition-colors duration-200; }
-      .sb .nav-link:hover svg { @apply text-slate-300; }
-      .sb .nav-link.is-active { @apply bg-white/10 text-white; }
-      .sb .nav-link.is-active svg { @apply text-primary-400; }
+      .sb .nav-link:hover svg { @apply text-slate-200; }
+      .sb .nav-link.is-active { @apply bg-gradient-to-r from-primary-500/25 via-violet-500/15 to-transparent text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.06)]; }
+      .sb .nav-link.is-active svg { @apply text-primary-300; }
       .sb .nav-link.nav-danger, .sb .nav-link.nav-danger svg { @apply text-rose-400; }
       .sb .nav-link.nav-danger:hover { @apply bg-rose-500/10 text-rose-300; }
-      .sb .nav-link.is-active::before { content: ""; @apply absolute -left-3 bottom-1.5 top-1.5 w-[3px] rounded-r-full bg-primary-400; }
+      .sb .nav-link.is-active::before { content: ""; @apply absolute -left-3 bottom-1.5 top-1.5 w-[3px] rounded-r-full bg-gradient-to-b from-primary-300 to-fuchsia-400; }
+      .nav-badge { @apply ml-auto rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-bold text-emerald-300; }
 
       /* মোবাইল বটম নেভ */
       .bnav-link { @apply flex flex-col items-center justify-center gap-1 rounded-lg py-1.5 text-[11px] font-medium text-slate-500 transition-all duration-200 ease-in-out active:scale-95 dark:text-slate-400; }
@@ -131,6 +161,30 @@
 
   <style>
     [x-cloak] { display: none !important; }
+
+    /* পটভূমি: হালকা রঙিন আভা (ঝকঝকে কিন্তু চোখে আরামদায়ক) */
+    body {
+      background-image:
+        radial-gradient(60rem 40rem at 110% -10%, rgba(139, 92, 246, .09), transparent 60%),
+        radial-gradient(50rem 35rem at -10% 0%, rgba(99, 102, 241, .08), transparent 60%),
+        radial-gradient(40rem 30rem at 50% 120%, rgba(236, 72, 153, .05), transparent 60%);
+      background-attachment: fixed;
+    }
+    .dark body {
+      background-image:
+        radial-gradient(60rem 40rem at 110% -10%, rgba(139, 92, 246, .14), transparent 60%),
+        radial-gradient(50rem 35rem at -10% 0%, rgba(79, 70, 229, .14), transparent 60%);
+    }
+    /* সাইডবার: গভীর নীল-বেগুনি গ্রেডিয়েন্ট */
+    #sidebar.sb { background: linear-gradient(180deg, #0b1023 0%, #11143a 55%, #1a1147 100%) !important; }
+    #sidebar.sb::after { content: ""; position: absolute; inset: auto -40% -10% auto; width: 18rem; height: 18rem;
+      background: radial-gradient(circle, rgba(167, 139, 250, .18), transparent 65%); pointer-events: none; }
+    /* মূল কনটেন্ট নরমভাবে ভেসে আসে */
+    /* backwards: শেষ হলে transform থাকে না — নইলে ভেতরের fixed ড্রয়ার/মডাল এই বক্সে আটকে যায় */
+    main > * { animation: fadeUpMain .45s cubic-bezier(.2,.7,.2,1) backwards; }
+    main > *:nth-child(2) { animation-delay: .04s; } main > *:nth-child(3) { animation-delay: .08s; }
+    @keyframes fadeUpMain { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+    @media (prefers-reduced-motion: reduce) { main > * { animation: none; } }
     /* পেজ লোডের সময় স্টাইল বসানোর মুহূর্তে ট্রানজিশনের কালচে ঝলক এড়াতে লোড শেষ না হওয়া পর্যন্ত ট্রানজিশন বন্ধ */
     html.preload *, html.preload *::before, html.preload *::after { transition: none !important; animation: none !important; }
 

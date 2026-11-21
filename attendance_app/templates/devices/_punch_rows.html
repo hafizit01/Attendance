@@ -1,0 +1,24 @@
+{% for p in punches %}
+<tr>
+  <td class="rt-title">
+    <div class="flex items-center gap-3">
+      {% if p.employee %}
+        <span class="avatar">{{ p.employee.name|slice:":2" }}</span>
+        <div class="min-w-0"><p class="truncate font-semibold text-slate-900 dark:text-white">{{ p.employee.name }}</p><p class="text-xs font-normal text-slate-500">ID {{ p.device_user_id }}</p></div>
+      {% else %}
+        <span class="avatar bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300">?</span>
+        <div class="min-w-0"><p class="font-semibold text-amber-700 dark:text-amber-300">Unknown ID {{ p.device_user_id }}</p><p class="text-xs font-normal text-slate-500">সফটওয়্যারে এই ID এর কর্মচারী নেই</p></div>
+      {% endif %}
+    </div>
+  </td>
+  <td class="whitespace-nowrap tabular-nums">
+    <p class="font-semibold text-slate-900 dark:text-white">{{ p.timestamp|date:"h:i:s A" }}</p>
+    <p class="text-xs text-slate-500">{{ p.timestamp|date:"D, d M Y" }}</p>
+  </td>
+  <td><div class="flex items-center gap-2">{% include "devices/_method_icon.html" with method=p.method %}<span class="text-sm capitalize">{{ p.get_method_display }}</span></div></td>
+  {% if not compact %}<td class="text-sm text-slate-600 dark:text-slate-300">{{ p.device.name|default:"—" }}{% if p.branch %}<p class="text-xs text-slate-500">{{ p.branch.name }}</p>{% endif %}</td>{% endif %}
+  <td><span class="badge-neutral">{{ p.get_source_display }}</span></td>
+</tr>
+{% empty %}
+<tr><td colspan="5">{% include "partials/empty_state.html" with icon="signal" title="No punches yet" text="মেশিনে কেউ ফেস/ফিঙ্গার/কার্ড দিলে এখানে দেখা যাবে।" %}</td></tr>
+{% endfor %}

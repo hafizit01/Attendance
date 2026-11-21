@@ -47,8 +47,8 @@ def save_state(state):
         json.dump(state, f, indent=1)
 
 
-def read_device(ip, port):
-    conn = ZK(ip, port=port, timeout=15, force_udp=False, ommit_ping=True).connect()
+def read_device(ip, port, password=0):
+    conn = ZK(ip, port=port, timeout=15, password=password, force_udp=False, ommit_ping=True).connect()
     try:
         conn.disable_device()
         return conn.get_users() or [], conn.get_attendance() or []
@@ -83,9 +83,10 @@ def post(url, token, payload):
 
 
 def push_device(name, cfg, url, since):
-    users, atts = read_device(cfg["ip"], cfg.getint("port", 4370))
+    users, atts = read_device(cfg["ip"], cfg.getint("port", 4370), cfg.getint("comm_key", 0))
     user_rows = [{"uid": u.user_id, "name": u.name} for u in users]
-    punches = [{"uid": a.user_id, "time": a.timestamp.strftime("%Y-%m-%d %H:%M:%S")}
+    # verify = ফেস/ফিঙ্গার/কার্ড কোন পদ্ধতিতে পাঞ্চ (সার্ভার Live Punches এ দেখায়)
+    punches = [{"uid": a.user_id, "time": a.timestamp.strftime("%Y-%m-%d %H:%M:%S"), "verify": a.status}
                for a in atts if a.timestamp and a.timestamp.date() >= since]
     log(f"{name}: read {len(users)} users, {len(punches)} punches since {since}")
 

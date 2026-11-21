@@ -10,6 +10,7 @@ from django.utils import timezone
 
 from attendance_app.models import Attendance, Department, Employee, Holiday, LeaveRequest
 from attendance_app.services import create_employee_with_limit
+from attendance_app.utils.attendance_helpers import day_range
 from payroll.models import EmployeeSalary
 
 AUTO_NAME = re.compile(r"^User \d+$")   # মেশিনে নাম না থাকলে সিঙ্ক এই নাম দেয়
@@ -114,7 +115,7 @@ class Command(BaseCommand):
         days = [d for _, d in incoming]
         existing = {(emp_id, timezone.localtime(ts).date())
                     for emp_id, ts in Attendance.objects.filter(
-                        employee_id__in=emps, timestamp__date__range=(min(days), max(days))
+                        employee_id__in=emps, **day_range(min(days), max(days))
                     ).values_list("employee_id", "timestamp")}
 
         to_create = []

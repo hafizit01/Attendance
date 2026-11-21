@@ -1,0 +1,25 @@
+{% extends "portal/base.html" %}
+{% block title %}Payslips{% endblock %}
+{% block content %}
+<div class="card overflow-hidden">
+  <div class="border-b border-slate-100 px-4 py-3 dark:border-white/[0.06]">
+    <p class="font-semibold text-slate-900 dark:text-white">My payslips</p>
+    <p class="text-xs text-slate-500">শেষ হওয়া মাসগুলোর বেতনের হিসাব (PDF)।</p>
+  </div>
+  <ul class="divide-y divide-slate-100 dark:divide-white/[0.05]">
+    {% for m in months %}
+    <li>
+      <a href="{% url 'portal:payslip_pdf' m|date:'Y-m' %}" target="_blank" rel="noopener" class="flex items-center justify-between gap-3 px-4 py-3.5 transition hover:bg-slate-50 dark:hover:bg-white/[0.03]">
+        <span class="flex items-center gap-3">
+          <span class="flex h-10 w-10 items-center justify-center rounded-xl bg-primary-50 text-primary-600 dark:bg-primary-500/10 dark:text-primary-300">{% include "partials/icon.html" with name="document" %}</span>
+          <span><span class="block font-semibold text-slate-900 dark:text-white">{{ m|date:"F Y" }}</span><span class="text-xs text-slate-500">Payslip PDF</span></span>
+        </span>
+        <span class="text-primary-600 dark:text-primary-300">{% include "partials/icon.html" with name="download" %}</span>
+      </a>
+    </li>
+    {% empty %}
+    <li class="px-4 py-8 text-center text-sm text-slate-500">{% if not has_salary %}আপনার বেতন এখনো সফটওয়্যারে সেট করা হয়নি — অফিসে যোগাযোগ করুন।{% else %}এখনো কোনো শেষ হওয়া মাস নেই।{% endif %}</li>
+    {% endfor %}
+  </ul>
+</div>
+{% endblock %}

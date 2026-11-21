@@ -42,7 +42,7 @@ def branch_list(request):
     branches = (scoping.branches(scope)
                 .annotate(dept_count=Count('departments', distinct=True),
                           emp_count=Count('departments__employees', distinct=True),
-                          device_count=Count('departments', filter=Q(departments__device_ip__isnull=False), distinct=True))
+                          device_count=Count('departments__devices', filter=Q(departments__devices__is_active=True), distinct=True))
                 .prefetch_related('managers__user'))
     return render(request, 'branches/branch_list.html', {
         'branches': branches,

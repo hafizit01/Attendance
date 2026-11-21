@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block title %}{{ loan.employee.name }} · Loan{% endblock %}
+{% block content %}
+<div class="space-y-6">
+  {% include "payroll/_tabs.html" with tab="loans" %}
+
+  <a href="{% url 'payroll:loan_list' %}" class="btn-ghost btn-sm -ml-3">← Loans</a>
+
+  <div class="hero">
+    <div class="relative z-10 flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+      <div>
+        <p class="text-sm text-white/75">{{ loan.get_loan_type_display }} · {{ loan.employee.department.name|default:"" }}</p>
+        <h1 class="text-2xl font-bold">{{ loan.employee.name }}</h1>
+        <p class="mt-1 text-sm text-white/80">৳{{ loan.amount|floatformat:"0g" }} · মাসে ৳{{ loan.monthly_deduction|floatformat:"0g" }} · {{ loan.start_month|date:"M Y" }} থেকে{% if loan.end_month %} · শেষ কিস্তি {{ loan.end_month|date:"M Y" }}{% endif %}</p>
+        {% if loan.note %}<p class="mt-1 text-sm text-white/70">{{ loan.note }}</p>{% endif %}
+      </div>
+      <div class="flex flex-wrap gap-3">
+        <div class="rounded-2xl bg-white/10 p-4 ring-1 ring-white/20"><p class="text-xs uppercase tracking-wide text-white/70">Outstanding</p><p class="text-2xl font-bold tabular-nums">৳{{ remaining|floatformat:"0g" }}</p></div>
+        {% if can_manage %}<a href="{% url 'payroll:loan_edit' loan.id %}" class="btn self-center bg-white text-primary-700 hover:bg-primary-50">{% include "partials/icon.html" with name="pencil" cls="h-4 w-4" %}Edit</a>{% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-1 gap-6 xl:grid-cols-3">
+    <div class="card overflow-hidden xl:col-span-2">
+      <div class="card-header"><p class="card-title">{% include "partials/icon.html" with name="calendar" cls="h-4 w-4 text-primary-500" %}EMI schedule</p>
+        {% if loan.status == 'closed' %}<span class="badge-neutral">Closed from {{ loan.closed_from|date:"M Y" }}</span>{% endif %}</div>
+      <div class="overflow-x-auto">
+        <table class="table-modern">
+          <thead><tr><th>#</th><th>Salary month</th><th class="text-right">Deduction</th><th class="text-right">Left after</th><th></th></tr></thead>
+          <tbody>
+            {% for m, cut, left in schedule %}
+            <tr class="{% if m == today_month %}bg-primary-50/50 dark:bg-primary-500/5{% endif %}">
+              <td class="text-slate-400">{{ forloop.counter }}</td>
+              <td class="font-medium">{{ m|date:"F Y" }}</td>
+              <td class="text-right tabular-nums">৳{{ cut|floatformat:"0g" }}</td>
+              <td class="text-right tabular-nums">৳{{ left|floatformat:"0g" }}</td>
+              <td>{% if m < today_month %}<span class="badge-success">Deducted</span>{% elif m == today_month %}<span class="badge-info">This month</span>{% else %}<span class="badge-neutral">Upcoming</span>{% endif %}</td>
+            </tr>
+            {% empty %}<tr><td colspan="5" class="text-center text-sm text-slate-500">কোনো কিস্তি বাকি নেই</td></tr>{% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="space-y-6">
+      {% if can_manage %}
+      <form method="post" action="{% url 'payroll:loan_repay' loan.id %}" class="card space-y-4 p-5">
+        {% csrf_token %}
+        <p class="card-title">{% include "partials/icon.html" with name="money" cls="h-4 w-4 text-emerald-500" %}Cash repayment</p>
+        <p class="text-xs text-slate-500">কর্মচারী বেতনের বাইরে হাতে টাকা ফেরত দিলে — বাকি কমবে, কিস্তি আগে শেষ হবে।</p>
+        {% include "partials/form_field.html" with field=repay_form.date %}
+        {% include "partials/form_field.html" with field=repay_form.amount %}
+        {% include "partials/form_field.html" with field=repay_form.note %}
+        <button class="btn-secondary w-full">Add repayment</button>
+      </form>
+      {% endif %}
+
+      <div class="card overflow-hidden">
+        <div class="card-header"><p class="card-title">Repayments (cash)</p></div>
+        <ul class="divide-y divide-slate-100 dark:divide-white/[0.05]">
+          {% for r in repayments %}
+          <li class="flex items-center justify-between px-5 py-2.5 text-sm"><span>{{ r.date|date:"d M Y" }}{% if r.note %} · <span class="text-slate-500">{{ r.note }}</span>{% endif %}</span><b class="tabular-nums">৳{{ r.amount|floatformat:"0g" }}</b></li>
+          {% empty %}<li class="px-5 py-4 text-sm text-slate-500">নেই</li>{% endfor %}
+        </ul>
+      </div>
+
+      {% if can_manage %}
+      <form method="post" action="{% url 'payroll:loan_delete' loan.id %}" onsubmit="return confirm('লোন মুছে ফেলবেন? আগের মাসের বেতনেও আর কিস্তি দেখাবে না। শুধু বন্ধ করতে চাইলে Edit → Closed।');">
+        {% csrf_token %}<button class="btn-ghost w-full text-rose-600 hover:bg-rose-50 dark:text-rose-400">{% include "partials/icon.html" with name="trash" cls="h-4 w-4" %}Delete loan</button>
+      </form>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

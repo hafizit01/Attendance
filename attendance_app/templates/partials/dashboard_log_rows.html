@@ -1,0 +1,30 @@
+{# ড্যাশবোর্ডের আজকের লগের সারি — প্রথম পেজ ও "Load more" দুটোই এটা ব্যবহার করে #}
+{% for data in rows %}
+          <tr>
+            <td class="rt-title">
+              <div class="flex items-center gap-3">
+                <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary-50 text-xs font-bold text-primary-700 dark:bg-primary-500/10 dark:text-primary-300">{{ data.employee.name|slice:":1"|upper }}</span>
+                <div class="min-w-0">
+                  <p class="truncate font-semibold text-slate-900 dark:text-white">{{ data.employee.name }}</p>
+                  <p class="truncate text-xs font-normal text-slate-500">{{ data.employee.department.name|default:"—" }}</p>
+                </div>
+              </div>
+            </td>
+            <td class="whitespace-nowrap tabular-nums">{% if data.in_time %}<span class="font-medium text-slate-900 dark:text-white">{{ data.in_time|time:"h:i A" }}</span>{% else %}<span class="text-slate-400">—</span>{% endif %}</td>
+            <td class="whitespace-nowrap tabular-nums">{% if data.out_time %}<span class="font-medium text-slate-900 dark:text-white">{{ data.out_time|time:"h:i A" }}</span>{% else %}<span class="text-slate-400">—</span>{% endif %}</td>
+            <td class="whitespace-nowrap text-center font-mono text-xs tabular-nums text-slate-600 dark:text-slate-300">{{ data.total_work_time }}</td>
+            <td class="whitespace-nowrap text-center font-mono text-xs tabular-nums {% if data.late_time.total_seconds > 0 %}text-amber-600 dark:text-amber-400{% else %}text-slate-400{% endif %}">{{ data.late_time }}</td>
+            <td class="whitespace-nowrap text-center font-mono text-xs tabular-nums {% if data.less_time.total_seconds > 0 %}text-rose-600 dark:text-rose-400{% else %}text-slate-400{% endif %}">{{ data.less_time }}</td>
+            <td class="whitespace-nowrap text-center font-mono text-xs tabular-nums {% if data.over_time.total_seconds > 0 %}text-violet-600 dark:text-violet-400{% else %}text-slate-400{% endif %}">{{ data.over_time }}</td>
+            <td class="text-right">
+              {% if data.status == 'Present' %}
+                <span class="badge-success"><span class="badge-dot"></span>Completed</span>
+              {% elif data.status == 'Present (Active)' %}
+                <span class="badge-info"><span class="badge-dot animate-pulse"></span>On duty</span>
+              {% else %}
+                <span class="badge-danger"><span class="badge-dot"></span>Absent</span>
+              {% endif %}
+              {% if data.late_time.total_seconds > 0 %}<span class="badge-warning ml-1">Late</span>{% endif %}
+            </td>
+          </tr>
+{% endfor %}

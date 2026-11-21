@@ -1,0 +1,146 @@
+{% extends "portal/base.html" %}
+{% block title %}Remote Punch{% endblock %}
+{% block content %}
+<div class="card p-5" x-data="remotePunch('{% url 'portal:punch_submit' %}', '{{ csrf_token }}')" x-init="init()">
+  <div class="flex items-center justify-between">
+    <div>
+      <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Remote punch</p>
+      <p class="text-2xl font-bold text-slate-900 dark:text-white">Punch <span class="text-gradient">{{ next_status }}</span></p>
+    </div>
+    <p class="text-right text-sm font-semibold tabular-nums text-slate-600 dark:text-slate-300" x-text="clock"></p>
+  </div>
+
+  <template x-if="!secure">
+    <div class="mt-4 rounded-xl bg-amber-50 p-3 text-sm text-amber-800 dark:bg-amber-500/10 dark:text-amber-200">
+      লোকেশন ও ক্যামেরা শুধু নিরাপদ (https://) লিংকে কাজ করে। অফিসকে সাইটটা HTTPS এ চালাতে বলুন।
+    </div>
+  </template>
+
+  {# ১) লোকেশন #}
+  <div class="mt-5 flex items-start gap-3 rounded-2xl border p-4" :class="loc ? 'border-emerald-200 bg-emerald-50/60 dark:border-emerald-500/20 dark:bg-emerald-500/5' : 'border-slate-200 dark:border-slate-700'">
+    <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl" :class="loc ? 'bg-emerald-500 text-white' : 'bg-slate-100 text-slate-500 dark:bg-white/10'">1</span>
+    <div class="min-w-0 flex-1">
+      <p class="font-semibold text-slate-900 dark:text-white">Location</p>
+      <p class="text-sm text-slate-500" x-show="!loc && !locError">লোকেশন নেওয়া হচ্ছে…</p>
+      <p class="text-sm text-rose-600" x-show="locError" x-text="locError"></p>
+      <template x-if="loc">
+        <p class="text-sm text-emerald-700 dark:text-emerald-300"><span x-text="loc.lat.toFixed(5) + ', ' + loc.lng.toFixed(5)"></span> · ±<span x-text="Math.round(loc.acc)"></span> m
+          <a :href="'https://www.google.com/maps?q=' + loc.lat + ',' + loc.lng" target="_blank" rel="noopener" class="link ml-1">map</a></p>
+      </template>
+      <button type="button" class="btn-secondary btn-sm mt-2" x-show="locError" @click="getLocation()">Try again</button>
+    </div>
+  </div>
+
+  {# ২) সেলফি #}
+  <div class="mt-3 rounded-2xl border p-4" :class="selfie ? 'border-emerald-200 bg-emerald-50/60 dark:border-emerald-500/20 dark:bg-emerald-500/5' : 'border-slate-200 dark:border-slate-700'">
+    <div class="flex items-start gap-3">
+      <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl" :class="selfie ? 'bg-emerald-500 text-white' : 'bg-slate-100 text-slate-500 dark:bg-white/10'">2</span>
+      <div class="min-w-0 flex-1">
+        <p class="font-semibold text-slate-900 dark:text-white">Selfie</p>
+        <p class="text-sm text-slate-500" x-show="!selfie && !cameraOn">মুখ পরিষ্কার দেখা যায় এমন একটা ছবি তুলুন।</p>
+        <p class="text-sm text-rose-600" x-show="camError" x-text="camError"></p>
+      </div>
+    </div>
+    <div class="mt-3 overflow-hidden rounded-2xl bg-slate-900" x-show="cameraOn">
+      <video x-ref="video" autoplay playsinline muted class="aspect-[3/4] w-full -scale-x-100 object-cover"></video>
+    </div>
+    <img x-show="selfie" :src="selfie" alt="Selfie preview" class="mt-3 aspect-[3/4] w-full rounded-2xl object-cover">
+    <canvas x-ref="canvas" class="hidden"></canvas>
+    <input x-ref="fileInput" type="file" accept="image/*" capture="user" class="hidden" @change="fromFile($event)">
+    <div class="mt-3 flex gap-2">
+      <button type="button" class="btn-secondary flex-1" x-show="!cameraOn && !selfie" @click="openCamera()">{% include "partials/icon.html" with name="face" cls="h-4 w-4" %}Open camera</button>
+      <button type="button" class="btn-primary flex-1" x-show="cameraOn" @click="capture()">Capture</button>
+      <button type="button" class="btn-secondary flex-1" x-show="selfie" @click="retake()">Retake</button>
+    </div>
+  </div>
+
+  <input type="text" x-model="note" maxlength="200" placeholder="Note (optional) — যেমন: ক্লায়েন্ট অফিস" class="form-input mt-3">
+
+  <button type="button" class="btn-primary mt-4 w-full py-3.5 text-base" :disabled="!loc || !selfie || busy" @click="submit()">
+    <svg x-show="busy" class="h-5 w-5 animate-spin" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" opacity=".25"/><path d="M22 12a10 10 0 0 1-10 10" stroke="currentColor" stroke-width="3"/></svg>
+    <span x-text="busy ? 'Sending…' : 'Punch {{ next_status }} now'"></span>
+  </button>
+  <div x-show="result" x-cloak class="mt-3 rounded-xl p-3 text-center text-sm font-semibold" :class="ok ? 'bg-emerald-50 text-emerald-800 dark:bg-emerald-500/10 dark:text-emerald-300' : 'bg-rose-50 text-rose-800 dark:bg-rose-500/10 dark:text-rose-300'" x-text="result"></div>
+</div>
+
+<div class="card overflow-hidden">
+  <p class="border-b border-slate-100 px-4 py-3 font-semibold text-slate-900 dark:border-white/[0.06] dark:text-white">Today's punches</p>
+  <ul class="divide-y divide-slate-100 dark:divide-white/[0.05]">
+    {% for a in todays %}
+    <li class="flex items-center justify-between px-4 py-3 text-sm">
+      <span class="font-semibold text-slate-900 dark:text-white">{{ a.timestamp|date:"h:i A" }}</span>
+      <span class="flex items-center gap-2"><span class="badge-neutral">{{ a.status }}</span>{% if a.is_remote_punch %}<span class="badge-info">Mobile</span>{% else %}<span class="badge-neutral">Machine / office</span>{% endif %}</span>
+    </li>
+    {% empty %}<li class="px-4 py-6 text-center text-sm text-slate-500">আজ এখনো কোনো পাঞ্চ নেই</li>{% endfor %}
+  </ul>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+function remotePunch(url, csrf) {
+  return {
+    secure: window.isSecureContext, loc: null, locError: '', selfie: null, cameraOn: false, camError: '',
+    stream: null, busy: false, result: '', ok: false, note: '', clock: '',
+    init() {
+      const tick = () => this.clock = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      tick(); setInterval(tick, 1000);
+      this.getLocation();
+    },
+    getLocation() {
+      this.locError = ''; this.loc = null;
+      if (!navigator.geolocation) { this.locError = 'এই ফোন/ব্রাউজারে লোকেশন সাপোর্ট নেই।'; return; }
+      navigator.geolocation.getCurrentPosition(
+        p => { this.loc = { lat: p.coords.latitude, lng: p.coords.longitude, acc: p.coords.accuracy }; },
+        e => { this.locError = e.code === 1 ? 'লোকেশনের অনুমতি দিন (ব্রাউজারের সেটিং → Location → Allow)।' : 'লোকেশন পাওয়া যায়নি — GPS চালু করে আবার চেষ্টা করুন।'; },
+        { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 });
+    },
+    async openCamera() {
+      this.camError = '';
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { this.$refs.fileInput.click(); return; }
+      try {
+        this.stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: { ideal: 720 } }, audio: false });
+        this.$refs.video.srcObject = this.stream;
+        this.cameraOn = true;
+      } catch (e) {
+        this.camError = 'ক্যামেরা খোলা যায়নি — অনুমতি দিন, অথবা ফোনের ক্যামেরা দিয়ে ছবি তুলুন।';
+        this.$refs.fileInput.click();
+      }
+    },
+    capture() {
+      const v = this.$refs.video, c = this.$refs.canvas;
+      const w = v.videoWidth || 720, h = v.videoHeight || 960;
+      c.width = w; c.height = h;
+      const ctx = c.getContext('2d');
+      ctx.translate(w, 0); ctx.scale(-1, 1);         // প্রিভিউর মতো আয়না-ছবি
+      ctx.drawImage(v, 0, 0, w, h);
+      this.selfie = c.toDataURL('image/jpeg', 0.85);
+      this.stopCamera();
+    },
+    fromFile(ev) {
+      const f = ev.target.files && ev.target.files[0];
+      if (!f) return;
+      const r = new FileReader();
+      r.onload = () => { this.selfie = r.result; };
+      r.readAsDataURL(f);
+    },
+    retake() { this.selfie = null; this.openCamera(); },
+    stopCamera() { if (this.stream) this.stream.getTracks().forEach(t => t.stop()); this.stream = null; this.cameraOn = false; },
+    async submit() {
+      this.busy = true; this.result = '';
+      const fd = new FormData();
+      fd.append('csrfmiddlewaretoken', csrf);
+      fd.append('latitude', this.loc.lat); fd.append('longitude', this.loc.lng); fd.append('accuracy', this.loc.acc);
+      fd.append('selfie', this.selfie); fd.append('note', this.note);
+      try {
+        const res = await fetch(url, { method: 'POST', body: fd, headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+        const data = await res.json();
+        this.ok = data.status === 'success'; this.result = data.message;
+        if (this.ok) setTimeout(() => window.location.reload(), 1500);
+      } catch (e) { this.ok = false; this.result = 'নেটওয়ার্ক সমস্যা — আবার চেষ্টা করুন।'; }
+      this.busy = false;
+    }
+  };
+}
+</script>
+{% endblock %}

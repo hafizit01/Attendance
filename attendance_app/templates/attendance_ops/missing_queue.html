@@ -1,0 +1,213 @@
+{% extends "base.html" %}
+{% block title %}Missing / Pending Attendance{% endblock %}
+{% block content %}
+{{ rows|json_script:"ops-rows" }}
+<div class="space-y-6" x-data="queue()" @keydown.window.ctrl.enter.prevent="save()" @keydown.window.ctrl.s.prevent="save()">
+  <div class="page-header">
+    <div>
+      <p class="eyebrow">{% include "partials/icon.html" with name="alert" cls="h-3.5 w-3.5" %}Operator tools</p>
+      <h1 class="page-title">Missing / Pending <span class="text-gradient">Attendance</span></h1>
+      <p class="page-subtitle">যেসব কর্মদিবসে পাঞ্চ নেই বা Out নেই। সারি বাছাই করে শিফটের সময় বসিয়ে একবারে সেভ করুন।</p>
+    </div>
+    <div class="flex flex-wrap gap-2 text-sm">
+      <span class="issue-nopunch !px-3 !py-1"><span class="h-1.5 w-1.5 rounded-full bg-current"></span><b class="tabular-nums" x-text="left('no_punch')"></b> No punch</span>
+      <span class="issue-out !px-3 !py-1"><span class="h-1.5 w-1.5 rounded-full bg-current"></span><b class="tabular-nums" x-text="left('missing_out')"></b> Missing out</span>
+    </div>
+  </div>
+
+  {% include "attendance_ops/_tabs.html" %}
+
+  {# ───────── ফিল্টার (GET — সেভের পরও একই থাকে) ───────── #}
+  <form method="get" class="ops-card grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-[repeat(6,minmax(0,1fr))_auto] lg:items-end" x-ref="filters">
+    <div>
+      <label class="ops-label" for="f-month">Month</label>
+      <input id="f-month" type="month" class="ops-input tabular-nums" value="{{ f.from|slice:':7' }}"
+             @change="if ($event.target.value) { const [y, m] = $event.target.value.split('-').map(Number); $refs.from.value = $event.target.value + '-01'; const last = new Date(y, m, 0); $refs.to.value = $event.target.value + '-' + String(last.getDate()).padStart(2, '0'); $refs.filters.submit(); }">
+    </div>
+    <div><label class="ops-label" for="f-from">From</label><input id="f-from" x-ref="from" type="date" name="from" value="{{ f.from }}" max="{{ today }}" class="ops-input tabular-nums"></div>
+    <div><label class="ops-label" for="f-to">To</label><input id="f-to" x-ref="to" type="date" name="to" value="{{ f.to }}" max="{{ today }}" class="ops-input tabular-nums"></div>
+    <div>
+      <label class="ops-label" for="f-dept">Department</label>
+      <select id="f-dept" name="department" class="ops-input">
+        <option value="">All departments</option>
+        {% for d in departments %}<option value="{{ d.id }}" {% if f.department == d.id|stringformat:"s" %}selected{% endif %}>{{ d.name }}</option>{% endfor %}
+      </select>
+    </div>
+    <div>
+      <label class="ops-label" for="f-issue">Issue</label>
+      <select id="f-issue" name="issue" class="ops-input">
+        <option value="">All issues</option>
+        <option value="no_punch" {% if f.issue == 'no_punch' %}selected{% endif %}>No punch</option>
+        <option value="missing_out" {% if f.issue == 'missing_out' %}selected{% endif %}>Missing out</option>
+      </select>
+    </div>
+    <div><label class="ops-label" for="f-q">Employee</label><input id="f-q" type="search" name="q" value="{{ f.q }}" class="ops-input" placeholder="Name or ID"></div>
+    <button class="ops-btn-primary">{% include "partials/icon.html" with name="filter" cls="h-4 w-4" %}Apply</button>
+  </form>
+
+  {% if truncated %}
+  <p class="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-200">প্রথম {{ limit }}টা সারি দেখানো হচ্ছে। ডিপার্টমেন্ট বা তারিখ দিয়ে ছোট করুন, সেভ করার পর বাকিগুলো আসবে।</p>
+  {% endif %}
+
+  <div>
+    <section class="ops-card overflow-hidden">
+      {# টুলবার #}
+      <div class="flex flex-col gap-3 border-b border-slate-100 px-4 py-3 lg:flex-row lg:items-center lg:justify-between dark:border-white/[0.06]">
+        <div class="flex flex-wrap items-center gap-1.5 text-sm">
+          <span class="mr-1 text-xs font-semibold uppercase tracking-wide text-slate-500">Select</span>
+          <button type="button" class="ops-chip" @click="pick(() => true)">All</button>
+          <button type="button" class="ops-chip" @click="pick(r => r.issue === 'no_punch')">No punch</button>
+          <button type="button" class="ops-chip" @click="pick(r => r.issue === 'missing_out')">Missing out</button>
+          <button type="button" class="ops-chip" @click="pick(() => false)">None</button>
+        </div>
+        <div class="flex flex-wrap items-center gap-2">
+          <button type="button" class="ops-btn-light" @click="autofill()" :disabled="!selCount" title="বাছাই করা সারিতে প্রত্যেকের শিফটের In/Out সময় বসবে">
+            {% include "partials/icon.html" with name="bolt" cls="h-4 w-4" %}Auto-fill shift times for selected</button>
+          <select class="ops-input !w-auto" @change="setStatus($event.target.value); $event.target.value = ''" :disabled="!selCount" aria-label="Set status for selected">
+            <option value="">Set status…</option>
+            {% for value, label in status_choices %}<option value="{{ value }}">{{ label }}</option>{% endfor %}
+          </select>
+        </div>
+      </div>
+
+      <div class="max-h-[68vh] overflow-auto" x-ref="grid">
+        <table class="w-full min-w-[960px] border-separate border-spacing-0 text-sm">
+          <thead class="sticky top-0 z-10">
+            <tr class="bg-slate-50 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+              <th class="w-10 border-b border-slate-200 px-4 py-2.5 dark:border-white/[0.06]">
+                <input type="checkbox" class="form-checkbox !h-4 !w-4" :checked="rows.length && selCount === rows.length" :indeterminate="selCount && selCount < rows.length"
+                       @change="pick(() => $event.target.checked)" aria-label="Select all rows"></th>
+              <th class="border-b border-slate-200 px-3 py-2.5 dark:border-white/[0.06]">Employee</th>
+              <th class="border-b border-slate-200 px-3 py-2.5 dark:border-white/[0.06]">Date</th>
+              <th class="border-b border-slate-200 px-3 py-2.5 dark:border-white/[0.06]">Issue</th>
+              <th class="w-28 border-b border-slate-200 px-3 py-2.5 dark:border-white/[0.06]">In time</th>
+              <th class="w-28 border-b border-slate-200 px-3 py-2.5 dark:border-white/[0.06]">Out time</th>
+              <th class="w-48 border-b border-slate-200 px-3 py-2.5 dark:border-white/[0.06]">Status</th>
+              <th class="border-b border-slate-200 px-3 py-2.5 dark:border-white/[0.06]">Remark</th>
+            </tr>
+          </thead>
+          <tbody>
+            <template x-for="(r, i) in rows" :key="r.key">
+              <tr class="transition-colors" :class="r.sel ? 'bg-indigo-50/50 dark:bg-indigo-500/[0.07]' : 'hover:bg-slate-50/70 dark:hover:bg-white/[0.02]'">
+                <td class="border-b border-slate-100 px-4 py-1.5 dark:border-white/[0.05]">
+                  <input type="checkbox" class="form-checkbox !h-4 !w-4" x-model="r.sel" :data-r="i" data-c="sel" @keydown="nav($event, i, 'sel')" :aria-label="'Select ' + r.name + ' ' + r.date_label"></td>
+                <td class="border-b border-slate-100 px-3 py-1.5 dark:border-white/[0.05]">
+                  <p class="font-medium text-slate-900 dark:text-white" x-text="r.name"></p>
+                  <p class="whitespace-nowrap text-xs text-slate-500" :title="r.shift.name + ' ' + r.shift.in + '–' + r.shift.out" x-text="'ID ' + r.device_id + (r.department ? ' · ' + r.department : '') + ' · ' + r.shift.in + '–' + r.shift.out"></p>
+                </td>
+                <td class="whitespace-nowrap border-b border-slate-100 px-3 py-1.5 tabular-nums text-slate-700 dark:border-white/[0.05] dark:text-slate-300" x-text="r.date_label"></td>
+                <td class="border-b border-slate-100 px-3 py-1.5 dark:border-white/[0.05]">
+                  <span :class="r.issue === 'no_punch' ? 'issue-nopunch' : 'issue-out'"><span class="h-1.5 w-1.5 rounded-full bg-current"></span><span x-text="r.issue === 'no_punch' ? 'No Punch' : 'Missing Out'"></span></span>
+                  <p x-show="r.err" class="mt-1 text-xs font-medium text-rose-600" x-text="r.err"></p>
+                </td>
+                <td class="border-b border-slate-100 px-2 py-1.5 dark:border-white/[0.05]">
+                  <input class="ops-cell" x-model="r.in" :data-r="i" data-c="in" inputmode="numeric" autocomplete="off" :placeholder="r.shift.in"
+                         :class="bad(r.in) && '!border-rose-400'" @input="r.sel = true; r.err = ''" @blur="r.in = norm(r.in)" @keydown="nav($event, i, 'in')" :aria-label="'In time ' + r.name"></td>
+                <td class="border-b border-slate-100 px-2 py-1.5 dark:border-white/[0.05]">
+                  <input class="ops-cell" x-model="r.out" :data-r="i" data-c="out" inputmode="numeric" autocomplete="off" :placeholder="r.status === 'half_day' ? '½ auto' : r.shift.out"
+                         :class="bad(r.out) && '!border-rose-400'" @input="r.sel = true; r.err = ''" @blur="r.out = norm(r.out)" @keydown="nav($event, i, 'out')" :aria-label="'Out time ' + r.name"></td>
+                <td class="border-b border-slate-100 px-2 py-1.5 dark:border-white/[0.05]">
+                  <select class="ops-cell" x-model="r.status" :data-r="i" data-c="status" @change="r.sel = true; r.err = ''; if (r.status === 'half_day' && r.out === r.shift.out) r.out = ''" @keydown="nav($event, i, 'status')" :aria-label="'Status ' + r.name">
+                    {% for value, label in status_choices %}<option value="{{ value }}">{{ label }}</option>{% endfor %}
+                  </select></td>
+                <td class="border-b border-slate-100 px-2 py-1.5 dark:border-white/[0.05]">
+                  <input class="ops-cell" x-model="r.remark" maxlength="255" :data-r="i" data-c="remark" placeholder="Reason…" @input="r.sel = true" @keydown="nav($event, i, 'remark')" :aria-label="'Remark ' + r.name"></td>
+              </tr>
+            </template>
+            <tr x-show="!rows.length">
+              <td colspan="8" class="px-4 py-16 text-center">
+                <p class="text-base font-semibold text-slate-900 dark:text-white">সব ঠিক আছে 🎉</p>
+                <p class="mt-1 text-sm text-slate-500">এই সময়ে কোনো No Punch বা Missing Out নেই।</p>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-slate-100 px-4 py-2.5 text-xs text-slate-500 dark:border-white/[0.06]">
+        <span><kbd>Tab</kbd> next cell</span><span><kbd>Enter</kbd> / <kbd>↓</kbd> same cell, next row</span><span><kbd>Shift</kbd>+<kbd>Enter</kbd> / <kbd>↑</kbd> previous row</span>
+        <span><kbd>Space</kbd> on checkbox to select</span><span><kbd>Ctrl</kbd>+<kbd>Enter</kbd> save selected</span><span>"930" → 09:30, "6:30p" → 18:30</span>
+      </div>
+    </section>
+
+    {# ───────── নিচের স্টিকি বার (সারি বাছাই করলে) ───────── #}
+    <div x-show="selCount" x-transition.opacity.duration.200ms x-cloak
+         class="sticky bottom-[4.75rem] z-20 mt-4 md:bottom-4">
+      <div class="mx-auto flex max-w-4xl flex-col gap-3 rounded-2xl bg-slate-900 px-4 py-3 text-white shadow-2xl ring-1 ring-white/10 sm:flex-row sm:items-center sm:justify-between dark:bg-slate-800">
+        <p class="text-sm"><b class="tabular-nums" x-text="selCount"></b> row<span x-show="selCount !== 1">s</span> selected
+          <span class="text-slate-400" x-show="emptyCount" x-text="'· ' + emptyCount + ' without time'"></span></p>
+        <div class="flex flex-wrap items-center gap-2">
+          <button type="button" class="ops-btn bg-white/10 text-white hover:bg-white/20" @click="autofill()">{% include "partials/icon.html" with name="bolt" cls="h-4 w-4" %}Auto-fill shift times</button>
+          <button type="button" class="ops-btn text-slate-300 hover:text-white" @click="pick(() => false)">Clear</button>
+          <button type="button" class="ops-btn bg-indigo-500 text-white hover:bg-indigo-400" @click="save()" :disabled="saving">
+            <svg x-show="saving" class="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" opacity=".25"/><path d="M22 12a10 10 0 0 1-10 10" stroke="currentColor" stroke-width="3"/></svg>
+            <span x-text="saving ? 'Saving…' : 'Save all selected'"></span></button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+function queue() {
+  const raw = JSON.parse(document.getElementById('ops-rows').textContent);
+  return {
+    rows: raw.map(r => ({ ...r, sel: false, in: r.current_in, out: '', status: 'present', remark: '', err: '' })),
+    saving: false,
+    get selCount() { return this.rows.filter(r => r.sel).length; },
+    get emptyCount() { return this.rows.filter(r => r.sel && (!r.in || (!r.out && r.status !== 'half_day'))).length; },
+    left(kind) { return this.rows.filter(r => r.issue === kind).length; },
+    norm(v) { const t = window.opsNormTime(v); return t === null ? v : t; },
+    bad(v) { return window.opsNormTime(v) === null; },
+    pick(fn) { this.rows.forEach(r => r.sel = !!fn(r)); },
+    autofill() {
+      let n = 0;
+      this.rows.forEach(r => {
+        if (!r.sel) return;
+        if (!r.in) r.in = r.shift.in;                    // Missing Out এ মেশিনের In থাকে — বদলাই না
+        r.out = r.status === 'half_day' ? '' : r.shift.out;
+        r.err = ''; n++;
+      });
+      if (n) window.opsToast('ok', `${n} row${n === 1 ? '' : 's'} filled with shift times`, 'দেখে নিয়ে "Save all selected" চাপুন।');
+    },
+    setStatus(v) {
+      if (!v) return;
+      this.rows.forEach(r => { if (r.sel) { r.status = v; if (v === 'half_day' && r.out === r.shift.out) r.out = ''; } });
+    },
+    nav(e, i, col) {
+      let to = null;
+      if (e.key === 'Enter' && !e.ctrlKey && !e.metaKey) to = e.shiftKey ? i - 1 : i + 1;
+      else if (col !== 'status' && e.key === 'ArrowDown') to = i + 1;
+      else if (col !== 'status' && e.key === 'ArrowUp') to = i - 1;
+      if (to === null) return;
+      e.preventDefault();
+      const el = this.$refs.grid.querySelector(`[data-r="${to}"][data-c="${col}"]`);
+      if (el) { el.focus(); if (el.select) el.select(); }
+    },
+    async save() {
+      const sel = this.rows.filter(r => r.sel);
+      if (!sel.length || this.saving) return;
+      sel.forEach(r => { r.in = this.norm(r.in); r.out = this.norm(r.out); });
+      const bad = sel.filter(r => this.bad(r.in) || this.bad(r.out) || !r.in || (!r.out && r.status !== 'half_day'));
+      bad.forEach(r => r.err = !r.in ? 'In সময় দিন' : (!r.out && r.status !== 'half_day') ? 'Out সময় দিন' : 'সময় ঠিকমতো লিখুন');
+      if (bad.length) { window.opsToast('err', `${bad.length} row${bad.length === 1 ? '' : 's'} need a time`, 'লাল চিহ্নিত সারি ঠিক করুন, অথবা "Auto-fill shift times" চাপুন।'); return; }
+      this.saving = true;
+      try {
+        const d = await window.opsPost('{% url "attendance_app:missing_queue_save" %}', {
+          rows: sel.map(r => ({ employee_id: r.employee_id, date: r.date, in: r.in, out: r.out, status: r.status, remark: r.remark })) });
+        const done = new Set([...d.saved, ...d.already_fixed]);
+        this.rows = this.rows.filter(r => !done.has(r.key));
+        for (const [k, msg] of Object.entries(d.errors || {})) { const r = this.rows.find(x => x.key === k); if (r) r.err = msg; }
+        const n = d.saved.length, parts = [];
+        if (d.already_fixed.length) parts.push(`${d.already_fixed.length} already fixed by someone else`);
+        const errs = Object.keys(d.errors || {}).length;
+        if (errs) parts.push(`${errs} need attention`);
+        window.opsToast(errs && !n ? 'err' : 'ok', `${n} attendance record${n === 1 ? '' : 's'} saved`, parts.join(' · '));
+      } catch (e) { window.opsToast('err', 'Save হয়নি', e.message); }
+      finally { this.saving = false; }
+    },
+  };
+}
+</script>
+{% endblock %}

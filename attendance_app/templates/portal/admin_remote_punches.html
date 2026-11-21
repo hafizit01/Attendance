@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}Remote Punches{% endblock %}
+{% block content %}
+<div class="space-y-6">
+  <div class="page-header">
+    <div>
+      <p class="eyebrow">{% include "partials/icon.html" with name="face" cls="h-3.5 w-3.5" %}Mobile attendance</p>
+      <h1 class="page-title">Remote <span class="text-gradient">Punches</span></h1>
+      <p class="page-subtitle">কর্মচারীরা মোবাইল থেকে GPS + সেলফি দিয়ে যে পাঞ্চ দিয়েছে — ছবি ও লোকেশন যাচাই করুন।</p>
+    </div>
+    <a href="{% url 'attendance_app:hr_settings' %}" class="btn-secondary">{% include "partials/icon.html" with name="shield" cls="h-4 w-4" %}HR Rules</a>
+  </div>
+
+  <form method="get" class="card flex flex-col gap-3 p-4 sm:flex-row sm:items-end">
+    <div class="sm:w-60"><label class="form-label">Employee</label>
+      <select name="employee" class="form-select"><option value="">All</option>{% for e in employees %}<option value="{{ e.id }}" {% if e.id == selected_employee %}selected{% endif %}>{{ e.name }}</option>{% endfor %}</select></div>
+    <div><label class="form-label">From</label><input type="date" name="date_from" value="{{ date_from|date:'Y-m-d' }}" class="form-input"></div>
+    <div><label class="form-label">To</label><input type="date" name="date_to" value="{{ date_to|date:'Y-m-d' }}" class="form-input"></div>
+    <button class="btn-primary">Filter</button>
+  </form>
+
+  <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+    {% for a in page_obj %}
+    <div class="card overflow-hidden">
+      <div class="flex gap-4 p-4">
+        {% if a.selfie %}
+        <a href="{% url 'attendance_app:remote_punch_selfie' a.id %}" target="_blank" rel="noopener" class="shrink-0">
+          <img src="{% url 'attendance_app:remote_punch_selfie' a.id %}" alt="Selfie of {{ a.employee.name }}" loading="lazy" class="h-28 w-24 rounded-xl object-cover ring-1 ring-slate-200 dark:ring-slate-700">
+        </a>
+        {% else %}<span class="flex h-28 w-24 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-xs text-slate-400 dark:bg-white/5">No photo</span>{% endif %}
+        <div class="min-w-0 flex-1">
+          <p class="truncate font-semibold text-slate-900 dark:text-white">{{ a.employee.name }}</p>
+          <p class="text-xs text-slate-500">{{ a.employee.department.name|default:"—" }}</p>
+          <p class="mt-2 text-lg font-bold tabular-nums text-slate-900 dark:text-white">{{ a.timestamp|date:"h:i A" }} <span class="badge-neutral align-middle">{{ a.status }}</span></p>
+          <p class="text-xs text-slate-500">{{ a.timestamp|date:"D, d M Y" }}</p>
+          {% if a.map_url %}<a href="{{ a.map_url }}" target="_blank" rel="noopener" class="link mt-1 inline-flex items-center gap-1 text-sm">{% include "partials/icon.html" with name="signal" cls="h-4 w-4" %}View on map{% if a.location_accuracy %} · ±{{ a.location_accuracy|floatformat:0 }} m{% endif %}</a>{% endif %}
+          {% if a.remote_note %}<p class="mt-1 truncate text-xs italic text-slate-500" title="{{ a.remote_note }}">“{{ a.remote_note }}”</p>{% endif %}
+        </div>
+      </div>
+    </div>
+    {% empty %}
+    <div class="card p-8 sm:col-span-2 xl:col-span-3">{% include "partials/empty_state.html" with icon="face" title="কোনো রিমোট পাঞ্চ নেই" text="HR Rules এ GPS attendance চালু করে কর্মচারীদের পোর্টাল লগইন দিন।" %}</div>
+    {% endfor %}
+  </div>
+  {% include "partials/pagination.html" with page=page_obj %}
+</div>
+{% endblock %}

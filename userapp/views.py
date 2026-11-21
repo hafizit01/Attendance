@@ -46,6 +46,12 @@ def login_view(request):
         if user is not None:
             login(request, user)
 
+            # কর্মচারীর লগইন → নিজের পোর্টাল (কোম্পানির সাবস্ক্রিপশন পোর্টাল নিজেই দেখে)
+            from attendance_app.portal.access import portal_employee
+            if portal_employee(user) is not None:
+                messages.success(request, f'স্বাগতম, {user.employee.name}!')
+                return redirect('portal:home')
+
             # ✅ লগইনের পরই expired চেক
             if _is_expired(user):
                 messages.warning(request, "Your subscription has expired.")

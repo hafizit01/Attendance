@@ -6,7 +6,7 @@
     <div>
       <p class="eyebrow">People</p>
       <h1 class="page-title">Employees</h1>
-      <p class="page-subtitle">{{ employees|length }} employee{{ employees|length|pluralize }}{% if branch_scope.branch %} in <span class="font-semibold text-slate-700 dark:text-slate-200">{{ branch_scope.branch.name }}</span>{% endif %}{% if query %} matching “{{ query }}”{% endif %}.</p>
+      <p class="page-subtitle">{{ total_employees }} employee{{ total_employees|pluralize }}{% if branch_scope.branch %} in <span class="font-semibold text-slate-700 dark:text-slate-200">{{ branch_scope.branch.name }}</span>{% endif %}{% if query %} matching “{{ query }}”{% endif %}.</p>
     </div>
     <div class="flex w-full flex-col gap-2 sm:flex-row lg:w-auto">
       <form method="get" class="relative sm:flex-1 lg:w-72 lg:flex-none" role="search">
@@ -49,6 +49,7 @@
               <div class="flex items-center justify-end gap-1">
                 <a href="{% url 'attendance_app:employee_attendance_detail' emp.id %}" class="btn-icon h-9 w-9 hover:bg-primary-50 hover:text-primary-600 dark:hover:bg-primary-500/10" title="Attendance report" aria-label="Attendance report for {{ emp.name }}">{% include "partials/icon.html" with name="chart" cls="h-4 w-4" %}</a>
                 {% if branch_scope.is_company_admin %}<a href="{% url 'attendance_app:employee_transfer' emp.id %}" class="btn-icon h-9 w-9 hover:bg-violet-50 hover:text-violet-600 dark:hover:bg-violet-500/10" title="Transfer to another branch" aria-label="Transfer {{ emp.name }}">{% include "partials/icon.html" with name="arrow-right" cls="h-4 w-4" %}</a>{% endif %}
+                <a href="{% url 'attendance_app:employee_portal_access' emp.id %}" class="btn-icon h-9 w-9 hover:bg-primary-50 hover:text-primary-600 dark:hover:bg-primary-500/10 {% if emp.user_id %}text-primary-600 dark:text-primary-400{% endif %}" title="{% if emp.user_id %}Portal login active{% else %}Give portal login{% endif %}" aria-label="Portal access for {{ emp.name }}">{% include "partials/icon.html" with name="key" cls="h-4 w-4" %}</a>
                 <a href="{% url 'attendance_app:employee_edit' emp.id %}" class="btn-icon h-9 w-9 hover:bg-amber-50 hover:text-amber-600 dark:hover:bg-amber-500/10" title="Edit" aria-label="Edit {{ emp.name }}">{% include "partials/icon.html" with name="pencil" cls="h-4 w-4" %}</a>
                 <a href="{% url 'attendance_app:employee_delete' emp.id %}" class="btn-icon h-9 w-9 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-500/10" title="Delete" aria-label="Delete {{ emp.name }}">{% include "partials/icon.html" with name="trash" cls="h-4 w-4" %}</a>
               </div>
@@ -64,6 +65,7 @@
         </tbody>
       </table>
     </div>
+    {% include "partials/pagination.html" with page=page_obj %}
   </div>
 </div>
 {% endblock content %}

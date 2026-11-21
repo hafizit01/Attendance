@@ -1,0 +1,56 @@
+{% extends "portal/base.html" %}
+{% block title %}Leave{% endblock %}
+{% block content %}
+{% if balances %}
+<div class="card p-4">
+  <p class="mb-3 font-semibold text-slate-900 dark:text-white">My leave balance {{ year }}</p>
+  <div class="grid grid-cols-2 gap-2 sm:grid-cols-3">
+    {% for b in balances %}
+    <div class="rounded-xl bg-slate-50 p-3 dark:bg-white/[0.04]">
+      <p class="text-xs text-slate-500">{{ b.label }}</p>
+      {% if b.limited %}
+        <p class="text-lg font-bold {% if b.remaining <= 0 %}text-rose-600{% else %}text-slate-900 dark:text-white{% endif %}">{{ b.remaining }} <span class="text-sm font-normal text-slate-400">/ {{ b.allocated }}</span></p>
+        <span class="mt-1 block h-1.5 overflow-hidden rounded-full bg-slate-200 dark:bg-white/10"><span class="block h-full rounded-full bg-primary-500" style="width: {% widthratio b.used b.allocated|default:1 100 %}%"></span></span>
+      {% else %}<p class="text-lg font-bold text-slate-900 dark:text-white">{{ b.used }} <span class="text-sm font-normal text-slate-400">used</span></p>{% endif %}
+      {% if b.pending %}<p class="mt-1 text-[11px] text-amber-600">{{ b.pending }} day(s) pending</p>{% endif %}
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+<form method="post" class="card space-y-4 p-5" novalidate>
+  {% csrf_token %}
+  <p class="font-semibold text-slate-900 dark:text-white">{% include "partials/icon.html" with name="plus-circle" cls="inline h-5 w-5 text-primary-500" %} Apply for leave</p>
+  {% if form.non_field_errors %}<div class="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700 dark:border-rose-500/20 dark:bg-rose-500/10 dark:text-rose-300">{% for e in form.non_field_errors %}<p>{{ e }}</p>{% endfor %}</div>{% endif %}
+  {% include "partials/form_field.html" with field=form.leave_type %}
+  <div class="grid grid-cols-2 gap-3">
+    {% include "partials/form_field.html" with field=form.start_date %}
+    {% include "partials/form_field.html" with field=form.end_date %}
+  </div>
+  {% include "partials/form_field.html" with field=form.reason %}
+  <button class="btn-primary w-full">Submit application</button>
+  <p class="text-center text-xs text-slate-500">অফিস approve করলে ব্যালান্স থেকে দিনগুলো কাটা হবে।</p>
+</form>
+
+<div class="card overflow-hidden">
+  <p class="border-b border-slate-100 px-4 py-3 font-semibold text-slate-900 dark:border-white/[0.06] dark:text-white">My applications</p>
+  <ul class="divide-y divide-slate-100 dark:divide-white/[0.05]">
+    {% for lv in leaves %}
+    <li class="flex items-center justify-between gap-3 px-4 py-3">
+      <div class="min-w-0">
+        <p class="text-sm font-semibold text-slate-900 dark:text-white">{{ lv.get_leave_type_display }}</p>
+        <p class="text-xs text-slate-500">{{ lv.start_date|date:"d M" }} – {{ lv.end_date|date:"d M Y" }}{% if lv.reason %} · {{ lv.reason|truncatechars:40 }}{% endif %}</p>
+      </div>
+      <div class="flex shrink-0 items-center gap-2">
+        <span class="{% if lv.status == 'Approved' %}badge-success{% elif lv.status == 'Rejected' %}badge-danger{% else %}badge-warning{% endif %}">{{ lv.status }}</span>
+        {% if lv.status == 'Pending' %}
+        <form method="post" action="{% url 'portal:leave_cancel' lv.id %}" onsubmit="return confirm('আবেদন বাতিল করবেন?');">{% csrf_token %}
+          <button class="btn-icon h-8 w-8 text-rose-500" title="Cancel">{% include "partials/icon.html" with name="x" cls="h-4 w-4" %}</button></form>
+        {% endif %}
+      </div>
+    </li>
+    {% empty %}<li class="px-4 py-6 text-center text-sm text-slate-500">এখনো কোনো আবেদন নেই</li>{% endfor %}
+  </ul>
+</div>
+{% endblock %}

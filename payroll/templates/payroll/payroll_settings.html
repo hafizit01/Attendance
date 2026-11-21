@@ -2,6 +2,8 @@
 {% block title %}Payroll Settings{% endblock %}
 {% block content %}
 <div class="mx-auto max-w-2xl space-y-6">
+  {% include "payroll/_tabs.html" with tab="bonus" %}
+
   <div>
     <a href="{% if next %}{{ next }}{% else %}{% url 'payroll:salary_summary_list' %}{% endif %}" class="btn-ghost btn-sm -ml-3 mb-2">← Salary summary</a>
     <p class="eyebrow">Payroll</p>

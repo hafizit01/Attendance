@@ -1,0 +1,67 @@
+{% extends "pdf/base.html" %}
+{% block title %}Payslip {{ month_label }}{% endblock %}
+{% block eyebrow %}Payslip{% endblock %}
+{% block heading %}{{ month_label }}{% endblock %}
+{% block footer_title %}Payslip · {{ employee.name }} · {{ month_label }}{% endblock %}
+{% block extra_css %}
+  .slip { width: 100%; border-collapse: collapse; margin-top: 6pt; }
+  .slip td { padding: 6pt 8pt; border-bottom: 0.6pt solid #e5e9f0; font-size: 9pt; }
+  .slip td.v { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
+  .slip tr.h td { background: #f1f5f9; font-size: 7pt; font-weight: 700; letter-spacing: 0.6pt; text-transform: uppercase; color: #475569; }
+  .slip tr.minus td.v { color: #be123c; }
+  .slip tr.sum td { background: #f8fafc; font-weight: 700; border-top: 0.8pt solid #cbd5e1; }
+  .slip tr.total td { background: #eef2ff; font-size: 11pt; font-weight: 700; color: #1e1b4b; border-top: 1pt solid #a5b4fc; }
+  .two { width: 100%; border-collapse: collapse; table-layout: fixed; }
+  .two > tbody > tr > td { vertical-align: top; padding: 0 5pt; }
+  .two > tbody > tr > td:first-child { padding-left: 0; } .two > tbody > tr > td:last-child { padding-right: 0; }
+{% endblock %}
+
+{% block meta %}
+<table class="meta"><tr>
+  <td><div class="k">Employee</div><div class="v">{{ employee.name }}</div></td>
+  <td><div class="k">ID</div><div class="v">{{ employee.device_user_id }}</div></td>
+  <td><div class="k">Department</div><div class="v">{{ employee.department.name|default:"—" }}</div></td>
+  <td><div class="k">Month</div><div class="v">{{ month_label }}</div></td>
+</tr></table>
+{% endblock %}
+
+{% block content %}
+<table class="two"><tr>
+  <td>
+    <table class="slip">
+      <tr class="h"><td>Earnings</td><td class="v">৳</td></tr>
+      {% for name, amount in lines.earnings %}<tr><td>{{ name }}</td><td class="v">{{ amount|floatformat:"2g" }}</td></tr>{% endfor %}
+      <tr class="sum"><td>Total earnings</td><td class="v">{{ lines.total_earnings|floatformat:"2g" }}</td></tr>
+    </table>
+  </td>
+  <td>
+    <table class="slip">
+      <tr class="h"><td>Deductions</td><td class="v">৳</td></tr>
+      {% for name, amount in lines.deductions %}<tr class="minus"><td>{{ name }}</td><td class="v">{{ amount|floatformat:"2g" }}</td></tr>{% empty %}<tr><td colspan="2" class="sub">No deductions</td></tr>{% endfor %}
+      <tr class="sum"><td>Total deductions</td><td class="v">{{ lines.total_deductions|floatformat:"2g" }}</td></tr>
+    </table>
+  </td>
+</tr></table>
+
+<table class="slip" style="margin-top:10pt">
+  <tr class="total"><td>Net pay <span class="sub">· Bank ৳{{ slip.bank_transfer|floatformat:"2g" }} · Cash ৳{{ slip.payable_cash|floatformat:"2g" }}</span></td><td class="v">৳{{ lines.net|floatformat:"2g" }}</td></tr>
+</table>
+
+<table class="kpis" style="margin-top:10pt"><tr>
+  <td class="kw"><div class="kpi"><div class="k">Present</div><div class="v">{{ slip.present_days }}</div></div></td>
+  <td class="kw"><div class="kpi"><div class="k">Leave</div><div class="v">{{ slip.leave_days }}</div></div></td>
+  <td class="kw"><div class="kpi"><div class="k">Absent</div><div class="v">{{ slip.absent_days }}</div></div></td>
+  <td class="kw"><div class="kpi"><div class="k">Late</div><div class="v">{{ slip.late_time }}</div></div></td>
+  <td class="kw"><div class="kpi"><div class="k">Overtime</div><div class="v">{{ slip.over_time }}</div></div></td>
+  <td class="kw"><div class="kpi"><div class="k">Worked</div><div class="v">{{ slip.total_work_hours }}</div></div></td>
+</tr></table>
+<p class="note">Computer-generated payslip based on attendance records. Contact the office for any correction.</p>
+{% endblock %}
+
+{% block signatures %}
+<table class="sigs"><tr>
+  <td><div class="line">Employee<div class="role">{{ employee.name }}</div></div></td>
+  <td><div class="line">Accounts</div></td>
+  <td><div class="line">Authorized signature</div></td>
+</tr></table>
+{% endblock %}

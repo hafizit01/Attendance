@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}Loans & Advances{% endblock %}
+{% block content %}
+<div class="space-y-6">
+  {% include "payroll/_tabs.html" with tab="loans" %}
+
+  <div class="page-header">
+    <div>
+      <p class="eyebrow">{% include "partials/icon.html" with name="money" cls="h-3.5 w-3.5" %}Payroll</p>
+      <h1 class="page-title">Loans & <span class="text-gradient">Advances</span></h1>
+      <p class="page-subtitle">প্রতি মাসের বেতন থেকে কিস্তি (EMI) নিজে থেকেই কাটা হয়, পুরো টাকা না ওঠা পর্যন্ত। বেতনের পেজ ও PDF এ "Loan deduction" দেখায়।</p>
+    </div>
+    <div class="flex flex-wrap gap-2">
+      <a href="{% url 'payroll:loan_excel' %}" class="btn-secondary">{% include "partials/excel_icon.html" %}Export Excel</a>
+      {% if can_manage %}<a href="{% url 'payroll:loan_add' %}" class="btn-primary">{% include "partials/icon.html" with name="plus" cls="h-4 w-4" %}New loan / advance</a>{% endif %}
+    </div>
+  </div>
+
+  <div class="grid grid-cols-2 gap-4 lg:grid-cols-3">
+    <div class="stat-card"><p class="stat-label">Loans shown</p><p class="stat-value">{{ loans|length }}</p></div>
+    <div class="stat-card"><p class="stat-label">Outstanding</p><p class="stat-value text-rose-600 dark:text-rose-400">৳{{ total_outstanding|floatformat:"0g" }}</p></div>
+    <div class="stat-card col-span-2 lg:col-span-1"><p class="stat-label">Deduction this month</p><p class="stat-value text-sky-600 dark:text-sky-400">৳{{ total_this_month|floatformat:"0g" }}</p></div>
+  </div>
+
+  <div class="tabs">
+    <a href="?status=active" class="tab {% if status == 'active' %}is-active{% endif %}">Active</a>
+    <a href="?status=closed" class="tab {% if status == 'closed' %}is-active{% endif %}">Closed</a>
+    <a href="?status=all" class="tab {% if status == 'all' %}is-active{% endif %}">All</a>
+  </div>
+
+  <div class="card overflow-hidden">
+    <div class="overflow-x-auto">
+      <table class="responsive-table table-modern">
+        <thead><tr><th>Employee</th><th class="text-right">Amount</th><th class="text-right">EMI</th><th>Progress</th><th class="text-right">Outstanding</th><th class="text-right">This month</th><th>Status</th></tr></thead>
+        <tbody>
+          {% for ln in loans %}
+          <tr class="cursor-pointer" onclick="window.location='{% url 'payroll:loan_detail' ln.id %}'">
+            <td class="rt-title"><p class="font-semibold text-slate-900 dark:text-white">{{ ln.employee.name }}</p>
+              <p class="text-xs font-normal text-slate-500">{{ ln.get_loan_type_display }} · from {{ ln.start_month|date:"M Y" }}</p></td>
+            <td class="text-right tabular-nums">৳{{ ln.amount|floatformat:"0g" }}</td>
+            <td class="text-right tabular-nums">৳{{ ln.monthly_deduction|floatformat:"0g" }} <span class="text-xs text-slate-400">× {{ ln.emi_count }}</span></td>
+            <td><div class="flex items-center gap-2"><span class="h-2 w-28 overflow-hidden rounded-full bg-slate-100 dark:bg-white/10"><span class="block h-full rounded-full bg-gradient-to-r from-primary-500 to-emerald-500" style="width: {{ ln.progress }}%"></span></span><span class="text-xs tabular-nums text-slate-500">{{ ln.progress }}%</span></div></td>
+            <td class="text-right font-semibold tabular-nums {% if ln.remaining %}text-rose-600 dark:text-rose-400{% else %}text-emerald-600{% endif %}">৳{{ ln.remaining|floatformat:"0g" }}</td>
+            <td class="text-right tabular-nums">{% if ln.this_month %}৳{{ ln.this_month|floatformat:"0g" }}{% else %}—{% endif %}</td>
+            <td>{% if ln.status == 'closed' %}<span class="badge-neutral">Closed</span>{% elif not ln.remaining %}<span class="badge-success">Recovered</span>{% else %}<span class="badge-info">Active</span>{% endif %}</td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="7">{% include "partials/empty_state.html" with icon="money" title="কোনো লোন বা অগ্রিম নেই" text="কাউকে লোন/অগ্রিম দিলে এখানে যোগ করুন — বেতন থেকে নিজে থেকেই কিস্তি কাটা হবে।" %}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -20,6 +20,16 @@ def format_timedelta(value):
 
 
 @register.filter
+def hours_label(value):
+    """timedelta → '8h 30m'"""
+    if not isinstance(value, timedelta):
+        return ""
+    total = int(value.total_seconds()) // 60
+    h, m = divmod(abs(total), 60)
+    return f"{h}h {m:02d}m" if m else f"{h}h"
+
+
+@register.filter
 def format_diff_timedelta(value):
     try:
         if isinstance(value, timedelta):

@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% load time_filters %}
+{% block title %}Shifts{% endblock %}
+{% block content %}
+<div class="space-y-6">
+  <div class="page-header">
+    <div>
+      <p class="eyebrow">{% include "partials/icon.html" with name="swap" cls="h-3.5 w-3.5" %}Shift management</p>
+      <h1 class="page-title">Work <span class="text-gradient">Shifts</span></h1>
+      <p class="page-subtitle">Morning, Evening, Night — শিফট বানান, কর্মচারীদের দিন। Late, Overtime, বেতন সব শিফট অনুযায়ী হিসাব হবে।</p>
+    </div>
+    <div class="flex flex-wrap gap-2">
+      <a href="{% url 'attendance_app:shift_roster' %}" class="btn-secondary">{% include "partials/icon.html" with name="grid" cls="h-4 w-4" %}Roster</a>
+      <a href="{% url 'attendance_app:shift_assign' %}" class="btn-secondary">{% include "partials/icon.html" with name="users" cls="h-4 w-4" %}Assign</a>
+      {% if can_edit %}<a href="{% url 'attendance_app:shift_add' %}" class="btn-primary">{% include "partials/icon.html" with name="plus" cls="h-4 w-4" %}New shift</a>{% endif %}
+    </div>
+  </div>
+
+  {% if shifts %}
+  <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+    {% for s in shifts %}
+    <div class="card card-hover relative overflow-hidden p-5 {% if not s.is_active %}opacity-60{% endif %}">
+      <div class="absolute inset-x-0 top-0 h-1.5 bg-gradient-to-r from-{{ s.color }}-400 to-{{ s.color }}-600"></div>
+      <div class="flex items-start justify-between gap-3">
+        <div class="flex items-center gap-3">
+          <span class="flex h-12 w-12 items-center justify-center rounded-2xl bg-{{ s.color }}-100 text-lg font-bold text-{{ s.color }}-700 dark:bg-{{ s.color }}-500/15 dark:text-{{ s.color }}-300">
+            {% if s.is_night %}{% include "partials/icon.html" with name="moon-star" cls="h-6 w-6" %}{% else %}{{ s.short }}{% endif %}
+          </span>
+          <div>
+            <p class="font-semibold text-slate-900 dark:text-white">{{ s.name }}</p>
+            <p class="text-xs text-slate-500">{% if s.branch %}{{ s.branch.name }}{% else %}All branches{% endif %}{% if not s.is_active %} · Inactive{% endif %}</p>
+          </div>
+        </div>
+        {% if can_edit %}
+        <a href="{% url 'attendance_app:shift_edit' s.id %}" class="btn-icon h-9 w-9" title="Edit">{% include "partials/icon.html" with name="pencil" cls="h-4 w-4" %}</a>
+        {% endif %}
+      </div>
+
+      <div class="mt-5 flex items-end justify-between">
+        <div>
+          <p class="text-2xl font-bold tabular-nums tracking-tight text-slate-900 dark:text-white">{{ s.start_time|time:"h:i A" }} <span class="text-slate-300 dark:text-slate-600">→</span> {{ s.end_time|time:"h:i A" }}</p>
+          <p class="mt-1 text-xs text-slate-500">{% if s.is_night %}🌙 রাতের শিফট (পরের দিন শেষ) · {% endif %}{{ s.duration|hours_label }} work</p>
+        </div>
+      </div>
+
+      <div class="mt-4 flex flex-wrap gap-1.5">
+        {% if s.grace_minutes %}<span class="badge-info">Grace {{ s.grace_minutes }} min</span>{% endif %}
+        {% if s.break_minutes %}<span class="badge-warning">Break {{ s.break_minutes }} min</span>{% endif %}
+        <span class="badge-neutral">Off: {{ s.weekly_off_day|default:"Dept. default" }}</span>
+      </div>
+
+      <div class="mt-4 flex items-center justify-between border-t border-slate-100 pt-3 dark:border-white/[0.06]">
+        <span class="text-sm"><b class="tabular-nums text-slate-900 dark:text-white">{{ s.current_count }}</b> <span class="text-slate-500">employee{{ s.current_count|pluralize }} today</span>{% if s.dept_count %} · <span class="text-slate-500">{{ s.dept_count }} dept default</span>{% endif %}</span>
+        <a href="{% url 'attendance_app:shift_assign' %}?shift={{ s.id }}" class="link text-sm">Assign →</a>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="card p-8 sm:p-12">
+    <div class="mx-auto max-w-xl text-center">
+      <span class="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-gradient-to-br from-primary-500 to-fuchsia-500 text-white shadow-glow">{% include "partials/icon.html" with name="swap" cls="h-8 w-8" %}</span>
+      <h2 class="mt-5 text-lg font-bold text-slate-900 dark:text-white">এখনো কোনো শিফট নেই</h2>
+      <p class="mt-2 text-sm text-slate-500">শিফট না থাকলে সবার হিসাব ডিপার্টমেন্টের Office time অনুযায়ী হয় (আগের মতো)। আলাদা সময়ে কাজ করলে শিফট বানান।</p>
+      {% if can_edit %}<a href="{% url 'attendance_app:shift_add' %}" class="btn-primary mt-6">{% include "partials/icon.html" with name="plus" cls="h-4 w-4" %}Create first shift</a>{% endif %}
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="card overflow-hidden">
+    <div class="card-header"><p class="card-title">{% include "partials/icon.html" with name="cube" cls="h-4 w-4 text-primary-500" %}Department default shifts</p>
+      <span class="text-xs text-slate-500">যাদের আলাদা শিফট দেওয়া নেই তাদের জন্য</span></div>
+    <div class="overflow-x-auto">
+      <table class="responsive-table table-modern">
+        <thead><tr><th>Department</th><th>Default</th><th>Office time</th><th class="text-right"></th></tr></thead>
+        <tbody>
+          {% for d in departments %}
+          <tr>
+            <td class="rt-title"><p class="font-semibold text-slate-900 dark:text-white">{{ d.name }}</p><p class="text-xs font-normal text-slate-500">{{ d.branch.name|default:"" }}</p></td>
+            <td>{% if d.default_shift %}<span class="badge bg-{{ d.default_shift.color }}-50 text-{{ d.default_shift.color }}-700 ring-{{ d.default_shift.color }}-600/20 dark:bg-{{ d.default_shift.color }}-500/10 dark:text-{{ d.default_shift.color }}-300">{{ d.default_shift.name }}</span>{% else %}<span class="text-sm text-slate-400">Office time</span>{% endif %}</td>
+            <td class="whitespace-nowrap tabular-nums text-sm text-slate-600 dark:text-slate-300">{{ d.in_time|time:"h:i A" }} – {{ d.out_time|time:"h:i A" }}</td>
+            <td class="text-right">{% if request.user.is_superuser or branch_scope.is_company_admin %}<a href="{% url 'attendance_app:department_edit' d.id %}" class="link text-sm">Change</a>{% endif %}</td>
+          </tr>
+          {% empty %}<tr><td colspan="4">{% include "partials/empty_state.html" with icon="cube" title="No departments" %}</td></tr>{% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

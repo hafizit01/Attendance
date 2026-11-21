@@ -6,7 +6,7 @@ from django.db import transaction
 from django.utils import timezone
 from zk import ZK
 
-from attendance_app.models import Attendance, Department
+from attendance_app.models import Attendance, Device
 from attendance_app.utils.zk_import import _sync_attendance, _sync_users
 
 
@@ -28,24 +28,25 @@ class Command(BaseCommand):
         except ValueError:
             raise CommandError("--since must be YYYY-MM-DD")
 
-        qs = (Department.objects.select_related("company", "branch")
-              .exclude(device_ip__isnull=True).exclude(device_port__isnull=True)
-              .exclude(company__isnull=True))
+        qs = (Device.objects.select_related("company", "department", "department__branch")
+              .filter(protocol=Device.PROTOCOL_ZK_PULL, is_active=True)
+              .exclude(ip__isnull=True))
         if company:
             qs = qs.filter(company_id=company)
 
-        # একই মেশিন একাধিক ডিপার্টমেন্টে সেট থাকলে একবারই পড়ি
+        # একই মেশিন একাধিকবার যোগ করা থাকলে একবারই পড়ি
         by_device = {}
-        for d in qs.order_by("id"):
-            by_device.setdefault((d.company_id, d.device_ip, d.device_port), d)
+        for dev in qs.order_by("id"):
+            by_device.setdefault((dev.company_id, dev.ip, dev.port or 4370), dev)
         if not by_device:
-            raise CommandError("No department has a device IP/Port set.")
+            raise CommandError("No active ZKTeco LAN device found.")
 
         # 1) সব মেশিন থেকে পড়া — একটাও ব্যর্থ হলে কিছুই বদলাই না (নাহলে ওই মেশিনের রেকর্ড মুছে আর ফিরবে না)
         fetched = []
-        for (_, ip, port), dept in by_device.items():
+        for (_, ip, port), dev in by_device.items():
+            dept = dev.department
             label = f"{dept.branch.name if dept.branch_id else '-'} · {dept.name} ({ip}:{port})"
-            zk, conn = ZK(ip, port=port, timeout=10, force_udp=False, ommit_ping=True), None
+            zk, conn = ZK(ip, port=port, timeout=10, password=dev.comm_key or 0, force_udp=False, ommit_ping=True), None
             try:
                 conn = zk.connect()
                 conn.disable_device()

@@ -10,6 +10,23 @@ class EmployeeSalaryAdmin(admin.ModelAdmin):
 
 
 
+from .models import EmployeeLoan, LoanRepayment  # noqa: E402
+
+
+class LoanRepaymentInline(admin.TabularInline):
+    model = LoanRepayment
+    extra = 0
+
+
+@admin.register(EmployeeLoan)
+class EmployeeLoanAdmin(admin.ModelAdmin):
+    list_display = ('employee', 'loan_type', 'amount', 'emi_count', 'monthly_deduction', 'start_month', 'status', 'company')
+    list_filter = ('company', 'loan_type', 'status')
+    search_fields = ('employee__name',)
+    raw_id_fields = ('employee',)
+    inlines = [LoanRepaymentInline]
+
+
 @admin.register(SalarySummary)
 class SalarySummaryAdmin(admin.ModelAdmin):
     list_display = (

@@ -19,7 +19,7 @@ from django.utils import timezone
 from django.utils.timezone import is_naive, make_aware
 from weasyprint import HTML
 from attendance_app.models import *
-from .models import EmployeeSalary
+from .models import EmployeeSalary, EmployeeLoan, salary_breakdown
 from attendance_app.utils.params import int_param, month_param
 from attendance_app.utils.pdf import render_pdf
 from django.utils.http import url_has_allowed_host_and_scheme
@@ -27,7 +27,11 @@ from .forms import PayrollSettingsForm
 from .rounding import round_cash_figure
 from .overtime import DayWork, OvertimeSettings, calculate_pay
 from attendance_app import scoping
-from attendance_app.utils.attendance_helpers import load_holidays, is_holiday_for, load_transfers, branch_on
+from attendance_app.utils.attendance_helpers import day_range as att_day_range, _local_dt, _weekday
+from collections import namedtuple
+_PunchRec = namedtuple('_PunchRec', 'pk timestamp')
+from attendance_app.utils.attendance_helpers import (load_holidays, is_holiday_for, load_transfers, branch_on,
+                                                     ShiftResolver, night_window)
 from django.http import HttpResponseForbidden
 from io import BytesIO
 import os
@@ -70,7 +74,9 @@ def get_salary_summary_data(request, month_str, department_id=None, employee_id=
     # Dropdowns (ব্রাঞ্চ ম্যানেজার / বাছাই করা ব্রাঞ্চ অনুযায়ী)
     scope = scoping.get_scope(request)
     departments = scoping.departments(Department.objects.all(), scope)
-    employees_qs = Employee.objects.filter(company=user_company).select_related('department', 'department__branch', 'employeesalary', 'company').order_by('id')
+    employees_qs = (Employee.objects.filter(company=user_company)
+                    .select_related('department', 'department__branch', 'employeesalary', 'company')
+                    .prefetch_related('employeesalary__components__component').order_by('id'))
 
     if department_id:
         employees_qs = employees_qs.filter(department__id=department_id)
@@ -88,6 +94,15 @@ def get_salary_summary_data(request, month_str, department_id=None, employee_id=
     total_rounding_adjustment = Decimal(0)
     rounding_enabled = user_company.salary_rounding_enabled
     ot_settings = OvertimeSettings.for_company(user_company)
+    hr_settings = HRSettings.for_company(user_company)
+    total_late_deduction = Decimal(0)
+    total_loan_deduction = Decimal(0)
+    loans_by_emp = defaultdict(list)
+    if month_str:
+        _y, _m = map(int, month_str.split('-'))
+        for loan in (EmployeeLoan.objects.filter(company=user_company, start_month__lte=date(_y, _m, 1))
+                     .select_related('employee').prefetch_related('repayments')):
+            loans_by_emp[loan.employee_id].append(loan)
 
     if month_str:
         year, month = map(int, month_str.split('-'))
@@ -95,10 +110,16 @@ def get_salary_summary_data(request, month_str, department_id=None, employee_id=
         next_month = start_date.replace(day=28) + timedelta(days=4)
         end_date = next_month - timedelta(days=next_month.day)
 
-        # Fetch Data
+        # শিফট (রোস্টার/ডিপার্টমেন্টের ডিফল্ট শিফট)। কারো শিফট না থাকলে নিচের হিসাব হুবহু আগের মতো
+        shift_resolver = ShiftResolver(list(employees_qs), start_date, end_date)
+        has_night = any(s.is_night for rows in shift_resolver.assignments.values() for _a, _b, s in rows) or \
+            any(e.department_id and e.department.default_shift_id and e.department.default_shift.is_night
+                for e in employees_qs)
+
+        # Fetch Data (রাতের শিফটে Out পরের দিনে, তাই একদিন বেশি)
         all_attendance = Attendance.objects.filter(
             employee__in=employees_qs,
-            timestamp__date__range=(start_date, end_date)
+            **att_day_range(start_date, end_date + timedelta(days=1) if has_night else end_date)
         ).order_by('timestamp')
 
         all_leaves = LeaveRequest.objects.filter(
@@ -107,9 +128,11 @@ def get_salary_summary_data(request, month_str, department_id=None, employee_id=
         )
 
         # Optimization Maps
+        # হিসাবে শুধু id আর সময় লাগে — পুরো মডেল অবজেক্ট না বানিয়ে হালকা রেকর্ড (হাজার কর্মচারীতে অনেক দ্রুত)
         att_map = defaultdict(list)
-        for att in all_attendance:
-            att_map[(att.employee_id, timezone.localtime(att.timestamp).date())].append(att)
+        _tz = timezone.get_current_timezone()
+        for pk, emp_id, ts in all_attendance.values_list('id', 'employee_id', 'timestamp'):
+            att_map[(emp_id, ts.astimezone(_tz).date())].append(_PunchRec(pk, ts))
 
         leave_map = set()
         for lv in all_leaves:
@@ -137,7 +160,11 @@ def get_salary_summary_data(request, month_str, department_id=None, employee_id=
                 continue
             
             sal = emp.employeesalary
-            base_salary = sal.base_salary
+            # বেতন কাঠামো: Basic + allowance = Gross (মাসিক), আর নির্দিষ্ট কাটা (Tax/PF)।
+            # কোনো অংশ সেট না থাকলে Gross = Basic — আগের হিসাব হুবহু।
+            structure = salary_breakdown(sal)
+            basic_salary = sal.base_salary
+            base_salary = structure['gross']
             bank_transfer = sal.bank_transfer_amount
             # Cash cannot be negative (শুধুমাত্র বেসিক থেকে ব্যাংক বাদ)
             base_cash = max(base_salary - bank_transfer, Decimal(0))
@@ -166,15 +193,36 @@ def get_salary_summary_data(request, month_str, department_id=None, employee_id=
 
             total_days = (end_date - start_date).days + 1
             working_days_count = 0
+            any_shift = False           # এই মাসে কোনো দিন Shift মডেলের শিফট ছিল কিনা
+            late_days = 0
+            expected_shift_td = timedelta()
+            night_used = set()
 
             for n in range(total_days):
                 curr = start_date + timedelta(days=n)
-                wd = curr.strftime('%A')
+                wd = _weekday(curr)
+
+                sh = shift_resolver.on(emp, curr)
+                use_shift = sh.shift_id is not None
+                any_shift = any_shift or use_shift
+                day_in = sh.in_time if use_shift else in_t
+                day_off = sh.off_day if use_shift else off_day
+                day_regular = sh.duration if use_shift else regular
+                day_grace = sh.grace if use_shift else timedelta()
+                day_break = sh.brk if use_shift else timedelta()
 
                 is_holiday = is_holiday_for(company_holidays, curr, branch_on(current_branch, transfers, curr))
-                is_off = (off_day and wd == off_day)
+                is_off = (day_off and wd == day_off)
                 is_leave = (emp.id, curr) in leave_map
-                recs = att_map.get((emp.id, curr), [])
+                if use_shift and sh.night:
+                    w_start, w_end = night_window(curr, sh)
+                    recs = [r for dd in (curr, curr + timedelta(days=1)) for r in att_map.get((emp.id, dd), [])
+                            if w_start <= r.timestamp <= w_end and r.pk not in night_used]
+                    night_used.update(r.pk for r in recs)
+                else:
+                    recs = [r for r in att_map.get((emp.id, curr), []) if r.pk not in night_used]
+                if not (is_holiday or is_off):
+                    expected_shift_td += day_regular
 
                 if is_holiday:
                     pub_holiday += 1
@@ -189,7 +237,7 @@ def get_salary_summary_data(request, month_str, department_id=None, employee_id=
 
                 if is_leave:
                     leave_days += 1
-                    day_works.append(DayWork(is_leave=True))
+                    day_works.append(DayWork(is_leave=True, regular=day_regular if use_shift else None))
                     continue
 
                 if recs:
@@ -197,26 +245,31 @@ def get_salary_summary_data(request, month_str, department_id=None, employee_id=
                     first_in = min(timestamps)
                     last_out = max(timestamps) if len(timestamps) > 1 else None
                     present_days += 1
-                    
-                    # Late Logic
-                    exp_in = datetime.combine(curr, in_t)
-                    if is_naive(exp_in): exp_in = make_aware(exp_in)
+
+                    # Late Logic (শিফটের grace এর মধ্যে এলে late নয়; শিফট না থাকলে grace 0 = আগের নিয়ম)
+                    exp_in = _local_dt(curr, day_in, _tz)   # = make_aware(datetime.combine(curr, day_in)), ক্যাশ করা
                     if is_naive(first_in): first_in = make_aware(first_in)
-                    
-                    if first_in > exp_in:
+
+                    if first_in > exp_in + day_grace:
                         total_late_time += (first_in - exp_in)
+                        if not (is_holiday or is_off):
+                            late_days += 1   # Late deduction শুধু কর্মদিবসের দেরি গোনে
 
                     # Work Duration and Overtime
                     if last_out:
                         if is_naive(last_out): last_out = make_aware(last_out)
-                        actual_start = max(first_in, exp_in) 
+                        actual_start = max(first_in, exp_in)
                         if last_out > actual_start:
-                            day_works.append(DayWork(work=last_out - actual_start, is_off=bool(is_holiday or is_off)))
+                            day_works.append(DayWork(work=max(last_out - actual_start - day_break, timedelta()),
+                                                     is_off=bool(is_holiday or is_off),
+                                                     regular=day_regular if use_shift else None))
                 else:
                     absent_days += 1
 
             # Calculations (ওভারটাইম কোম্পানির সেটিং অনুযায়ী)
-            pay = calculate_pay(base_salary, regular, working_days_count, day_works, ot_settings)
+            # attendance অনুযায়ী হিসাব হয় Basic + আনুপাতিক allowance এর উপর; নির্দিষ্ট allowance পুরোটা যোগ হয়
+            pay = calculate_pay(structure['prorated_gross'], regular, working_days_count, day_works, ot_settings,
+                                expected_hours=(expected_shift_td.total_seconds() / 3600) if any_shift else None)
             total_work_time = pay['total_work']
             total_over_time = pay['over_time']
             expected_hours_float = pay['expected_hours']
@@ -231,11 +284,44 @@ def get_salary_summary_data(request, month_str, department_id=None, employee_id=
             time_diff_str = f"{sign}{h:02d}:{m:02d}"
 
             # Salary Logic
-            earned_salary = pay['earned']
+            earned_salary = pay['earned'] + structure['fixed_earnings'] if structure['fixed_earnings'] else pay['earned']
 
             bonus_amount = sal.bonus_for_month(year, month)
             final_salary = earned_salary + bonus_amount
-            
+
+            # Smart late rule (HR Settings): প্রতি N দিন দেরি = ১ দিনের মূল বেতন কাটা। বন্ধ থাকলে ০ (আগের হিসাব)
+            late_deduction_days = 0
+            late_deduction = Decimal(0)
+            if hr_settings.enable_late_deduction and hr_settings.lates_equal_one_day_deduction:
+                late_deduction_days = late_days // hr_settings.lates_equal_one_day_deduction
+                if late_deduction_days:
+                    divisor = (total_days if hr_settings.late_deduction_basis == HRSettings.BASIS_CALENDAR
+                               else (working_days_count or total_days))
+                    day_rate = basic_salary / Decimal(divisor)   # নিয়ম: ১ দিনের মূল (basic) বেতন
+                    late_deduction = min((day_rate * late_deduction_days).quantize(Decimal('0.01')),
+                                         max(final_salary, Decimal(0)))
+                    final_salary -= late_deduction
+
+            # নির্দিষ্ট মাসিক কাটা (Tax / PF …) — বেতনের বেশি নয়
+            fixed_deductions = min(structure['fixed_deductions'], max(final_salary, Decimal(0)))
+            if fixed_deductions:
+                final_salary -= fixed_deductions
+
+            # লোন / অগ্রিম: এই মাসের কিস্তি (লোন না থাকলে ০ — আগের হিসাব)
+            loan_items = []
+            for loan in loans_by_emp.get(emp.id, ()):
+                cut = loan.deduction_for(year, month)
+                if cut:
+                    loan_items.append({'loan': loan, 'amount': cut,
+                                       'remaining': Decimal(loan.amount) - loan.recovered_until(year, month)})
+            loan_deduction = sum((i['amount'] for i in loan_items), Decimal(0))
+            loan_shortfall = Decimal(0)
+            if loan_deduction > max(final_salary, Decimal(0)):
+                # বেতন কম — যতটুকু সম্ভব কাটা; বাকিটা নোট হিসেবে দেখানো হয়
+                loan_shortfall = loan_deduction - max(final_salary, Decimal(0))
+                loan_deduction = max(final_salary, Decimal(0))
+            final_salary -= loan_deduction
+
             # 🟢 আপনার দেওয়া লজিক অনুযায়ী পেয়াবল ক্যাশ ক্যালকুলেশন
             if base_salary > 0:
                 # ব্যাংকের অংশে কত টাকা বোনাস পড়বে তা আনুপাতিক হারে বের করা হচ্ছে (e.g., 25k/30k = 83.33%)
@@ -267,6 +353,8 @@ def get_salary_summary_data(request, month_str, department_id=None, employee_id=
             total_rounding_adjustment += rounding_adjustment
             total_earned += earned_salary
             total_bonus += bonus_amount
+            total_late_deduction += late_deduction
+            total_loan_deduction += loan_deduction
 
             def fmt_td(td):
                 s = int(td.total_seconds())
@@ -301,7 +389,17 @@ def get_salary_summary_data(request, month_str, department_id=None, employee_id=
                 'payable_cash': payable_cash, # 🟢 আপনার লজিকের ফাইনাল ক্যাশ (7500 tk)
                 'payable_cash_raw': payable_cash_raw,
                 'rounding_adjustment': rounding_adjustment,
-                
+
+                'late_days': late_days,
+                'late_deduction_days': late_deduction_days,
+                'late_deduction': late_deduction,
+                'basic_salary': basic_salary,
+                'structure': structure,
+                'fixed_deductions': fixed_deductions,
+                'loan_deduction': loan_deduction,
+                'loan_items': loan_items,
+                'loan_shortfall': loan_shortfall,
+
                 'salary_difference': salary_diff
             })
 
@@ -335,6 +433,12 @@ def get_salary_summary_data(request, month_str, department_id=None, employee_id=
 
         'rounding_enabled': rounding_enabled,
         'total_rounding_adjustment': round(total_rounding_adjustment, 2),
+        'late_deduction_enabled': hr_settings.enable_late_deduction,
+        'salary_sms_enabled': hr_settings.enable_salary_sms,
+        'lates_per_day': hr_settings.lates_equal_one_day_deduction,
+        'total_late_deduction': round(total_late_deduction, 2),
+        'loan_deduction_any': any(r['loan_deduction'] or r['loan_shortfall'] for r in summary_data),
+        'total_loan_deduction': round(total_loan_deduction, 2),
         'can_change_settings': can_change_payroll_settings(request.user, user_company),
         'ot_settings': ot_settings,
         'company': user_company,
@@ -370,6 +474,9 @@ def payroll_settings(request):
     })
 
 
+SALARY_PAGE_SIZE = 100
+
+
 @login_required
 def salary_summary_list(request):
     if request.user.groups.filter(name='attendance').exists():
@@ -385,6 +492,15 @@ def salary_summary_list(request):
     except PermissionError:
         return HttpResponseForbidden("Company not set.")
 
+    # অনেক কর্মচারী হলে পেজে ১০০ জন করে দেখাই (মোবাইল কার্ড + টেবিল দুটোই); মোট (Total) সবসময় সবার —
+    # get_salary_summary_data আগেই পুরো তালিকার যোগফল করে রাখে। PDF/Excel/SMS আগের মতো সবার।
+    page_obj = Paginator(context['summaries'], SALARY_PAGE_SIZE).get_page(request.GET.get('page'))
+    context.update({
+        'page_obj': page_obj,
+        'page_rows': page_obj.object_list,
+        'page_offset': page_obj.start_index() - 1 if page_obj.object_list else 0,
+        'summary_count': len(context['summaries']),
+    })
     return render(request, 'payroll/salary_summary_list.html', context)
 
 @login_required

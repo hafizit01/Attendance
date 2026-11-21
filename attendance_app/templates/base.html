@@ -72,11 +72,31 @@
       {% url 'attendance_app:dashboard' as u %}{% include "partials/nav_link.html" with href=u label="Dashboard" icon="home" name="dashboard" %}
       {% url 'attendance_app:employee_list' as u %}{% include "partials/nav_link.html" with href=u label="Employees" icon="users" name="employee_list" %}
       {% url 'attendance_app:attendance_list' as u %}{% include "partials/nav_link.html" with href=u label="Attendance" icon="clock" name="attendance_list" %}
+      {% url 'attendance_app:bulk_attendance' as u %}{% include "partials/nav_link.html" with href=u label="Bulk / Official Duty" icon="plus-circle" name="bulk_attendance" %}
+      {% url 'attendance_app:missing_queue' as u %}{% include "partials/nav_link.html" with href=u label="Pending Attendance" icon="inbox" name="missing_queue" %}
+      {% url 'attendance_app:analytics' as u %}{% include "partials/nav_link.html" with href=u label="Analytics" icon="trend" name="analytics" %}
       <button type="button" @click="showModal = true; sidebarOpen = false" class="nav-link {% if current == 'monthly_work_time_report' %}is-active{% endif %}" title="Monthly Report">
         {% include "partials/icon.html" with name="chart" %}<span class="nav-label">Monthly Report</span>
       </button>
       {% url 'attendance_app:leave_list' as u %}{% include "partials/nav_link.html" with href=u label="Leave Requests" icon="calendar" name="leave_list" %}
+      {% url 'attendance_app:leave_balance' as u %}{% include "partials/nav_link.html" with href=u label="Leave Balance" icon="chart" name="leave_balance" %}
       {% url 'attendance_app:holiday_list' as u %}{% include "partials/nav_link.html" with href=u label="Public Holidays" icon="sun" name="holiday_list" %}
+    </div>
+
+    <p class="nav-section">Shifts</p>
+    <div class="space-y-1">
+      {% url 'attendance_app:shift_list' as u %}{% include "partials/nav_link.html" with href=u label="Shifts" icon="swap" name="shift_list" %}
+      {% url 'attendance_app:shift_roster' as u %}{% include "partials/nav_link.html" with href=u label="Shift Roster" icon="grid" name="shift_roster" %}
+      {% url 'attendance_app:shift_assign' as u %}{% include "partials/nav_link.html" with href=u label="Assign Shift" icon="plus-circle" name="shift_assign" %}
+    </div>
+
+    <p class="nav-section">Machines</p>
+    <div class="space-y-1">
+      {% url 'attendance_app:device_list' as u %}{% include "partials/nav_link.html" with href=u label="Devices" icon="device" name="device_list" %}
+      {% url 'attendance_app:punch_feed' as u %}{% include "partials/nav_link.html" with href=u label="Live Punches" icon="signal" name="punch_feed" %}
+      {% url 'attendance_app:missing_punch_list' as u %}{% include "partials/nav_link.html" with href=u label="Missing Punches" icon="alert" name="missing_punch_list" %}
+      {% url 'attendance_app:remote_punch_list' as u %}{% include "partials/nav_link.html" with href=u label="Remote Punches" icon="face" name="remote_punch_list" %}
+      {% url 'attendance_app:unknown_punch_list' as u %}{% include "partials/nav_link.html" with href=u label="Unknown Punches" icon="shield" name="unknown_punch_list" %}
     </div>
 
     <p class="nav-section">Management</p>
@@ -85,6 +105,7 @@
       {% url 'attendance_app:department_list' as u %}{% include "partials/nav_link.html" with href=u label="Departments" icon="cube" name="department_list" %}
       {% url 'userapp:employee_profile_list' as u %}{% include "partials/nav_link.html" with href=u label="Employee Profiles" icon="user" name="employee_profile_list" %}
       {% url 'attendance_app:sync_attendance' as u %}{% include "partials/nav_link.html" with href=u label="Sync Device Data" icon="sync" name="sync_attendance" %}
+      {% url 'attendance_app:message_log' as u %}{% include "partials/nav_link.html" with href=u label="SMS / WhatsApp log" icon="chat" name="message_log" %}
     </div>
 
     {% if not request.user.groups.all|length == 1 or request.user.groups.all.0.name != 'attendance' %}
@@ -92,7 +113,9 @@
     <div class="space-y-1">
       {% url 'payroll:salary_summary_list' as u %}{% include "partials/nav_link.html" with href=u label="Salary Summary" icon="money" name="salary_summary_list" %}
       {% url 'payroll:add_salary' as u %}{% include "partials/nav_link.html" with href=u label="Base Salaries" icon="plus-circle" name="add_salary" %}
+      {% url 'payroll:loan_list' as u %}{% include "partials/nav_link.html" with href=u label="Loans & Advances" icon="card" name="loan_list" %}
       {% if not branch_scope.locked %}{% url 'payroll:payroll_settings' as u %}{% include "partials/nav_link.html" with href=u label="Payroll Settings" icon="cog" name="payroll_settings" %}{% endif %}
+      {% if not branch_scope.locked %}{% url 'attendance_app:hr_settings' as u %}{% include "partials/nav_link.html" with href=u label="HR Rules" icon="shield" name="hr_settings" %}{% endif %}
     </div>
     {% endif %}
 
@@ -148,6 +171,45 @@
         <span x-show="!darkMode">{% include "partials/icon.html" with name="moon" %}</span>
         <span x-show="darkMode" x-cloak>{% include "partials/icon.html" with name="sun" %}</span>
       </button>
+
+      {% if request.user.is_authenticated and branch_scope.company %}
+      {# নোটিফিকেশন ঘণ্টা #}
+      <div class="relative" x-data="{ open: false }" @click.outside="open = false">
+        <button type="button" class="btn-icon relative" @click="open = !open" :aria-expanded="open" aria-label="Notifications" title="Notifications">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.7" stroke="currentColor" class="h-5 w-5"><path stroke-linecap="round" stroke-linejoin="round" d="M14.857 17.082a23.848 23.848 0 0 0 5.454-1.31A8.967 8.967 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.967 8.967 0 0 1-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0"/></svg>
+          {% if notif_unread_count %}<span class="absolute right-1 top-1 flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-bold text-white ring-2 ring-white dark:ring-slate-900">{% if notif_unread_count > 9 %}9+{% else %}{{ notif_unread_count }}{% endif %}</span>{% endif %}
+        </button>
+        <div x-show="open" x-cloak x-transition.origin.top.right
+             class="absolute right-0 mt-2 w-[22rem] max-w-[calc(100vw-2rem)] origin-top-right overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-lift dark:border-slate-700 dark:bg-slate-900">
+          <div class="flex items-center justify-between border-b border-slate-100 px-4 py-3 dark:border-slate-800">
+            <p class="text-sm font-semibold text-slate-900 dark:text-white">Notifications</p>
+            {% if notif_unread_count %}
+            <form method="post" action="{% url 'attendance_app:notification_read_all' %}">{% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}">
+              <button class="text-xs font-medium text-primary-600 hover:underline dark:text-primary-400">Mark all read</button></form>
+            {% endif %}
+          </div>
+          <ul class="max-h-96 divide-y divide-slate-100 overflow-y-auto dark:divide-slate-800">
+            {% for n in notif_latest %}
+            <li>
+              <form method="post" action="{% url 'attendance_app:notification_read' n.id %}">{% csrf_token %}
+                <button class="flex w-full gap-3 px-4 py-3 text-left transition hover:bg-slate-50 dark:hover:bg-white/[0.03]">
+                  <span class="mt-1.5 h-2 w-2 shrink-0 rounded-full {% if n.is_read %}bg-transparent{% else %}bg-primary-500{% endif %}"></span>
+                  <span class="min-w-0">
+                    <span class="block text-sm {% if n.is_read %}text-slate-600 dark:text-slate-400{% else %}font-semibold text-slate-900 dark:text-white{% endif %}">{{ n.title }}</span>
+                    <span class="mt-0.5 line-clamp-2 block text-xs text-slate-500">{{ n.message }}</span>
+                    <span class="mt-1 block text-[11px] text-slate-400">{{ n.created_at|timesince }} ago</span>
+                  </span>
+                </button>
+              </form>
+            </li>
+            {% empty %}
+            <li class="px-4 py-8 text-center text-sm text-slate-500">কোনো নোটিফিকেশন নেই</li>
+            {% endfor %}
+          </ul>
+          <a href="{% url 'attendance_app:notification_list' %}" class="block border-t border-slate-100 px-4 py-2.5 text-center text-xs font-semibold text-primary-600 hover:bg-slate-50 dark:border-slate-800 dark:text-primary-400 dark:hover:bg-white/[0.03]">View all</a>
+        </div>
+      </div>
+      {% endif %}
 
       {% if request.user.is_authenticated %}
       <div class="relative" x-data="{ open: false }" @click.outside="open = false">
@@ -292,6 +354,42 @@
   });
 </script>
 
+{% if request.user.is_authenticated and branch_scope.company %}
+{# ── লাইভ পপ-আপ: নতুন নোটিফিকেশন (অচেনা ID, missing punch, ছুটির আবেদন) এলে ৩০ সেকেন্ডের মধ্যে দেখায় ── #}
+<div id="toasts" class="pointer-events-none fixed right-4 top-20 z-[70] flex w-[22rem] max-w-[calc(100vw-2rem)] flex-col gap-2" aria-live="polite"></div>
+<script>
+(function () {
+  let since = {{ notif_latest.0.id|default:0 }};
+  const box = document.getElementById('toasts');
+  const csrf = '{{ csrf_token }}';
+  function toast(n) {
+    const el = document.createElement('form');
+    el.method = 'post'; el.action = n.url;
+    el.className = 'pointer-events-auto card flex cursor-pointer items-start gap-3 border-l-4 p-4 shadow-lift ' +
+      (n.kind === 'device' || n.kind === 'missing_punch' ? 'border-l-rose-500' : 'border-l-primary-500');
+    el.innerHTML = '<input type="hidden" name="csrfmiddlewaretoken"><div class="min-w-0 flex-1"><p class="t text-sm font-semibold text-slate-900 dark:text-white"></p><p class="m mt-0.5 line-clamp-2 text-xs text-slate-500"></p></div><button type="button" class="x text-slate-400 hover:text-slate-700" aria-label="Dismiss">✕</button>';
+    el.querySelector('input').value = csrf;
+    el.querySelector('.t').textContent = n.title;
+    el.querySelector('.m').textContent = n.message;
+    el.addEventListener('click', e => { if (!e.target.classList.contains('x')) el.submit(); });
+    el.querySelector('.x').addEventListener('click', e => { e.stopPropagation(); el.remove(); });
+    box.appendChild(el);
+    setTimeout(() => el.remove(), 15000);
+  }
+  async function poll() {
+    if (document.hidden) return;
+    try {
+      const r = await fetch('{% url "attendance_app:notification_poll" %}?since=' + since, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+      if (!r.ok) return;
+      const d = await r.json();
+      d.items.forEach(toast);
+      since = d.last_id;
+    } catch (e) {}
+  }
+  setInterval(poll, 30000);
+})();
+</script>
+{% endif %}
 {% block extra_scripts %}{% endblock %}
 </body>
 </html>

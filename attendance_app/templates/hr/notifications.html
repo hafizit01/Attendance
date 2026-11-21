@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Notifications{% endblock %}
+{% block content %}
+<div class="mx-auto max-w-3xl space-y-6">
+  <div class="page-header">
+    <div>
+      <p class="eyebrow">Inbox</p>
+      <h1 class="page-title">Notifications</h1>
+    </div>
+    <form method="post" action="{% url 'attendance_app:notification_read_all' %}">{% csrf_token %}
+      <button class="btn-secondary">{% include "partials/icon.html" with name="check-circle" cls="h-4 w-4" %}Mark all read</button></form>
+  </div>
+
+  <div class="card overflow-hidden">
+    <ul class="divide-y divide-slate-100 dark:divide-white/[0.05]">
+      {% for n in page_obj %}
+      <li>
+        <form method="post" action="{% url 'attendance_app:notification_read' n.id %}">{% csrf_token %}
+          <button class="flex w-full items-start gap-4 px-5 py-4 text-left transition hover:bg-slate-50 dark:hover:bg-white/[0.03]">
+            <span class="stat-icon {% if n.kind == 'missing_punch' %}bg-rose-50 text-rose-600 dark:bg-rose-500/10 dark:text-rose-300{% else %}bg-primary-50 text-primary-600 dark:bg-primary-500/10 dark:text-primary-300{% endif %}">
+              {% if n.kind == 'missing_punch' %}{% include "partials/icon.html" with name="alert" %}{% else %}{% include "partials/icon.html" with name="info" %}{% endif %}</span>
+            <span class="min-w-0 flex-1">
+              <span class="flex items-center gap-2"><span class="text-sm {% if n.is_read %}text-slate-600 dark:text-slate-400{% else %}font-semibold text-slate-900 dark:text-white{% endif %}">{{ n.title }}</span>
+                {% if not n.is_read %}<span class="h-2 w-2 rounded-full bg-primary-500"></span>{% endif %}</span>
+              <span class="mt-1 block text-sm text-slate-500">{{ n.message }}</span>
+              <span class="mt-1 block text-xs text-slate-400">{{ n.created_at|date:"d M Y, h:i A" }}</span>
+            </span>
+          </button>
+        </form>
+      </li>
+      {% empty %}
+      <li class="p-6">{% include "partials/empty_state.html" with icon="inbox" title="কোনো নোটিফিকেশন নেই" %}</li>
+      {% endfor %}
+    </ul>
+    {% include "partials/pagination.html" with page=page_obj %}
+  </div>
+</div>
+{% endblock %}

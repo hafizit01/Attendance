@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}Unknown Punches{% endblock %}
+{% block content %}
+<div class="space-y-6">
+  <div class="page-header">
+    <div>
+      <p class="eyebrow">{% include "partials/icon.html" with name="alert" cls="h-3.5 w-3.5" %}Security</p>
+      <h1 class="page-title">Unknown <span class="text-gradient">punches</span></h1>
+      <p class="page-subtitle">মেশিনে এমন ID বা মুখ এসেছে যেটা কোনো কর্মচারীর সাথে মেলে না। নতুন কর্মচারী হলে যোগ করুন — আগের পাঞ্চগুলোও হাজিরায় বসে যাবে।</p>
+    </div>
+    <div class="tabs">
+      <a href="?status=open" class="tab {% if status == 'open' %}is-active{% endif %}">Open</a>
+      <a href="?status=resolved" class="tab {% if status == 'resolved' %}is-active{% endif %}">Added</a>
+      <a href="?status=ignored" class="tab {% if status == 'ignored' %}is-active{% endif %}">Ignored</a>
+    </div>
+  </div>
+
+  <div class="card overflow-hidden">
+    <div class="overflow-x-auto">
+      <table class="responsive-table table-modern">
+        <thead><tr><th>ID / face</th><th>Device</th><th class="text-right">Punches</th><th>First – last</th><th class="text-right">Action</th></tr></thead>
+        <tbody>
+          {% for g in groups %}
+          <tr>
+            <td class="rt-title">
+              {% if g.reason == 'stranger' %}<span class="badge-danger">{% include "partials/icon.html" with name="face" cls="h-3.5 w-3.5" %}Unknown face</span>
+              {% else %}<p class="font-mono text-base font-bold text-slate-900 dark:text-white">ID {{ g.raw_id }}</p>{% endif %}
+              <p class="text-xs font-normal text-slate-500">{{ g.department__name|default:"" }}</p>
+            </td>
+            <td class="text-sm">{{ g.device__name|default:"File / agent" }}</td>
+            <td class="text-right font-semibold tabular-nums">{{ g.n }}</td>
+            <td class="whitespace-nowrap text-xs tabular-nums text-slate-500">{{ g.first|date:"d M h:i A" }} – {{ g.last|date:"d M h:i A" }}</td>
+            <td class="text-right">
+              {% if g.status == 'open' %}
+              <div class="flex flex-wrap items-center justify-end gap-2" x-data="{ open: false }">
+                {% if g.reason != 'stranger' %}
+                <button type="button" class="btn-primary btn-sm" @click="open = !open">Add as employee</button>
+                {% endif %}
+                <form method="post" action="{% url 'attendance_app:unknown_punch_resolve' %}">{% csrf_token %}
+                  <input type="hidden" name="raw_id" value="{{ g.raw_id }}"><input type="hidden" name="action" value="ignore">
+                  <button class="btn-ghost btn-sm">Ignore</button></form>
+                <form method="post" action="{% url 'attendance_app:unknown_punch_resolve' %}" x-show="open" x-cloak class="flex w-full flex-wrap justify-end gap-2 pt-2">
+                  {% csrf_token %}<input type="hidden" name="raw_id" value="{{ g.raw_id }}"><input type="hidden" name="action" value="create">
+                  <input name="name" required placeholder="Employee name" class="form-input w-44">
+                  <select name="department" class="form-select w-48">{% for d in departments %}<option value="{{ d.id }}" {% if d.id == g.department_id %}selected{% endif %}>{% if d.branch %}{{ d.branch.name }} · {% endif %}{{ d.name }}</option>{% endfor %}</select>
+                  <button class="btn-primary btn-sm">Save</button>
+                </form>
+              </div>
+              {% else %}<span class="badge-neutral">{{ g.status|title }}</span>{% endif %}
+            </td>
+          </tr>
+          {% empty %}<tr><td colspan="5">{% include "partials/empty_state.html" with icon="check-circle" title="কোনো অচেনা পাঞ্চ নেই" text="মেশিনের সব ID সফটওয়্যারের কর্মচারীর সাথে মিলছে।" %}</td></tr>{% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% include "partials/pagination.html" with page=groups %}
+  </div>
+</div>
+{% endblock %}

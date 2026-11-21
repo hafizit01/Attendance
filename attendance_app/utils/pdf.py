@@ -43,7 +43,8 @@ def report_meta(request):
         'company_name': company.name if company else 'SmartAttendance',
         'branch_name': scope.branch.name if scope.branch else 'All branches',
         'generated_at': timezone.localtime(),
-        'generated_by': user.get_full_name() or user.username,
+        # লগইন ছাড়া (পে-স্লিপের নিরাপদ লিংক) AnonymousUser এর get_full_name নেই
+        'generated_by': (getattr(user, 'get_full_name', lambda: '')() or getattr(user, 'username', '') or 'System'),
     }
 
 

@@ -1,0 +1,223 @@
+{% extends "base.html" %}
+{% block title %}{{ device.name }}{% endblock %}
+{% block content %}
+<div class="space-y-6">
+  <a href="{% url 'attendance_app:device_list' %}" class="btn-ghost btn-sm -ml-3">← Devices</a>
+
+  {# ── হিরো ── #}
+  <div class="hero">
+    <div class="relative z-10 flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+      <div class="flex items-center gap-4">
+        <span class="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-white/15 ring-1 ring-white/25 backdrop-blur">{% include "partials/icon.html" with name="device" cls="h-8 w-8" %}</span>
+        <div class="min-w-0">
+          <div class="flex flex-wrap items-center gap-2">
+            <h1 class="truncate text-2xl font-bold">{{ device.name }}</h1>
+            {% if not device.is_active %}<span class="rounded-full bg-white/20 px-2.5 py-0.5 text-xs font-semibold">Disabled</span>
+            {% elif device.is_online %}<span class="inline-flex items-center gap-1.5 rounded-full bg-emerald-400/25 px-2.5 py-0.5 text-xs font-semibold text-emerald-50 ring-1 ring-emerald-200/40"><span class="live-dot"><span></span></span>Online</span>
+            {% else %}<span class="rounded-full bg-white/15 px-2.5 py-0.5 text-xs font-semibold">Offline</span>{% endif %}
+          </div>
+          <p class="mt-1 text-sm text-white/80">{{ device.get_protocol_display }}</p>
+          <p class="text-sm text-white/70">{% if device.department.branch %}{{ device.department.branch.name }} · {% endif %}{{ device.department.name }}</p>
+        </div>
+      </div>
+      <div class="flex flex-wrap gap-2">
+        {% if can_manage %}<a href="{% url 'attendance_app:device_edit' device.id %}" class="btn bg-white/15 text-white ring-1 ring-white/25 hover:bg-white/25">{% include "partials/icon.html" with name="pencil" cls="h-4 w-4" %}Edit</a>{% endif %}
+        <a href="{% url 'attendance_app:punch_feed' %}?device={{ device.id }}" class="btn bg-white text-primary-700 hover:bg-primary-50">{% include "partials/icon.html" with name="signal" cls="h-4 w-4" %}Live punches</a>
+      </div>
+    </div>
+    <div class="relative z-10 mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-6">
+      <div class="rounded-2xl bg-white/10 p-3 ring-1 ring-white/15"><p class="text-[11px] uppercase tracking-wide text-white/70">Last seen</p><p class="mt-0.5 text-sm font-semibold">{% if device.last_seen_at %}{{ device.last_seen_at|timesince }} ago{% else %}Never{% endif %}</p></div>
+      <div class="rounded-2xl bg-white/10 p-3 ring-1 ring-white/15"><p class="text-[11px] uppercase tracking-wide text-white/70">Last sync</p><p class="mt-0.5 text-sm font-semibold">{% if device.last_synced_at %}{{ device.last_synced_at|date:"d M, h:i A" }}{% else %}—{% endif %}</p></div>
+      <div class="rounded-2xl bg-white/10 p-3 ring-1 ring-white/15"><p class="text-[11px] uppercase tracking-wide text-white/70">Users</p><p class="mt-0.5 text-lg font-bold tabular-nums">{{ device.user_count|default:"—" }}</p></div>
+      <div class="rounded-2xl bg-white/10 p-3 ring-1 ring-white/15"><p class="text-[11px] uppercase tracking-wide text-white/70">Fingers</p><p class="mt-0.5 text-lg font-bold tabular-nums">{{ device.finger_count|default:"—" }}</p></div>
+      <div class="rounded-2xl bg-white/10 p-3 ring-1 ring-white/15"><p class="text-[11px] uppercase tracking-wide text-white/70">Faces</p><p class="mt-0.5 text-lg font-bold tabular-nums">{{ device.face_count|default:"—" }}</p></div>
+      <div class="rounded-2xl bg-white/10 p-3 ring-1 ring-white/15"><p class="text-[11px] uppercase tracking-wide text-white/70">Records</p><p class="mt-0.5 text-lg font-bold tabular-nums">{{ device.record_count|default:"—" }}</p></div>
+    </div>
+  </div>
+
+  {% if device.last_error %}
+  <div class="flex items-start gap-3 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800 dark:border-rose-500/20 dark:bg-rose-500/10 dark:text-rose-300">
+    {% include "partials/icon.html" with name="alert" %}<div><p class="font-semibold">শেষ চেষ্টায় সমস্যা হয়েছিল</p><p class="mt-0.5 break-words font-mono text-xs">{{ device.last_error }}</p></div>
+  </div>
+  {% endif %}
+
+  <div class="grid grid-cols-1 gap-6 xl:grid-cols-3">
+    <div class="space-y-6 xl:col-span-2">
+
+      {# ── অ্যাকশন ── #}
+      {% if actions %}
+      <div class="card" x-data="deviceActions('{% url 'attendance_app:device_action' device.id %}')">
+        <div class="card-header"><p class="card-title">{% include "partials/icon.html" with name="bolt" cls="h-4 w-4 text-primary-500" %}Actions</p>
+          {% if pending_commands %}<span class="badge-warning">{{ pending_commands }} command(s) waiting for device</span>{% endif %}</div>
+        <div class="grid grid-cols-2 gap-2 p-5 sm:grid-cols-3">
+          {% for key, label in actions %}
+          <button type="button" @click="run('{{ key }}', '{{ label|escapejs }}')" :disabled="busy"
+                  class="btn {% if key == 'sync' %}btn-primary{% elif key == 'restart' %}btn-secondary text-rose-600 dark:text-rose-400{% else %}btn-secondary{% endif %} h-auto flex-col py-3">
+            {% if key == 'sync' or key == 'sync_full' %}{% include "partials/icon.html" with name="sync" %}{% elif key == 'test' %}{% include "partials/icon.html" with name="signal" %}{% elif key == 'set_time' %}{% include "partials/icon.html" with name="clock" %}{% elif key == 'push_users' %}{% include "partials/icon.html" with name="users" %}{% elif key == 'restart' %}{% include "partials/icon.html" with name="power" %}{% else %}{% include "partials/icon.html" with name="info" %}{% endif %}
+            <span class="text-xs">{{ label }}</span>
+          </button>
+          {% endfor %}
+        </div>
+        <div class="px-5 pb-5" x-show="msg" x-cloak>
+          <div class="flex items-start gap-2 rounded-xl p-3 text-sm" :class="ok ? 'bg-emerald-50 text-emerald-800 dark:bg-emerald-500/10 dark:text-emerald-300' : 'bg-rose-50 text-rose-800 dark:bg-rose-500/10 dark:text-rose-300'">
+            <svg x-show="busy" class="h-4 w-4 shrink-0 animate-spin" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" opacity=".25"/><path d="M22 12a10 10 0 0 1-10 10" stroke="currentColor" stroke-width="3"/></svg>
+            <span x-text="msg"></span>
+          </div>
+        </div>
+      </div>
+      {% endif %}
+
+      {# ── সেটআপ গাইড ── #}
+      <div class="card" x-data="{ copied: '' }">
+        <div class="card-header"><p class="card-title">{% include "partials/icon.html" with name="cog" cls="h-4 w-4 text-primary-500" %}Setup guide — মেশিনে কী সেট করবেন</p></div>
+        <div class="space-y-4 p-5 text-sm text-slate-700 dark:text-slate-300">
+          {% if device.protocol == 'zk_adms' %}
+            <ol class="list-decimal space-y-2 pl-5">
+              <li>মেশিনে যান: <b>Menu → COMM. → Cloud Server Setting</b> (কোনো মডেলে <b>ADMS</b> / <b>Webserver</b>)।</li>
+              <li><b>Enable Domain Name</b>: {% if urls.host|slice:":1" in "0123456789" %}OFF{% else %}ON{% endif %}</li>
+              <li><b>Server Address</b>: <code class="rounded bg-slate-100 px-1.5 py-0.5 font-mono dark:bg-white/10">{{ urls.host }}</code></li>
+              <li><b>Server Port</b>: <code class="rounded bg-slate-100 px-1.5 py-0.5 font-mono dark:bg-white/10">{{ urls.port }}</code> {% if urls.https %}· <b>HTTPS</b>: ON{% endif %}</li>
+              <li><b>Enable Proxy Server</b>: OFF → Save → মেশিন রিস্টার্ট দিন।</li>
+              <li>মেশিনের Serial Number এখানে দেওয়া SN এর সাথে হুবহু মিলতে হবে: <code class="rounded bg-slate-100 px-1.5 py-0.5 font-mono dark:bg-white/10">{{ device.serial_number }}</code></li>
+            </ol>
+            <p class="rounded-xl bg-primary-50 p-3 text-primary-800 dark:bg-primary-500/10 dark:text-primary-200">১–২ মিনিটের মধ্যে উপরে <b>Online</b> দেখাবে। এরপর কেউ ফেস/ফিঙ্গার দিলেই সাথে সাথে Live Punches এ চলে আসবে। মেশিনের ঘড়ি সার্ভারের সময়ের সাথে নিজেই মিলে যায়।</p>
+          {% elif device.protocol == 'hik_push' or device.protocol == 'hik_isapi' %}
+            {% if device.protocol == 'hik_push' %}
+            <ol class="list-decimal space-y-2 pl-5">
+              <li>ব্রাউজারে মেশিনের ওয়েব পেজে লগইন করুন (বা iVMS-4200 / Hik-Connect)।</li>
+              <li><b>Configuration → Network → Advanced → HTTP Listening</b> (কোনো মডেলে <b>Event → Alarm Server / HTTP Host</b>)।</li>
+              <li>নিচের URL বসান (Protocol: {% if urls.https %}HTTPS{% else %}HTTP{% endif %}, Port: {{ urls.port }}) → Save।</li>
+            </ol>
+            {% else %}
+            <ol class="list-decimal space-y-2 pl-5">
+              <li>মেশিন ও সার্ভার একই নেটওয়ার্কে থাকতে হবে। মেশিনের IP: <code class="font-mono">{{ device.ip|default:"—" }}</code>, Port: <code class="font-mono">{{ device.port|default:80 }}</code></li>
+              <li>মেশিনের ওয়েব পেজে <b>ISAPI</b> চালু ও admin পাসওয়ার্ড এখানে দেওয়া আছে কিনা দেখুন।</li>
+              <li>রিয়েল-টাইম চাইলে মেশিনের HTTP Listening এ নিচের URL ও বসাতে পারেন।</li>
+            </ol>
+            {% endif %}
+            {% if show_secrets %}
+            <div class="flex gap-2"><input readonly value="{{ urls.hik_push }}" class="form-input min-w-0 flex-1 font-mono text-xs" onclick="this.select()">
+              <button type="button" class="btn-secondary shrink-0" @click="navigator.clipboard.writeText('{{ urls.hik_push }}'); copied='hik'; setTimeout(()=>copied='',1500)"><span x-text="copied==='hik' ? 'Copied ✓' : 'Copy'"></span></button></div>
+            {% endif %}
+          {% elif device.protocol == 'api' %}
+            <p>যেকোনো মেশিন বা সফটওয়্যার (Anviz, Suprema, eSSL software, নিজস্ব স্ক্রিপ্ট) এই URL এ JSON POST করলেই হাজিরা চলে আসবে:</p>
+            {% if show_secrets %}
+            <div class="flex gap-2"><input readonly value="{{ urls.api_push }}" class="form-input min-w-0 flex-1 font-mono text-xs" onclick="this.select()">
+              <button type="button" class="btn-secondary shrink-0" @click="navigator.clipboard.writeText('{{ urls.api_push }}'); copied='api'; setTimeout(()=>copied='',1500)"><span x-text="copied==='api' ? 'Copied ✓' : 'Copy'"></span></button></div>
+            {% endif %}
+            <pre class="overflow-x-auto rounded-xl bg-slate-900 p-4 font-mono text-xs leading-relaxed text-slate-100">POST (Content-Type: application/json)
+{
+  "users":   [{"uid": 12, "name": "Rahim"}],
+  "punches": [{"uid": 12, "time": "2026-11-18 09:01:02", "method": "face"}]
+}
+method: face | finger | card | palm | password</pre>
+          {% elif device.protocol == 'zk_pull' %}
+            <ol class="list-decimal space-y-2 pl-5">
+              <li>মেশিনে: <b>Menu → COMM. → Ethernet</b> — IP <code class="font-mono">{{ device.ip|default:"—" }}</code>, Port <code class="font-mono">{{ device.port|default:4370 }}</code>।</li>
+              <li><b>COMM. → PC Connection → Comm Key</b> সেট থাকলে এখানেও একই key দিন।</li>
+              <li>সার্ভার ও মেশিন একই নেটওয়ার্কে থাকতে হবে। লাইভ সার্ভার থেকে না পৌঁছালে মেশিনটা <b>Cloud push (ADMS)</b> এ বদলে দিন — মেশিন নিজেই ডাটা পাঠাবে।</li>
+              <li>ঘণ্টায় একবার অটো সিঙ্ক চালাতে <code class="font-mono">run_sync.bat</code> Windows Task Scheduler এ দিন।</li>
+            </ol>
+          {% else %}
+            <ol class="list-decimal space-y-2 pl-5">
+              <li>মেশিনে USB ঢুকিয়ে: <b>Menu → Data Mgt. / USB Manager → Download → Attendance Data</b>।</li>
+              <li>USB তে <code class="font-mono">1_attlog.dat</code> (বা <code class="font-mono">.txt/.csv</code>) ফাইল পাবেন — নিচে আপলোড করুন।</li>
+            </ol>
+          {% endif %}
+        </div>
+      </div>
+
+      {# ── সাম্প্রতিক পাঞ্চ ── #}
+      <div class="card overflow-hidden">
+        <div class="card-header"><p class="card-title">{% include "partials/icon.html" with name="clock" cls="h-4 w-4 text-primary-500" %}Recent punches</p>
+          <a href="{% url 'attendance_app:punch_feed' %}?device={{ device.id }}" class="link text-sm">View all →</a></div>
+        <div class="overflow-x-auto">
+          <table class="responsive-table table-modern">
+            <thead><tr><th>Employee</th><th>Time</th><th>Method</th><th>Source</th></tr></thead>
+            <tbody>{% include "devices/_punch_rows.html" with punches=punches compact=True %}</tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="space-y-6">
+      {# ── তথ্য ── #}
+      <div class="card p-5">
+        <p class="card-title">{% include "partials/icon.html" with name="info" cls="h-4 w-4 text-primary-500" %}Device info</p>
+        <dl class="mt-4 grid grid-cols-2 gap-4">
+          <div><dt class="kv-label">Model</dt><dd class="kv-value">{{ device.model_name|default:"—" }}</dd></div>
+          <div><dt class="kv-label">Serial No.</dt><dd class="kv-value font-mono text-xs">{{ device.serial_number|default:"—" }}</dd></div>
+          <div class="col-span-2"><dt class="kv-label">Firmware</dt><dd class="kv-value text-xs">{{ device.firmware|default:"—" }}</dd></div>
+          {% if show_secrets %}
+          <div><dt class="kv-label">IP / Port</dt><dd class="kv-value font-mono text-xs">{{ device.ip|default:"—" }}{% if device.port %}:{{ device.port }}{% endif %}</dd></div>
+          {% endif %}
+          <div><dt class="kv-label">Last IP seen</dt><dd class="kv-value font-mono text-xs">{{ device.last_ip_seen|default:"—" }}</dd></div>
+        </dl>
+      </div>
+
+      {# ── পদ্ধতি অনুযায়ী ── #}
+      {% if methods %}
+      <div class="card p-5">
+        <p class="card-title">{% include "partials/icon.html" with name="chart" cls="h-4 w-4 text-primary-500" %}How people punch</p>
+        <div class="mt-4 space-y-3">
+          {% for m in methods %}
+          <div class="flex items-center gap-3">
+            {% include "devices/_method_icon.html" with method=m.method %}
+            <span class="flex-1 text-sm font-medium capitalize text-slate-700 dark:text-slate-200">{{ m.method }}</span>
+            <span class="text-sm font-semibold tabular-nums text-slate-900 dark:text-white">{{ m.n }}</span>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
+
+      {# ── ফাইল ইমপোর্ট ── #}
+      <form method="post" action="{% url 'attendance_app:device_import' device.id %}" enctype="multipart/form-data" class="card space-y-4 p-5">
+        {% csrf_token %}
+        <p class="card-title">{% include "partials/icon.html" with name="upload" cls="h-4 w-4 text-primary-500" %}Import USB file</p>
+        {% include "partials/form_field.html" with field=import_form.file %}
+        {% include "partials/form_field.html" with field=import_form.create_employees %}
+        <button type="submit" class="btn-secondary w-full">{% include "partials/icon.html" with name="upload" cls="h-4 w-4" %}Upload & import</button>
+      </form>
+
+      {# ── কমান্ড ── #}
+      {% if commands %}
+      <div class="card overflow-hidden">
+        <div class="card-header"><p class="card-title">{% include "partials/icon.html" with name="inbox" cls="h-4 w-4 text-primary-500" %}Commands sent to device</p></div>
+        <ul class="divide-y divide-slate-100 dark:divide-white/[0.05]">
+          {% for c in commands %}
+          <li class="flex items-center justify-between gap-3 px-5 py-2.5 text-sm">
+            <span class="min-w-0 truncate text-slate-700 dark:text-slate-300" title="{{ c.command }}">{{ c.label|default:c.command }}</span>
+            <span class="{% if c.status == 'done' %}badge-success{% elif c.status == 'failed' %}badge-danger{% elif c.status == 'sent' %}badge-info{% else %}badge-warning{% endif %}">{{ c.get_status_display }}</span>
+          </li>
+          {% endfor %}
+        </ul>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<script>
+function deviceActions(url) {
+  return {
+    busy: false, msg: '', ok: true,
+    async run(action, label) {
+      if (action === 'restart' && !confirm('মেশিন রিস্টার্ট করবেন?')) return;
+      if (action === 'push_users' && !confirm('এই ব্রাঞ্চের সব সক্রিয় কর্মচারী (ID + নাম) মেশিনে পাঠানো হবে। মেশিনের আগের ফেস/ফিঙ্গার মুছবে না। চালাবেন?')) return;
+      this.busy = true; this.ok = true; this.msg = label + '… মেশিনের সাথে কাজ চলছে';
+      try {
+        const fd = new FormData();
+        fd.append('action', action);
+        fd.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+        const res = await fetch(url, { method: 'POST', body: fd, headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+        const data = await res.json();
+        this.ok = data.status === 'success';
+        this.msg = data.message;
+      } catch (e) { this.ok = false; this.msg = 'Server error: ' + e.message; }
+      this.busy = false;
+    }
+  };
+}
+</script>
+{% endblock %}

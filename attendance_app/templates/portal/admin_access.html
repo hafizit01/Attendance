@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}Portal access · {{ employee.name }}{% endblock %}
+{% block content %}
+<div class="mx-auto max-w-xl space-y-6">
+  <div>
+    <a href="{% url 'attendance_app:employee_list' %}" class="btn-ghost btn-sm -ml-3 mb-2">← Employees</a>
+    <p class="eyebrow">{% include "partials/icon.html" with name="user" cls="h-3.5 w-3.5" %}Employee portal</p>
+    <h1 class="page-title">{{ employee.name }}</h1>
+    <p class="page-subtitle">এই লগইন দিয়ে কর্মচারী শুধু নিজের হাজিরা, ছুটি ও পে-স্লিপ দেখতে পারবে — অন্য কারো তথ্য বা অ্যাডমিনের কিছু না।</p>
+  </div>
+
+  {% if portal_user %}
+  <div class="card flex items-center justify-between gap-3 p-4">
+    <div>
+      <p class="text-sm text-slate-500">Current login</p>
+      <p class="font-semibold text-slate-900 dark:text-white">{{ portal_user.username }}
+        {% if portal_user.is_active %}<span class="badge-success ml-1">Active</span>{% else %}<span class="badge-danger ml-1">Disabled</span>{% endif %}</p>
+      {% if portal_user.last_login %}<p class="text-xs text-slate-400">Last login {{ portal_user.last_login|timesince }} ago</p>{% endif %}
+    </div>
+    {% if portal_user.is_active %}
+    <form method="post" action="{% url 'attendance_app:employee_portal_revoke' employee.id %}" onsubmit="return confirm('এই কর্মচারীর পোর্টাল লগইন বন্ধ করবেন?');">{% csrf_token %}
+      <button class="btn-secondary text-rose-600">Disable login</button></form>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  <form method="post" class="card space-y-5 p-5 sm:p-6" novalidate autocomplete="off">
+    {% csrf_token %}
+    <p class="card-title">{% if portal_user %}Change username / reset password{% else %}Create portal login{% endif %}</p>
+    {% include "partials/form_field.html" with field=form.username %}
+    {% include "partials/form_field.html" with field=form.password %}
+    <button class="btn-primary w-full">{% include "partials/icon.html" with name="check-circle" cls="h-4 w-4" %}{% if portal_user %}Save{% else %}Create login{% endif %}</button>
+    <p class="rounded-xl bg-slate-50 p-3 text-xs text-slate-600 dark:bg-white/5 dark:text-slate-300">
+      কর্মচারী <b>{{ request.scheme }}://{{ request.get_host }}/login/</b> এ username/password দিয়ে ঢুকবে — নিজে থেকেই তার পোর্টালে যাবে।
+      মোবাইল থেকে GPS + সেলফি হাজিরার জন্য HR Rules এ "GPS attendance" চালু করুন।
+    </p>
+  </form>
+</div>
+{% endblock %}

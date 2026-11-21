@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}Salary Components{% endblock %}
+{% block content %}
+<div class="space-y-6">
+  {% include "payroll/_tabs.html" with tab="components" %}
+
+  <div>
+    <h1 class="text-2xl font-semibold tracking-tight text-slate-900 dark:text-white">Salary components</h1>
+    <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Allowances and deductions that make up each employee's salary. Amounts per employee are set in Salary Base.</p>
+  </div>
+
+  <div class="grid grid-cols-1 gap-6 xl:grid-cols-3">
+    <div class="space-y-6 xl:col-span-2">
+      {% with items=earnings %}
+      <div class="pcard overflow-hidden">
+        <div class="flex items-center justify-between border-b border-slate-200/80 px-5 py-3.5 dark:border-white/[0.07]">
+          <p class="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-white"><span class="h-2 w-2 rounded-full bg-emerald-500"></span>Earnings &amp; allowances</p>
+          <span class="text-xs text-slate-500">{{ items|length }}</span>
+        </div>
+        {% include "payroll/_component_rows.html" %}
+      </div>
+      {% endwith %}
+      {% with items=deductions %}
+      <div class="pcard overflow-hidden">
+        <div class="flex items-center justify-between border-b border-slate-200/80 px-5 py-3.5 dark:border-white/[0.07]">
+          <p class="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-white"><span class="h-2 w-2 rounded-full bg-rose-500"></span>Fixed deductions</p>
+          <span class="text-xs text-slate-500">{{ items|length }}</span>
+        </div>
+        {% include "payroll/_component_rows.html" %}
+      </div>
+      {% endwith %}
+    </div>
+
+    {% if can_manage %}
+    <form method="post" class="pcard h-fit space-y-5 p-5 xl:sticky xl:top-24" novalidate>
+      {% csrf_token %}
+      <div class="flex items-center justify-between">
+        <p class="text-sm font-semibold text-slate-900 dark:text-white">{% if editing %}Edit “{{ editing.name }}”{% else %}New component{% endif %}</p>
+        {% if editing %}<a href="{% url 'payroll:components' %}" class="text-xs font-medium text-indigo-600 hover:underline dark:text-indigo-300">+ New instead</a>{% endif %}
+      </div>
+      {% include "partials/form_field.html" with field=form.name %}
+      {% include "partials/form_field.html" with field=form.kind %}
+      {% include "partials/form_field.html" with field=form.calc_type %}
+      <div class="grid grid-cols-2 gap-3">
+        {% include "partials/form_field.html" with field=form.default_value %}
+        {% include "partials/form_field.html" with field=form.order %}
+      </div>
+      {% include "partials/form_field.html" with field=form.prorate %}
+      {% include "partials/form_field.html" with field=form.is_active %}
+      <button class="btn-indigo w-full">{% include "partials/icon.html" with name="check-circle" cls="h-4 w-4" %}{% if editing %}Save changes{% else %}Add component{% endif %}</button>
+      <p class="text-xs leading-relaxed text-slate-500">ডিফল্ট মান শুধু নতুন কর্মচারীর বেতন সেট করার সময় বসে — আগের কর্মচারীদের পরিমাণ বদলায় না। বন্ধ (inactive) অংশ বেতনে ধরা হয় না।</p>
+    </form>
+    {% else %}
+    <div class="pcard h-fit p-5 text-sm text-slate-500">শুধু কোম্পানির মালিক/অ্যাডমিন বেতনের অংশ যোগ বা বদলাতে পারেন।</div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

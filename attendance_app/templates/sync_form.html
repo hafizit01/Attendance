@@ -1,26 +1,33 @@
 {% extends 'base.html' %}
 {% block title %}Sync Device Data{% endblock %}
 {% block content %}
-<div class="mx-auto max-w-2xl space-y-6">
-  <div>
-    <p class="eyebrow">ZKTeco</p>
-    <h1 class="page-title">Sync Device Data</h1>
-    <p class="page-subtitle">হাজিরা মেশিন থেকে নতুন পাঞ্চ ও ইউজার আনুন। মেশিন আর সার্ভার একই নেটওয়ার্কে থাকতে হবে।</p>
+<div class="mx-auto max-w-3xl space-y-6">
+  <div class="page-header">
+    <div>
+      <p class="eyebrow">{% include "partials/icon.html" with name="sync" cls="h-3.5 w-3.5" %}Machines</p>
+      <h1 class="page-title">Sync Device Data</h1>
+      <p class="page-subtitle">LAN মেশিন থেকে নতুন পাঞ্চ ও ইউজার আনুন। Real-time মেশিন নিজেই ডাটা পাঠায় — সেগুলোর সিঙ্ক লাগে না।</p>
+    </div>
+    <a href="{% url 'attendance_app:device_list' %}" class="btn-secondary">{% include "partials/icon.html" with name="device" cls="h-4 w-4" %}Manage devices</a>
   </div>
 
   <form id="syncForm" method="post" action="{% url 'attendance_app:sync_attendance' %}" class="card overflow-hidden">
     {% csrf_token %}
     <div class="space-y-5 p-5 sm:p-6">
+      {% if pull_devices %}
       <div>
-        <label for="department_id" class="form-label">Department / device <span class="text-rose-500">*</span></label>
-        <select name="department_id" id="department_id" required class="form-select">
-          <option value="">Select a department…</option>
-          {% for dept in departments %}
-            <option value="{{ dept.id }}" {% if not dept.device_ip %}disabled{% endif %}>{{ dept.name }}{% if not dept.device_ip %} — no device set{% endif %}</option>
+        <label for="device_id" class="form-label">Device <span class="text-rose-500">*</span></label>
+        <select name="device_id" id="device_id" required class="form-select">
+          {% if pull_devices|length > 1 %}<option value="all">All LAN devices ({{ pull_devices|length }})</option>{% endif %}
+          {% for d in pull_devices %}
+            <option value="{{ d.id }}">{{ d.name }} — {% if d.department.branch %}{{ d.department.branch.name }} · {% endif %}{{ d.department.name }}</option>
           {% endfor %}
         </select>
-        <p class="form-help">শুধু যেসব ডিপার্টমেন্টে ডিভাইসের IP সেট করা আছে সেগুলো সিঙ্ক করা যাবে।</p>
+        <p class="form-help">মেশিন আর সার্ভার একই নেটওয়ার্কে থাকতে হবে।</p>
       </div>
+      {% else %}
+      {% include "partials/empty_state.html" with icon="device" title="কোনো LAN মেশিন নেই" text="Devices পেজ থেকে মেশিন যোগ করুন।" %}
+      {% endif %}
 
       <div id="progressContainer" class="hidden space-y-2" aria-live="polite">
         <div class="h-2.5 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
@@ -30,14 +37,31 @@
       </div>
       <div id="resultMessages" class="space-y-2" aria-live="polite"></div>
     </div>
-    <div class="flex justify-end border-t border-slate-100 bg-slate-50/60 px-5 py-4 sm:px-6 dark:border-slate-800 dark:bg-slate-800/40">
+    {% if pull_devices %}
+    <div class="flex justify-end border-t border-slate-100 bg-slate-50/60 px-5 py-4 sm:px-6 dark:border-white/[0.06] dark:bg-white/[0.02]">
       <button type="submit" id="syncBtn" class="btn-primary w-full sm:w-auto">{% include "partials/icon.html" with name="sync" cls="h-4 w-4" %}Start sync</button>
     </div>
+    {% endif %}
   </form>
+
+  {% if push_devices %}
+  <div class="card overflow-hidden">
+    <div class="card-header"><p class="card-title">{% include "partials/icon.html" with name="bolt" cls="h-4 w-4 text-emerald-500" %}Real-time devices (auto)</p></div>
+    <ul class="divide-y divide-slate-100 dark:divide-white/[0.05]">
+      {% for d in push_devices %}
+      <li><a href="{% url 'attendance_app:device_detail' d.id %}" class="flex items-center justify-between gap-3 px-5 py-3 hover:bg-slate-50 dark:hover:bg-white/[0.03]">
+        <span class="min-w-0"><span class="block truncate font-medium text-slate-900 dark:text-white">{{ d.name }}</span><span class="text-xs text-slate-500">{{ d.get_protocol_display }}</span></span>
+        {% if d.is_online %}<span class="badge-success"><span class="live-dot"><span></span></span>Online</span>{% else %}<span class="badge-neutral">{% if d.last_seen_at %}Seen {{ d.last_seen_at|timesince }} ago{% else %}Never connected{% endif %}</span>{% endif %}
+      </a></li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
 </div>
 
 <script>
-document.getElementById('syncForm').addEventListener('submit', async function (e) {
+var syncForm = document.getElementById('syncForm');
+syncForm && syncForm.addEventListener('submit', async function (e) {
   e.preventDefault();
   const box = document.getElementById('progressContainer');
   const bar = document.getElementById('progressBar');
@@ -69,8 +93,9 @@ document.getElementById('syncForm').addEventListener('submit', async function (e
     const data = await res.json();
     clearInterval(timer);
     if (data.status === 'success') {
-      setBar(100, 'bg-emerald-500');
-      text.textContent = 'Sync complete';
+      const anyFail = (data.messages || []).some(m => m.type !== 'success');
+      setBar(100, anyFail ? 'bg-amber-500' : 'bg-emerald-500');
+      text.textContent = anyFail ? 'Sync finished with errors' : 'Sync complete';
       (data.messages || []).forEach(m => note(m.type === 'success', m.text));
     } else {
       setBar(100, 'bg-rose-500');

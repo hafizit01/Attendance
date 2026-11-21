@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+{% block title %}Leave Balance{% endblock %}
+{% block content %}
+<div class="space-y-6">
+  <div class="page-header">
+    <div>
+      <p class="eyebrow">{% include "partials/icon.html" with name="calendar" cls="h-3.5 w-3.5" %}Time off</p>
+      <h1 class="page-title">Leave <span class="text-gradient">Balance</span> {{ year }}</h1>
+      <p class="page-subtitle">বছরে কে কত দিন ছুটি পাবে, কত নিয়েছে, কত বাকি। Approve করলেই ব্যালান্স থেকে কমে; বাকি না থাকলে আবেদন করা যায় না।</p>
+    </div>
+    <div class="flex flex-wrap items-center gap-2">
+      <form method="get" class="flex gap-2">
+        <select name="year" class="form-select w-28" onchange="this.form.submit()">{% for y in years %}<option value="{{ y }}" {% if y == year %}selected{% endif %}>{{ y }}</option>{% endfor %}</select>
+        <select name="department" class="form-select w-48" onchange="this.form.submit()">
+          <option value="">All departments</option>
+          {% for d in departments %}<option value="{{ d.id }}" {% if d.id == selected_department %}selected{% endif %}>{{ d.name }}</option>{% endfor %}
+        </select>
+      </form>
+      <a href="{% url 'attendance_app:leave_balance_excel' %}?year={{ year }}{% if selected_department %}&department={{ selected_department }}{% endif %}" class="btn-secondary">{% include "partials/excel_icon.html" %}Export Excel</a>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-1 gap-6 xl:grid-cols-3">
+    {# ── বছরের সীমা ── #}
+    <form method="post" action="{% url 'attendance_app:leave_allocation_save' %}" class="card h-fit overflow-hidden">
+      {% csrf_token %}
+      <div class="card-header"><p class="card-title">{% include "partials/icon.html" with name="cog" cls="h-4 w-4 text-primary-500" %}Yearly limit (all employees)</p></div>
+      <div class="space-y-3 p-5">
+        {% for t, label, days in leave_types %}
+        <div class="flex items-center justify-between gap-3">
+          <label for="alloc_{{ t }}" class="text-sm font-medium text-slate-700 dark:text-slate-200">{{ label }}</label>
+          <div class="flex items-center gap-2">
+            <input id="alloc_{{ t }}" type="number" min="0" max="366" name="alloc_{{ t }}" value="{{ days|default_if_none:'' }}" placeholder="No limit"
+                   class="form-input w-28 text-right" {% if not can_manage %}disabled{% endif %}>
+            <span class="w-8 text-xs text-slate-400">days</span>
+          </div>
+        </div>
+        {% endfor %}
+        <p class="form-help">খালি রাখলে ওই ছুটির কোনো সীমা নেই (আগের মতো)। Unpaid ছুটি সাধারণত খালি রাখা হয়।</p>
+      </div>
+      {% if can_manage %}<div class="border-t border-slate-100 bg-slate-50/60 px-5 py-3 text-right dark:border-white/[0.06] dark:bg-white/[0.02]"><button class="btn-primary">Save limits</button></div>{% endif %}
+    </form>
+
+    {# ── ব্যালান্স টেবিল ── #}
+    <div class="card overflow-hidden xl:col-span-2">
+      <div class="card-header"><p class="card-title">{% include "partials/icon.html" with name="users" cls="h-4 w-4 text-primary-500" %}Employees</p>
+        <span class="text-xs text-slate-500">বাকি / বছরে · (pending)</span></div>
+      {% if types %}
+      <div class="overflow-x-auto">
+        <table class="responsive-table table-modern">
+          <thead><tr><th>Employee</th>{% for t, label in types %}<th class="text-center">{{ label }}</th>{% endfor %}</tr></thead>
+          <tbody>
+            {% for r in rows %}
+            <tr>
+              <td class="rt-title"><p class="font-semibold text-slate-900 dark:text-white">{{ r.employee.name }}</p><p class="text-xs font-normal text-slate-500">{{ r.employee.department.name|default:"—" }}</p></td>
+              {% for c in r.cells %}
+              <td class="text-center">
+                {% if c.allocated is None %}<span class="text-sm text-slate-400">{{ c.used }} used</span>
+                {% else %}
+                <div class="inline-flex flex-col items-center">
+                  <span class="text-sm font-bold tabular-nums {% if c.remaining <= 0 %}text-rose-600 dark:text-rose-400{% elif c.remaining <= 2 %}text-amber-600 dark:text-amber-400{% else %}text-emerald-600 dark:text-emerald-400{% endif %}">{{ c.remaining }}<span class="font-normal text-slate-400"> / {{ c.allocated }}</span></span>
+                  <span class="mt-1 h-1.5 w-16 overflow-hidden rounded-full bg-slate-100 dark:bg-white/10"><span class="block h-full rounded-full {% if c.remaining <= 0 %}bg-rose-500{% else %}bg-primary-500{% endif %}" style="width: {% widthratio c.used c.allocated|default:1 100 %}%"></span></span>
+                  {% if c.pending %}<span class="mt-0.5 text-[10px] text-amber-600">({{ c.pending }} pending)</span>{% endif %}
+                </div>
+                {% endif %}
+              </td>
+              {% endfor %}
+            </tr>
+            {% empty %}<tr><td colspan="{{ types|length|add:1 }}">{% include "partials/empty_state.html" with icon="users" title="No employees" %}</td></tr>{% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div class="p-8">{% include "partials/empty_state.html" with icon="calendar" title="এখনো কোনো ছুটির সীমা নেই" text="বামে বছরের সীমা দিন (যেমন Casual 10, Sick 14) — তাহলে এখানে সবার ব্যালান্স দেখাবে।" %}</div>
+      {% endif %}
+    </div>
+  </div>
+
+  {# ── কর্মচারী-ভিত্তিক আলাদা সীমা ── #}
+  <div class="card overflow-hidden">
+    <div class="card-header"><p class="card-title">{% include "partials/icon.html" with name="user" cls="h-4 w-4 text-primary-500" %}Special limits for specific employees</p></div>
+    {% if can_manage %}
+    <form method="post" action="{% url 'attendance_app:leave_allocation_override' %}" class="grid grid-cols-1 gap-3 border-b border-slate-100 p-5 sm:grid-cols-4 sm:items-end dark:border-white/[0.06]">
+      {% csrf_token %}
+      {% include "partials/form_field.html" with field=override_form.employee %}
+      {% include "partials/form_field.html" with field=override_form.leave_type %}
+      {% include "partials/form_field.html" with field=override_form.days_per_year %}
+      <button class="btn-secondary">{% include "partials/icon.html" with name="plus" cls="h-4 w-4" %}Add / update</button>
+    </form>
+    {% endif %}
+    <ul class="divide-y divide-slate-100 dark:divide-white/[0.05]">
+      {% for o in overrides %}
+      <li class="flex items-center justify-between gap-3 px-5 py-3 text-sm">
+        <span><b class="text-slate-900 dark:text-white">{{ o.employee.name }}</b> · {{ o.get_leave_type_display }}: <b>{{ o.days_per_year }}</b> days / year</span>
+        {% if can_manage %}<form method="post" action="{% url 'attendance_app:leave_allocation_delete' o.id %}">{% csrf_token %}<button class="btn-ghost btn-sm text-rose-600">Remove</button></form>{% endif %}
+      </li>
+      {% empty %}<li class="px-5 py-4 text-sm text-slate-500">কোনো আলাদা সীমা নেই — সবার জন্য উপরের সীমা প্রযোজ্য।</li>{% endfor %}
+    </ul>
+  </div>
+</div>
+{% endblock %}

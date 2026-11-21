@@ -56,6 +56,8 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 
+    # কর্মচারীর পোর্টাল লগইন শুধু /me/ — অ্যাডমিনের পেজে ঢুকতে দেয় না (সাবস্ক্রিপশন চেকের আগে)
+    "attendance_app.portal.access.PortalAccessMiddleware",
     "attendance_project.middleware.SubscriptionExpiryMiddleware",
 ]
 
@@ -125,6 +127,13 @@ SUPPORT_EMAIL = os.getenv('SUPPORT_EMAIL', EMAIL_HOST_USER)
 
 
 
+# ------------------Celery (ঐচ্ছিক — রাতের Missing punch চেক)--------------------
+CELERY_BROKER_URL = os.getenv('CELERY_BROKER_URL', 'redis://localhost:6379/0')
+CELERY_RESULT_BACKEND = os.getenv('CELERY_RESULT_BACKEND', None)
+CELERY_TIMEZONE = 'Asia/Dhaka'
+CELERY_ENABLE_UTC = False
+
+
 LANGUAGE_CODE = 'en-us'
 TIME_ZONE = 'Asia/Dhaka'  # Bangladesh time
 USE_I18N = True
@@ -135,6 +144,8 @@ STATIC_ROOT = BASE_DIR / 'staticfiles'
 STATIC_URL = '/static/'
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+# গোপন ফাইল (রিমোট পাঞ্চের সেলফি) — /media/ এর বাইরে, শুধু লগইন করা অ্যাডমিন ভিউ দিয়ে দেখা যায়
+PRIVATE_MEDIA_ROOT = os.getenv('PRIVATE_MEDIA_ROOT', os.path.join(BASE_DIR, 'private_media'))
 
 # For large form submissions (e.g., bulk delete in admin)
 DATA_UPLOAD_MAX_NUMBER_FIELDS = 20000

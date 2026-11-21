@@ -20,7 +20,9 @@
 
   <div class="flex flex-wrap gap-2">
     <a href="{% url 'attendance_app:leave_summary' %}" class="btn-secondary btn-sm">{% include "partials/icon.html" with name="chart" cls="h-4 w-4" %}Leave summary</a>
+    <a href="{% url 'attendance_app:leave_balance' %}" class="btn-secondary btn-sm">{% include "partials/icon.html" with name="calendar" cls="h-4 w-4" %}Leave balance</a>
     <a href="{% url 'attendance_app:leave_summary_pdf' %}" target="_blank" rel="noopener" class="btn-secondary btn-sm">{% include "partials/icon.html" with name="download" cls="h-4 w-4" %}Download PDF</a>
+    <a href="{% url 'attendance_app:leave_list_excel' %}" class="btn-secondary btn-sm">{% include "partials/excel_icon.html" %}Export Excel</a>
   </div>
 
   {% include "partials/leave_table.html" %}
