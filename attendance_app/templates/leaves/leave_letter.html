@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+{# ছুটির আবেদন ও অনুমোদনপত্র — A4। ব্রাউজারে প্রিন্ট ও PDF (WeasyPrint) দুটোই এই একই টেমপ্লেট। স্বাক্ষর লাগে না — সিস্টেমে তৈরি #}
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Leave {{ lv.reference }} · {{ employee.name }}</title>
+{% if not pdf %}<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Hind+Siliguri:wght@400;600&display=swap" rel="stylesheet">{% endif %}
+<style>
+  @font-face { font-family: 'Inter'; font-weight: 400; src: url(Inter-400.ttf); }
+  @font-face { font-family: 'Inter'; font-weight: 500; src: url(Inter-500.ttf); }
+  @font-face { font-family: 'Inter'; font-weight: 600; src: url(Inter-600.ttf); }
+  @font-face { font-family: 'Inter'; font-weight: 700; src: url(Inter-700.ttf); }
+  @font-face { font-family: 'Hind Siliguri'; font-weight: 400; src: url(HindSiliguri-Regular.ttf); }
+  @font-face { font-family: 'Hind Siliguri'; font-weight: 600; src: url(HindSiliguri-SemiBold.ttf); }
+  @page { size: A4 portrait; margin: 0; }
+  :root { --ink:#0f172a; --muted:#64748b; --line:#e2e8f0; --soft:#f8fafc; --brand:#4f46e5; --brand2:#7c3aed; --ok:#059669; --warn:#d97706; --bad:#e11d48; }
+  {% if lv.status == 'Approved' %}:root { --st:#059669; --st-bg:#ecfdf5; --st-line:#a7f3d0; }
+  {% elif lv.status == 'Rejected' %}:root { --st:#e11d48; --st-bg:#fff1f2; --st-line:#fecdd3; }
+  {% else %}:root { --st:#d97706; --st-bg:#fffbeb; --st-line:#fde68a; }{% endif %}
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: 'Inter', 'Hind Siliguri', sans-serif; color: var(--ink); font-size: 9.4pt; line-height: 1.5; background: {% if pdf %}#fff{% else %}#cbd5e1{% endif %}; }
+  .bar { max-width: 210mm; margin: 18px auto 0; display: flex; justify-content: space-between; gap: 8px; padding: 0 4px; }
+  .btn { display: inline-flex; align-items: center; gap: 6px; border: 1px solid #cbd5e1; background: #fff; color: var(--ink); padding: 8px 14px; border-radius: 10px; font: 600 13px Inter, sans-serif; cursor: pointer; text-decoration: none; }
+  .btn.primary { background: var(--brand); border-color: var(--brand); color: #fff; }
+  .sheet { width: 210mm; min-height: 297mm; margin: {% if pdf %}0{% else %}12px auto 40px{% endif %}; background: #fff; position: relative; overflow: hidden;
+           {% if not pdf %}box-shadow: 0 20px 50px -20px rgba(15,23,42,.45);{% endif %} }
+
+  /* ── মাথার রঙিন ব্যান্ড ── */
+  .band { background: linear-gradient(120deg, #312e81 0%, #4f46e5 45%, #7c3aed 100%); color: #fff; padding: 13mm 15mm 11mm; position: relative; }
+  .band .glow { position: absolute; right: -30mm; top: -30mm; width: 90mm; height: 90mm; border-radius: 50%; background: rgba(255,255,255,.08); }
+  .band table { width: 100%; border-collapse: collapse; position: relative; }
+  .band td { vertical-align: middle; padding: 0; }
+  .logo { display: inline-block; width: 36pt; height: 36pt; line-height: 36pt; text-align: center; border-radius: 10pt; background: rgba(255,255,255,.18); border: 1pt solid rgba(255,255,255,.35); font-size: 16pt; font-weight: 800; vertical-align: middle; }
+  .coname { display: inline-block; vertical-align: middle; margin-left: 9pt; }
+  .coname b { display: block; font-size: 15pt; letter-spacing: -.2pt; }
+  .coname span { font-size: 8pt; opacity: .8; }
+  .doc { text-align: right; }
+  .doc .k { font-size: 7pt; letter-spacing: 2pt; text-transform: uppercase; opacity: .75; font-weight: 700; }
+  .doc .t { font-size: 16pt; font-weight: 800; letter-spacing: .5pt; }
+  .doc .r { display: inline-block; margin-top: 3pt; padding: 2pt 8pt; border-radius: 10pt; background: rgba(255,255,255,.16); font-size: 8pt; font-weight: 700; letter-spacing: .5pt; }
+
+  .content { padding: 0 15mm 12mm; }
+
+  /* ── স্ট্যাটাস রিবন ── */
+  .status { margin: -7mm 0 9mm; background: #fff; border: 1pt solid var(--st-line); border-radius: 10pt; box-shadow: 0 8px 20px -12px rgba(15,23,42,.35); position: relative; }
+  .status table { width: 100%; border-collapse: collapse; }
+  .status td { padding: 9pt 12pt; vertical-align: middle; }
+  .status .pill { display: inline-block; background: var(--st); color: #fff; font-weight: 800; letter-spacing: 1.5pt; font-size: 10pt; padding: 4pt 11pt; border-radius: 6pt; }
+  .status .who { font-size: 8.4pt; color: var(--muted); }
+  .status .who b { color: var(--ink); }
+  .steps { text-align: right; white-space: nowrap; }
+  .step { display: inline-block; text-align: center; width: 62pt; vertical-align: top; }
+  .step .dot { display: block; width: 13pt; height: 13pt; line-height: 13pt; margin: 0 auto 2pt; border-radius: 50%; background: var(--st); color: #fff; font-size: 7pt; font-weight: 800; }
+  .step.off .dot { background: #cbd5e1; }
+  .step .l { display: block; font-size: 6.6pt; color: var(--muted); text-transform: uppercase; letter-spacing: .6pt; font-weight: 700; }
+  .step .d { display: block; font-size: 7.8pt; font-weight: 700; }
+  .arrow { display: inline-block; width: 18pt; border-top: 1.2pt dashed #cbd5e1; vertical-align: top; margin-top: 6pt; }
+
+  /* ── আবেদনপত্র ── */
+  .letter { margin-bottom: 9mm; }
+  .letter .to { font-size: 8.8pt; color: var(--muted); margin-bottom: 6pt; }
+  .letter .to b { color: var(--ink); }
+  .letter .subject { font-size: 10.5pt; font-weight: 700; margin: 0 0 7pt; padding-bottom: 6pt; border-bottom: 1pt solid var(--line); }
+  .letter p { margin: 0 0 6pt; }
+  .quote { margin: 8pt 0; padding: 8pt 11pt; background: var(--soft); border-radius: 8pt; border-left: 3pt solid var(--brand); }
+  .quote .lab { font-size: 7pt; font-weight: 700; letter-spacing: 1pt; text-transform: uppercase; color: var(--brand); }
+
+  /* ── সংখ্যার কার্ড ── */
+  .cards { width: 100%; border-collapse: separate; border-spacing: 7pt 0; margin: 0 -7pt 8mm; table-layout: fixed; }
+  .cards td { background: var(--soft); border: 1pt solid var(--line); border-radius: 9pt; padding: 9pt 10pt; vertical-align: top; }
+  .cards .k { font-size: 7pt; font-weight: 700; letter-spacing: .8pt; text-transform: uppercase; color: var(--muted); }
+  .cards .v { font-size: 19pt; font-weight: 800; line-height: 1.15; }
+  .cards .s { font-size: 7.6pt; color: var(--muted); }
+  .cards td.hl { background: linear-gradient(135deg, #eef2ff, #f5f3ff); border-color: #c7d2fe; }
+  .cards td.hl .v { color: #4338ca; }
+
+  h2 { font-size: 7.4pt; font-weight: 800; letter-spacing: 1.4pt; text-transform: uppercase; color: var(--brand); margin: 0 0 5pt; }
+  .two { width: 100%; border-collapse: separate; border-spacing: 8pt 0; margin: 0 -8pt 8mm; table-layout: fixed; }
+  .two > tbody > tr > td { vertical-align: top; padding: 0; }
+  table.kv { width: 100%; border-collapse: collapse; }
+  table.kv td { padding: 5pt 0; border-bottom: .6pt solid var(--line); font-size: 8.9pt; vertical-align: top; }
+  table.kv td.k { color: var(--muted); width: 40%; }
+  table.kv td.v { font-weight: 600; text-align: right; }
+  .tag { display: inline-block; padding: 1pt 6pt; border-radius: 8pt; font-size: 6.8pt; font-weight: 800; letter-spacing: .4pt; margin-left: 3pt; }
+  .tag.paid { background: #ecfdf5; color: var(--ok); } .tag.unpaid { background: #fff1f2; color: var(--bad); } .tag.extra { background: #e0f2fe; color: #0369a1; }
+
+  /* ── ব্যালান্স বার ── */
+  .bal { border: 1pt solid var(--line); border-radius: 9pt; padding: 10pt 12pt; margin-bottom: 8mm; }
+  .bal table { width: 100%; border-collapse: collapse; }
+  .bal td { padding: 0; vertical-align: bottom; }
+  .meter { height: 8pt; border-radius: 4pt; background: #eef2f7; overflow: hidden; margin: 7pt 0 5pt; white-space: nowrap; font-size: 0; }
+  .meter span { display: inline-block; height: 8pt; }
+  .legend { font-size: 7.6pt; color: var(--muted); }
+  .legend i { display: inline-block; width: 7pt; height: 7pt; border-radius: 2pt; margin: 0 3pt -1pt 8pt; }
+  .legend i:first-child { margin-left: 0; }
+  .over { color: var(--bad); font-weight: 700; }
+
+  /* ── সিস্টেমে তৈরি (স্বাক্ষর লাগে না) ── */
+  .machine { border: 1pt dashed #c7d2fe; background: #f8faff; border-radius: 9pt; padding: 9pt 12pt; }
+  .machine table { width: 100%; border-collapse: collapse; }
+  .machine td { vertical-align: middle; padding: 0; }
+  .machine .ic { width: 26pt; height: 26pt; line-height: 26pt; border-radius: 8pt; background: #e0e7ff; color: #4338ca; text-align: center; font-weight: 800; font-size: 12pt; }
+  .machine .t1 { font-weight: 700; font-size: 9pt; }
+  .machine .t2 { font-size: 7.8pt; color: var(--muted); }
+  .code { font-family: 'Inter', monospace; font-weight: 800; letter-spacing: 1.2pt; font-size: 9pt; color: #3730a3; text-align: right; }
+  .code span { display: block; font-size: 6.6pt; letter-spacing: 1pt; color: var(--muted); font-weight: 700; text-transform: uppercase; }
+  .foot { position: absolute; left: 15mm; right: 15mm; bottom: 8mm; font-size: 7pt; color: #94a3b8; border-top: .6pt solid var(--line); padding-top: 5pt; }
+  .foot table { width: 100%; border-collapse: collapse; }
+  .foot td:last-child { text-align: right; }
+
+  @media print {
+    @page { size: A4 portrait; margin: 0; }
+    body { background: #fff; }
+    .bar { display: none; }
+    .sheet { margin: 0; box-shadow: none; }
+    * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  }
+</style>
+</head>
+<body>
+{% if not pdf %}
+<div class="bar">
+  <a class="btn" href="javascript:history.back()">← Back</a>
+  <div style="display:flex; gap:8px">
+    <a class="btn" href="?format=pdf">PDF</a>
+    <button class="btn primary" onclick="window.print()">Print</button>
+  </div>
+</div>
+{% endif %}
+
+<div class="sheet">
+  {# ── মাথা ── #}
+  <div class="band">
+    <div class="glow"></div>
+    <table><tr>
+      <td>
+        <span class="logo">{{ company.name|slice:":1"|upper }}</span><span class="coname"><b>{{ company.name }}</b>
+          <span>{% if branch %}{{ branch.name }}{% if branch.address %} · {{ branch.address }}{% endif %}{% elif company.address %}{{ company.address }}{% endif %}</span></span>
+      </td>
+      <td class="doc">
+        <div class="k">Human Resources</div>
+        <div class="t">{% if lv.status == 'Approved' %}Leave Approval{% else %}Leave Application{% endif %}</div>
+        <div class="r">{{ lv.reference }}</div>
+      </td>
+    </tr></table>
+  </div>
+
+  <div class="content">
+    {# ── স্ট্যাটাস + টাইমলাইন ── #}
+    <div class="status">
+      <table><tr>
+        <td>
+          <span class="pill">{% if lv.status == 'Approved' %}✓ APPROVED{% elif lv.status == 'Rejected' %}✕ REJECTED{% else %}PENDING{% endif %}</span>
+          <div class="who" style="margin-top:4pt">
+            {% if lv.status == 'Pending' %}Waiting for a decision{% else %}{% if approver_name %}by <b>{{ approver_name }}</b>{% endif %}{% if decided_at %} · {{ decided_at|date:"d M Y, h:i A" }}{% endif %}{% endif %}
+          </div>
+        </td>
+        <td class="steps">
+          <span class="step"><span class="dot">1</span><span class="l">Applied</span><span class="d">{{ lv.applied_on|date:"d M Y" }}</span></span><span class="arrow"></span><span class="step {% if lv.status == 'Pending' %}off{% endif %}"><span class="dot">2</span><span class="l">{% if lv.status == 'Rejected' %}Rejected{% else %}Approved{% endif %}</span><span class="d">{% if lv.status == 'Pending' %}—{% else %}{{ decided_at|default:lv.applied_on|date:"d M Y" }}{% endif %}</span></span>{% if lv.status != 'Rejected' %}<span class="arrow"></span><span class="step {% if lv.status != 'Approved' %}off{% endif %}"><span class="dot">3</span><span class="l">Resumes</span><span class="d">{{ resume_date|date:"d M Y"|default:"—" }}</span></span>{% endif %}
+        </td>
+      </tr></table>
+    </div>
+
+    {# ── আবেদনপত্র ── #}
+    <div class="letter">
+      <div class="to">To: <b>The Authority / Human Resources</b>, {{ company.name }} &nbsp;·&nbsp; From: <b>{{ employee.name }}</b>{% if profile.designation %}, {{ profile.designation }}{% endif %}</div>
+      <p class="subject">Subject: Application for {{ leave_label }} — {{ lv.start_date|date:"d M Y" }}{% if lv.end_date != lv.start_date %} to {{ lv.end_date|date:"d M Y" }}{% endif %} ({{ total_days }} day{{ total_days|pluralize }})</p>
+      <p>Dear Sir / Madam,</p>
+      <p>I, <b>{{ employee.name }}</b>{% if employee.department %} of {{ employee.department.name }}{% endif %} (Employee ID {{ employee.device_user_id }}), respectfully request
+         {{ leave_label|lower }} for <b>{{ total_days }} day{{ total_days|pluralize }}</b>, from <b>{{ lv.start_date|date:"l, d F Y" }}</b> to <b>{{ lv.end_date|date:"l, d F Y" }}</b>,
+         and will resume my duties on <b>{{ resume_date|date:"l, d F Y"|default:"the next working day" }}</b>. I kindly request you to grant me the leave.</p>
+      {% if lv.reason %}<div class="quote"><div class="lab">Reason</div>{{ lv.reason }}</div>{% endif %}
+    </div>
+
+    {# ── সংখ্যা ── #}
+    <table class="cards"><tr>
+      <td><div class="k">Total days</div><div class="v">{{ total_days }}</div><div class="s">{{ lv.start_date|date:"d M" }} – {{ lv.end_date|date:"d M" }}</div></td>
+      <td><div class="k">Working days</div><div class="v">{{ working_days }}</div><div class="s">{% if off_days %}+{{ off_days }} off / holiday{% else %}no off days inside{% endif %}</div></td>
+      <td><div class="k">Back to work</div><div class="v" style="font-size:13pt; padding-top:4pt">{{ resume_date|date:"D, d M"|default:"—" }}</div><div class="s">next working day</div></td>
+      <td class="hl"><div class="k">Leave left ({{ lv.start_date|date:"Y" }})</div><div class="v">{% if balance %}{{ balance.remaining_after }}{% else %}—{% endif %}</div><div class="s">{% if balance %}of {{ balance.allocated }} days{% else %}no yearly limit{% endif %}</div></td>
+    </tr></table>
+
+    {# ── কর্মচারী + ছুটির তথ্য ── #}
+    <table class="two"><tr>
+      <td>
+        <h2>Employee</h2>
+        <table class="kv">
+          <tr><td class="k">Name</td><td class="v">{{ employee.name }}</td></tr>
+          <tr><td class="k">Employee ID</td><td class="v">{{ employee.device_user_id }}{% if profile.employee_code %} · {{ profile.employee_code }}{% endif %}</td></tr>
+          <tr><td class="k">Designation</td><td class="v">{{ profile.designation|default:"—" }}</td></tr>
+          <tr><td class="k">Department</td><td class="v">{{ employee.department.name|default:"—" }}</td></tr>
+          <tr><td class="k">Joined</td><td class="v">{{ profile.join_date|date:"d M Y"|default:"—" }}</td></tr>
+        </table>
+      </td>
+      <td>
+        <h2>Leave</h2>
+        <table class="kv">
+          <tr><td class="k">Type</td><td class="v">{{ leave_label }}{% if is_paid %}<span class="tag paid">PAID</span>{% else %}<span class="tag unpaid">UNPAID</span>{% endif %}{% if balance and not balance.counts %}<span class="tag extra">EXTRA</span>{% endif %}</td></tr>
+          <tr><td class="k">From</td><td class="v">{{ lv.start_date|date:"D, d M Y" }}</td></tr>
+          <tr><td class="k">To</td><td class="v">{{ lv.end_date|date:"D, d M Y" }}</td></tr>
+          <tr><td class="k">Applied on</td><td class="v">{{ lv.applied_on|date:"d M Y, h:i A" }}</td></tr>
+          <tr><td class="k">Salary</td><td class="v">{% if is_paid %}No deduction{% else %}Deducted for these days{% endif %}</td></tr>
+        </table>
+      </td>
+    </tr></table>
+
+    {# ── ব্যালান্স ── #}
+    {% if balance %}
+    <div class="bal">
+      <table><tr>
+        <td><h2 style="margin:0">Yearly leave balance · {{ lv.start_date|date:"Y" }}</h2></td>
+        <td style="text-align:right; font-size:8.6pt"><b>{{ balance.taken_before }}</b> taken before · <b>{{ balance.this }}</b> this · <b style="color:#4338ca">{{ balance.remaining_after }}</b> left of {{ balance.allocated }}</td>
+      </tr></table>
+      <div class="meter"><span style="width:{% widthratio balance.taken_before balance.allocated 100 %}%; background:#94a3b8"></span><span style="width:{% widthratio balance.this balance.allocated 100 %}%; background:#4f46e5"></span></div>
+      <div class="legend"><i style="background:#94a3b8"></i>Taken before<i style="background:#4f46e5"></i>This application<i style="background:#eef2f7; border:.6pt solid #cbd5e1"></i>Remaining</div>
+      {% if not balance.counts %}<p class="legend" style="margin:5pt 0 0">{{ leave_label }} is additional leave from the company — it is not counted in the yearly allowance.</p>
+      {% elif balance.over %}<p class="legend over" style="margin:5pt 0 0">This application exceeds the yearly allowance by {{ balance.over }} day{{ balance.over|pluralize }}.</p>{% endif %}
+      {% if type_row %}<p class="legend" style="margin:3pt 0 0">{{ type_row.label }}: {{ type_row.allocated }} days per year, {{ type_row.used }} taken before this.</p>{% endif %}
+    </div>
+    {% endif %}
+
+    {# ── সিস্টেমে তৈরি — স্বাক্ষর লাগে না ── #}
+    <div class="machine">
+      <table><tr>
+        <td style="width:34pt"><div class="ic">✓</div></td>
+        <td>
+          <div class="t1">Machine-generated document — no signature required</div>
+          <div class="t2">This {% if lv.status == 'Approved' %}approval{% else %}application{% endif %} was generated by the attendance system{% if lv.status != 'Pending' and approver_name %} and {{ lv.status|lower }} online by {{ approver_name }}{% endif %}. It is valid without a physical signature or seal.</div>
+        </td>
+        <td class="code" style="width:110pt"><span>Verification</span>{{ lv.reference }}-{{ lv.employee.device_user_id }}</td>
+      </tr></table>
+    </div>
+  </div>
+
+  <div class="foot"><table><tr>
+    <td>{{ company.name }} · Generated {{ generated_at|date:"d M Y, h:i A" }}</td>
+    <td>Page 1 of 1</td>
+  </tr></table></div>
+</div>
+</body>
+</html>

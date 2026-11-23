@@ -63,6 +63,7 @@
       </div>
       <div class="flex shrink-0 items-center gap-2">
         <span class="{% if lv.status == 'Approved' %}badge-success{% elif lv.status == 'Rejected' %}badge-danger{% else %}badge-warning{% endif %}">{{ lv.status }}</span>
+        {% if lv.status == 'Approved' %}<a href="{% url 'portal:leave_letter' lv.id %}" class="btn-icon h-8 w-8 text-emerald-600" title="Approval letter (A4)" aria-label="Approval letter">{% include "partials/icon.html" with name="document" cls="h-4 w-4" %}</a>{% endif %}
         {% if lv.status == 'Pending' %}
         <form method="post" action="{% url 'portal:leave_cancel' lv.id %}" onsubmit="return confirm('আবেদন বাতিল করবেন?');">{% csrf_token %}
           <button class="btn-icon h-8 w-8 text-rose-500" title="Cancel">{% include "partials/icon.html" with name="x" cls="h-4 w-4" %}</button></form>

@@ -1,30 +1,27 @@
-{# ড্যাশবোর্ডের আজকের লগের সারি — প্রথম পেজ ও "Load more" দুটোই এটা ব্যবহার করে #}
+{% load ui %}{# ড্যাশবোর্ডের আজকের লগের সারি — প্রথম পেজ ও "Load more" দুটোই এটা ব্যবহার করে #}
 {% for data in rows %}
-          <tr>
+          <tr class="group">
             <td class="rt-title">
-              <div class="flex items-center gap-3">
-                <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary-50 text-xs font-bold text-primary-700 dark:bg-primary-500/10 dark:text-primary-300">{{ data.employee.name|slice:":1"|upper }}</span>
-                <div class="min-w-0">
-                  <p class="truncate font-semibold text-slate-900 dark:text-white">{{ data.employee.name }}</p>
-                  <p class="truncate text-xs font-normal text-slate-500">{{ data.employee.department.name|default:"—" }}</p>
-                </div>
-              </div>
+              <a href="{% url 'attendance_app:employee_attendance_detail' data.employee.id %}" class="flex items-center gap-3">
+                <span class="lx-avatar" style="{{ data.employee.name|avatar_style }}">{{ data.employee.name|initials }}</span>
+                <span class="min-w-0">
+                  <span class="block truncate font-semibold text-slate-900 hover:text-indigo-600 dark:text-white">{{ data.employee.name }}</span>
+                  <span class="block truncate text-xs font-normal text-slate-500">{{ data.employee.department.name|default:"—" }}</span>
+                </span>
+              </a>
             </td>
-            <td class="whitespace-nowrap tabular-nums">{% if data.in_time %}<span class="font-medium text-slate-900 dark:text-white">{{ data.in_time|time:"h:i A" }}</span>{% else %}<span class="text-slate-400">—</span>{% endif %}</td>
-            <td class="whitespace-nowrap tabular-nums">{% if data.out_time %}<span class="font-medium text-slate-900 dark:text-white">{{ data.out_time|time:"h:i A" }}</span>{% else %}<span class="text-slate-400">—</span>{% endif %}</td>
-            <td class="whitespace-nowrap text-center font-mono text-xs tabular-nums text-slate-600 dark:text-slate-300">{{ data.total_work_time }}</td>
-            <td class="whitespace-nowrap text-center font-mono text-xs tabular-nums {% if data.late_time.total_seconds > 0 %}text-amber-600 dark:text-amber-400{% else %}text-slate-400{% endif %}">{{ data.late_time }}</td>
-            <td class="whitespace-nowrap text-center font-mono text-xs tabular-nums {% if data.less_time.total_seconds > 0 %}text-rose-600 dark:text-rose-400{% else %}text-slate-400{% endif %}">{{ data.less_time }}</td>
-            <td class="whitespace-nowrap text-center font-mono text-xs tabular-nums {% if data.over_time.total_seconds > 0 %}text-violet-600 dark:text-violet-400{% else %}text-slate-400{% endif %}">{{ data.over_time }}</td>
+            <td class="whitespace-nowrap tabular-nums">{% if data.in_time %}<span class="font-semibold text-slate-900 dark:text-white">{{ data.in_time|time:"h:i A" }}</span>{% if data.late_time.total_seconds > 0 %} <span class="lx-mini bg-amber-100 text-amber-800 dark:bg-amber-500/15 dark:text-amber-300">{{ data.late_time|short_late }}</span>{% endif %}{% else %}<span class="text-slate-300 dark:text-slate-600">—</span>{% endif %}</td>
+            <td class="whitespace-nowrap tabular-nums">{% if data.out_time %}<span class="font-semibold text-slate-900 dark:text-white">{{ data.out_time|time:"h:i A" }}</span>{% else %}<span class="text-slate-300 dark:text-slate-600">—</span>{% endif %}</td>
+            <td>{% if data.total_work_time.total_seconds > 0 %}
+              <div class="flex items-center gap-2"><span class="h-1.5 w-16 overflow-hidden rounded-full bg-slate-100 dark:bg-white/10"><span class="block h-full rounded-full {% if data.over_time.total_seconds > 0 %}bg-violet-500{% else %}bg-indigo-400{% endif %}" style="width: {{ data.total_work_time|pct_of:data.shift_duration }}%"></span></span>
+                <span class="whitespace-nowrap text-xs font-medium tabular-nums text-slate-600 dark:text-slate-300">{{ data.total_work_time|hm }}</span></div>
+              {% else %}<span class="text-slate-300 dark:text-slate-600">—</span>{% endif %}</td>
             <td class="text-right">
-              {% if data.status == 'Present' %}
-                <span class="badge-success"><span class="badge-dot"></span>Completed</span>
-              {% elif data.status == 'Present (Active)' %}
-                <span class="badge-info"><span class="badge-dot animate-pulse"></span>On duty</span>
-              {% else %}
-                <span class="badge-danger"><span class="badge-dot"></span>Absent</span>
-              {% endif %}
-              {% if data.late_time.total_seconds > 0 %}<span class="badge-warning ml-1">Late</span>{% endif %}
+              {% if data.status == 'Present' %}<span class="{% if data.late_time.total_seconds > 0 %}lx-late{% else %}lx-present{% endif %}">Completed</span>
+              {% elif data.status == 'Present (Active)' %}<span class="lx-pill bg-indigo-50 text-indigo-700 ring-indigo-600/15 dark:bg-indigo-500/10 dark:text-indigo-300">On duty</span>
+              {% elif data.day_status == 'Leave' %}<span class="lx-leave">{{ data.label|default:"Leave" }}</span>
+              {% elif data.day_status == 'Weekly Off' or data.day_status == 'Public Holiday' %}<span class="lx-off">{{ data.label }}</span>
+              {% else %}<span class="lx-absent">Not in</span>{% endif %}
             </td>
           </tr>
 {% endfor %}

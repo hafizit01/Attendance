@@ -65,6 +65,108 @@ def _today_row(emp, d):
         # দিন শেষ না হলে (Out নেই) কম সময় দেখাই না
         'less_time': d['less'] if d['out_time'] else timedelta(),
         'status': status_display,
+        # নতুন ডিজাইনের জন্য বাড়তি
+        'day_status': d['status'],
+        'label': d.get('label', d['status']),
+        'shift_duration': d['shift'].duration if d.get('shift') else timedelta(hours=8),
+    }
+
+
+def _sparkline(values, w=100, h=28):
+    """সংখ্যার তালিকা → SVG polyline এর points (ছোট ট্রেন্ড লাইন)"""
+    if not values:
+        return ''
+    hi = max(values) or 1
+    step = w / max(len(values) - 1, 1)
+    return ' '.join(f"{i * step:.1f},{h - 2 - (v / hi) * (h - 4):.1f}" for i, v in enumerate(values))
+
+
+def _dashboard_insights(request, scope, per_emp, attendance_trend, today):
+    """ড্যাশবোর্ডের স্মার্ট অংশ: আজকের ভাগ, আসার সময়ের চার্ট, সতর্কতা, ছুটিতে কে, ছুটির দিন, জন্মদিন"""
+    from django.db.models import Max
+    from .models import MissingPunch, UnknownPunch
+    zero = timedelta()
+    split = {'on_time': 0, 'late': 0, 'leave': 0, 'off': 0, 'not_in': 0}
+    arrivals = defaultdict(int)
+    on_leave, yesterday_missing_out = [], 0
+    for emp, _s, days in per_emp:
+        d = days[-1]
+        if d['in_time']:
+            split['late' if d['late'] > zero else 'on_time'] += 1
+            arrivals[d['in_time'].hour] += 1
+        elif d['status'] == 'Leave':
+            split['leave'] += 1
+            on_leave.append(emp)
+        elif d['status'] in ('Weekly Off', 'Public Holiday', 'Other Branch'):
+            split['off'] += 1
+        else:
+            split['not_in'] += 1
+        if len(days) > 1 and days[-2]['in_time'] and not days[-2]['out_time']:
+            yesterday_missing_out += 1
+
+    # আসার সময় (ঘণ্টা অনুযায়ী) — ৬টা থেকে ১২টা, বা যেখানে পাঞ্চ আছে
+    hours = sorted(arrivals) if arrivals else []
+    lo, hi = (min(hours + [8]), max(hours + [12])) if hours else (8, 12)
+    peak = max(arrivals.values()) if arrivals else 0
+    arrival_bars = [{'hour': h, 'label': f"{(h % 12) or 12}{'a' if h < 12 else 'p'}", 'count': arrivals.get(h, 0),
+                     'pct': round(100 * arrivals.get(h, 0) / peak) if peak else 0} for h in range(lo, hi + 1)]
+
+    spark = {k: _sparkline([t[k] for t in attendance_trend]) for k in ('present', 'late', 'absent')}
+
+    # সতর্কতা — যা এখনই দেখা দরকার
+    company = scope.company
+    attention = []
+    last_punch = scoping.attendance(Attendance.objects.all(), scope).aggregate(m=Max('timestamp'))['m']
+    if last_punch:
+        gap = timezone.now() - last_punch
+        if gap > timedelta(hours=24):
+            days_ago = gap.days
+            attention.append({'level': 'danger', 'icon': 'signal',
+                              'title': f"{days_ago} দিন ধরে কোনো পাঞ্চ আসেনি" if days_ago >= 1 else "অনেকক্ষণ কোনো পাঞ্চ আসেনি",
+                              'text': f"শেষ পাঞ্চ: {localtime(last_punch):%d %b, %I:%M %p}। মেশিনের নেটওয়ার্ক/সিঙ্ক দেখুন — নইলে সবাই Absent দেখাবে।",
+                              'url': reverse('attendance_app:device_list'), 'cta': 'Check devices'})
+    pending_leaves = scoping.leaves(LeaveRequest.objects.filter(status='Pending'), scope).count()
+    if pending_leaves:
+        attention.append({'level': 'info', 'icon': 'calendar', 'title': f"{pending_leaves}টা ছুটির আবেদন অপেক্ষায়",
+                          'text': 'Approve বা Reject করুন।', 'url': reverse('attendance_app:leave_list'), 'cta': 'Review'})
+    if yesterday_missing_out:
+        attention.append({'level': 'warn', 'icon': 'alert', 'title': f"গতকাল {yesterday_missing_out} জন Out দেয়নি",
+                          'text': 'ঠিক না করলে ওই দিনের কাজ ০ ধরে বেতন কাটবে।',
+                          'url': reverse('attendance_app:missing_queue') + '?issue=missing_out', 'cta': 'Fix'})
+    mp = MissingPunch.objects.filter(company=company, status=MissingPunch.STATUS_OPEN)
+    unknown = UnknownPunch.objects.filter(company=company, status='open')
+    if scope.branch:
+        mp = mp.filter(employee__department__branch=scope.branch)
+    mp_count, unknown_count = mp.count(), unknown.count()
+    if mp_count:
+        attention.append({'level': 'warn', 'icon': 'clock', 'title': f"{mp_count}টা Missing out-punch সতর্কতা খোলা",
+                          'text': 'রাতের অটো চেক যেগুলো পেয়েছে।', 'url': reverse('attendance_app:missing_punch_list'), 'cta': 'Open'})
+    if unknown_count:
+        attention.append({'level': 'warn', 'icon': 'shield', 'title': f"{unknown_count}টা অচেনা ID এর পাঞ্চ",
+                          'text': 'মেশিনে এমন ID যা সফটওয়্যারে কারো নয়।', 'url': reverse('attendance_app:unknown_punch_list'), 'cta': 'Resolve'})
+
+    holidays = list(scoping.holidays(Holiday.objects.filter(end_date__gte=today, start_date__lte=today + timedelta(days=45)), scope)
+                    .order_by('start_date')[:4])
+
+    # জন্মদিন (আজ থেকে ৭ দিন)
+    birthdays = []
+    try:
+        from userapp.models import EmployeeProfile
+        emp_ids = [e.id for e, _s, _d in per_emp]
+        for p in EmployeeProfile.objects.filter(employee_id__in=emp_ids, date_of_birth__isnull=False).select_related('employee'):
+            for add in range(8):
+                day = today + timedelta(days=add)
+                if (p.date_of_birth.month, p.date_of_birth.day) == (day.month, day.day):
+                    birthdays.append({'employee': p.employee, 'date': day, 'today': add == 0})
+                    break
+        birthdays.sort(key=lambda b: b['date'])
+    except Exception:   # প্রোফাইল অ্যাপ না থাকলেও ড্যাশবোর্ড চলবে
+        birthdays = []
+
+    return {
+        'split': split, 'arrival_bars': arrival_bars, 'spark': spark, 'attention': attention,
+        'on_leave_today': on_leave[:8], 'upcoming_holidays': holidays, 'birthdays': birthdays[:6],
+        'last_punch': last_punch,
     }
 
 
@@ -134,7 +236,8 @@ def dashboard(request):
         attendance_trend.append({
             'date': (start_date + timedelta(days=i)).strftime('%Y-%m-%d'),
             'present': present,
-            'absent': total_employees - present,  # Total - Present = Absent
+            # শুধু আসল Absent (কর্মদিবসে অনুপস্থিত) — ছুটি/সাপ্তাহিক বন্ধের দিন আর অনুপস্থিত গোনা হয় না
+            'absent': sum(1 for _e, _s, days in per_emp if days[i]['status'] == 'Absent'),
             'late': late,
         })
 
@@ -176,6 +279,7 @@ def dashboard(request):
         'can_view_salary': user.has_perm('payroll.view_salarysummary'),
         'attendance_rate': round(100 * sum(1 for e in employee_data if e['in_time']) / total_employees) if total_employees else 0,
         **_dashboard_widgets(scope),
+        **_dashboard_insights(request, scope, per_emp, attendance_trend, today),
     }
     return render(request, 'dashboard.html', context)
 
@@ -586,15 +690,47 @@ def attendance_list(request):
     # 4. Generate Data (Using Optimized Helper)
     attendance_summary = generate_attendance_table(employees, start_date_str, end_date_str, branch_id=scope.branch_id)
 
+    # স্ট্যাটাস অনুযায়ী গোনা (ফিল্টারের আগে — ট্যাবে সংখ্যা) ও ফিল্টার
+    def _kind(r):
+        if r['status'] == 'Present':
+            return 'missing_out' if r['missing_out'] else ('late' if r['late'] > timedelta() else 'present')
+        return {'Absent': 'absent', 'Leave': 'leave'}.get(r['status'], 'off')
+    counts = {'all': len(attendance_summary), 'present': 0, 'late': 0, 'missing_out': 0, 'absent': 0, 'leave': 0, 'off': 0}
+    for r in attendance_summary:
+        r['kind'] = _kind(r)
+        counts[r['kind']] += 1
+    present_total = counts['present'] + counts['late'] + counts['missing_out']
+    counted = present_total + counts['absent']
+    status_filter = request.GET.get('status', '')
+    if status_filter == 'present_all':
+        attendance_summary = [r for r in attendance_summary if r['kind'] in ('present', 'late', 'missing_out')]
+    elif status_filter in counts and status_filter != 'all':
+        attendance_summary = [r for r in attendance_summary if r['kind'] == status_filter]
+
     # 5. Context Data
     departments = scoping.departments(Department.objects.all(), scope) if user_company else []
 
     # এক মাসে সবার সারি হাজার হাজার হয় — পেজে ১০০টা করে (PDF এ সব থাকে)
     page_obj = Paginator(attendance_summary, 100).get_page(request.GET.get('page'))
 
+    today = localdate()
+    week_start = today - timedelta(days=(today.weekday() + 1) % 7)     # রবিবার থেকে সপ্তাহ
+    quick = [('Today', today, today), ('Yesterday', today - timedelta(days=1), today - timedelta(days=1)),
+             ('This week', week_start, today), ('This month', today.replace(day=1), today)]
+
     return render(request, 'attendance_list.html', {
         'attendance_summary': page_obj,
         'page_obj': page_obj,
+        'counts': counts,
+        'present_total': present_total,
+        'attendance_rate': round(100 * present_total / counted) if counted else None,
+        'status_filter': status_filter,
+        'multi_day': start_d != end_d,
+        'start_d': start_d, 'end_d': end_d,
+        'quick_ranges': [{'label': l, 'start': s.isoformat(), 'end': e.isoformat(),
+                          'on': (s, e) == (start_d, end_d)} for l, s, e in quick],
+        'bar': [(k, round(100 * counts[k] / counts['all'], 1) if counts['all'] else 0)
+                for k in ('present', 'late', 'missing_out', 'leave', 'absent', 'off')],
         'employees': employees, # For filter persistence if needed (optional)
         'all_employees': scoping.employees(Employee.objects.all(), scope) if user_company else [],  # ড্রপডাউন
         'departments': departments,
@@ -1137,6 +1273,10 @@ def leave_list(request):
     user_company = getattr(request.user.profile, 'company', None)
     # Company filter added
     leaves = scoping.leaves(LeaveRequest.objects.select_related('employee', 'employee__department'), scoping.get_scope(request))
+    # অপেক্ষায় থাকা আবেদন সবার উপরে, তারপর নতুন থেকে পুরনো
+    from django.db.models import Case, IntegerField, When
+    leaves = leaves.order_by(Case(When(status='Pending', then=0), default=1, output_field=IntegerField()),
+                             '-applied_on', '-id')
 
     query = request.GET.get('q', '')
     if query:
@@ -1184,17 +1324,25 @@ def leave_summary_pdf(request):
 
 
 def _leave_saved_message(request, form, leave, ok_text):
-    """সেভের পর: সীমার ভেতরে হলে বাকি কত দিন, সীমা পার হলে কত দিন অতিরিক্ত"""
+    """সেভের পর: সীমার ভেতরে হলে বাকি কত দিন, সীমা পার হলে কত দিন অতিরিক্ত; Approved হলে অনুমোদনপত্রের লিংক"""
+    from django.urls import reverse as _rev
+    from django.utils.html import format_html
     from .hr import leave_balance
     if form.over_days:
-        messages.warning(request, f"{leave.employee.name} এর ছুটি সেভ হয়েছে — {form.over_days} দিন সীমার অতিরিক্ত।")
-        return
-    if leave.status != 'Rejected':
-        tb = leave_balance.total_balance(leave.employee, leave.start_date.year)
-        if tb['allocated'] is not None:
-            left = max(tb['allocated'] - tb['used'] - tb['pending'], 0)
-            ok_text += f" {leave.employee.name} এর {leave.start_date.year} সালে মোট ছুটি বাকি: {left} দিন (বছরে {tb['allocated']})।"
-    messages.success(request, ok_text)
+        text = f"{leave.employee.name} এর ছুটি সেভ হয়েছে — {form.over_days} দিন সীমার অতিরিক্ত।"
+        level = messages.warning
+    else:
+        text, level = ok_text, messages.success
+        if leave.status != 'Rejected':
+            tb = leave_balance.total_balance(leave.employee, leave.start_date.year)
+            if tb['allocated'] is not None:
+                left = max(tb['allocated'] - tb['used'] - tb['pending'], 0)
+                text += f" {leave.employee.name} এর {leave.start_date.year} সালে মোট ছুটি বাকি: {left} দিন (বছরে {tb['allocated']})।"
+    if leave.status == 'Approved':
+        level(request, format_html('{} <a href="{}" target="_blank" class="font-semibold underline">অনুমোদনপত্র (A4) দেখুন / প্রিন্ট করুন →</a>',
+                                   text, _rev('attendance_app:leave_letter', args=[leave.pk])))
+    else:
+        level(request, text)
 
 
 @login_required
@@ -1208,6 +1356,8 @@ def leave_create(request):
         leave = form.save(commit=False)
         leave.approved_by = request.user
         leave.company = user_company  # ✅ Ensure Company is set
+        if leave.status in ('Approved', 'Rejected'):
+            leave.decided_at = timezone.now()
         leave.save()
         _leave_saved_message(request, form, leave, "Leave request created successfully.")
         return redirect('attendance_app:leave_list')
@@ -1221,9 +1371,16 @@ def leave_update(request, pk):
     # ✅ Security: Only own company's data
     leave = get_object_or_404(scoping.leaves(LeaveRequest.objects.all(), scoping.get_scope(request).security), pk=pk)
     
+    old_status = leave.status
     form = LeaveRequestForm(request.POST or None, instance=leave, user=request.user)
     if form.is_valid():
-        leave = form.save()
+        leave = form.save(commit=False)
+        # Pending → Approved/Rejected হলে: কে, কখন সিদ্ধান্ত দিল (অনুমোদনপত্রে দেখায়)
+        if leave.status != old_status and leave.status in ('Approved', 'Rejected'):
+            leave.decided_at = timezone.now()
+            if not form.cleaned_data.get('approved_by'):
+                leave.approved_by = request.user
+        leave.save()
         _leave_saved_message(request, form, leave, "Leave updated successfully.")
         return redirect('attendance_app:leave_list')
         

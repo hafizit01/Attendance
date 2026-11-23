@@ -187,6 +187,15 @@ def unknown_punch_resolve(request):
     return redirect('attendance_app:unknown_punch_list')
 
 
+def _leave_id_from(link):
+    from django.urls import Resolver404, resolve
+    try:
+        match = resolve(link.split('?')[0])
+    except Resolver404:
+        return None
+    return match.kwargs.get('pk') if match.url_name == 'leave_update' else None
+
+
 @login_required
 def notification_poll(request):
     """হেডারের পপ-আপ: since id এর পরের না-পড়া নোটিফিকেশন"""
@@ -196,9 +205,11 @@ def notification_poll(request):
     except ValueError:
         since = 0
     qs = Notification.objects.filter(user=request.user, is_read=False)
-    new = list(qs.filter(id__gt=since).order_by('id')[:5].values('id', 'title', 'message', 'kind'))
+    new = list(qs.filter(id__gt=since).order_by('id')[:5].values('id', 'title', 'message', 'kind', 'link'))
     for n in new:
         n['url'] = reverse('attendance_app:notification_read', args=[n['id']])
+        # ছুটির আবেদন: পপআপ থেকেই Approve/Reject করার জন্য ছুটির id
+        n['leave_id'] = _leave_id_from(n.pop('link') or '') if n['kind'] == 'leave' else None
     return JsonResponse({'unread': qs.count(), 'items': new,
                          'last_id': max([n['id'] for n in new] + [since])})
 

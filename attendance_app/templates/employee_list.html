@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load ui %}
 {% block title %}Employees{% endblock %}
 {% block content %}
 <div class="space-y-6">
@@ -36,10 +37,10 @@
             <td class="rt-hide text-xs tabular-nums text-slate-400">#{{ emp.id }}</td>
             <td class="rt-title">
               <div class="flex items-center gap-3">
-                <span class="avatar h-10 w-10 text-sm">{{ emp.name|slice:":1" }}</span>
+                <span class="lx-avatar h-10 w-10" style="{{ emp.name|avatar_style }}">{{ emp.name|initials }}</span>
                 <div class="min-w-0">
                   <a href="{% url 'attendance_app:employee_attendance_detail' emp.id %}" class="block truncate font-semibold text-slate-900 transition hover:text-primary-600 dark:text-white dark:hover:text-primary-400">{{ emp.name }}</a>
-                  <p class="text-xs font-normal text-slate-500">{% if emp.is_active %}Active{% else %}Inactive{% endif %}</p>
+                  <p class="mt-0.5">{% if emp.is_active %}<span class="lx-present !py-0.5 !text-[11px]">Active</span>{% else %}<span class="lx-off !py-0.5 !text-[11px]">Inactive</span>{% endif %}</p>
                 </div>
               </div>
             </td>

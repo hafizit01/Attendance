@@ -215,3 +215,64 @@ def leave_balance_excel(request):
                  Col(f"{labels[t]} — left", (lambda r, i=i: r['cells'][i]['remaining']), 'int')]
     meta = [('Company', scope.company.name), ('Year', year)] + ([('Branch', scope.branch.name)] if scope.branch else [])
     return excel_response(f"Leave_Balance_{year}", [Sheet('Leave balance', cols, rows, title=f'Leave balance {year}', meta=meta)])
+
+
+# ---------------------------------------------------------
+# ছুটির আবেদন ও অনুমোদনপত্র (A4) — প্রিন্ট / PDF
+# ---------------------------------------------------------
+def render_leave_letter(request, lv):
+    """HTML (প্রিন্ট বোতামসহ) অথবা ?format=pdf দিলে PDF — অ্যাডমিন ও পোর্টাল দুটোই এটা ব্যবহার করে"""
+    from .hr.leave_letter import letter_context
+    from .utils.pdf import render_pdf
+    ctx = letter_context(lv)
+    if request.GET.get('format') == 'pdf':
+        return render_pdf(request, 'leaves/leave_letter.html', {**ctx, 'pdf': True},
+                          f"Leave_{lv.reference}_{lv.employee.name}.pdf".replace(' ', '_'))
+    return render(request, 'leaves/leave_letter.html', ctx)
+
+
+@login_required
+def leave_letter(request, pk):
+    lv = get_object_or_404(
+        scoping.leaves(LeaveRequest.objects.select_related('employee', 'employee__company', 'employee__department',
+                                                           'employee__department__branch', 'approved_by'),
+                       scoping.get_scope(request).security), pk=pk)
+    return render_leave_letter(request, lv)
+
+
+@login_required
+@require_POST
+def leave_decide(request, pk):
+    """
+    এক ক্লিকে Approve / Reject (নোটিফিকেশনের পপআপ ও ছুটির তালিকা থেকে)।
+    এই ছুটির নোটিফিকেশনগুলো পড়া হয়ে যায়। XHR হলে JSON, না হলে আগের পেজে ফেরে।
+    """
+    from django.urls import reverse
+    from django.utils.http import url_has_allowed_host_and_scheme
+    from .models import Notification
+    lv = get_object_or_404(scoping.leaves(LeaveRequest.objects.select_related('employee'),
+                                          scoping.get_scope(request).security), pk=pk)
+    action = request.POST.get('action')
+    if action not in ('approve', 'reject'):
+        return HttpResponseForbidden("ভুল অনুরোধ।")
+    lv.status = 'Approved' if action == 'approve' else 'Rejected'
+    lv.approved_by = request.user
+    lv.decided_at = timezone.now()
+    lv.save(update_fields=['status', 'approved_by', 'decided_at'])
+    Notification.objects.filter(user=request.user, kind='leave',
+                                link=reverse('attendance_app:leave_update', args=[lv.pk])).update(is_read=True)
+    letter = reverse('attendance_app:leave_letter', args=[lv.pk])
+    text = f"{lv.employee.name} এর ছুটি ({lv.start_date:%d %b} – {lv.end_date:%d %b}) " + (
+        "Approved হয়েছে।" if lv.status == 'Approved' else "Rejected হয়েছে।")
+    if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+        return JsonResponse({'ok': True, 'status': lv.status, 'message': text,
+                             'letter': letter if lv.status == 'Approved' else ''})
+    if lv.status == 'Approved':
+        from django.utils.html import format_html
+        messages.success(request, format_html('{} <a href="{}" target="_blank" class="font-semibold underline">অনুমোদনপত্র (A4) →</a>', text, letter))
+    else:
+        messages.warning(request, text)
+    nxt = request.POST.get('next')
+    if nxt and url_has_allowed_host_and_scheme(nxt, allowed_hosts={request.get_host()}):
+        return redirect(nxt)
+    return redirect('attendance_app:leave_list')

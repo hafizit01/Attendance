@@ -1,263 +1,269 @@
 {% extends "base.html" %}
+{% load ui %}
 {% block title %}Dashboard{% endblock %}
+{% block extra_head %}
+<style type="text/tailwindcss">
+  @layer components {
+    .db-card { @apply overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_1px_2px_rgba(15,23,42,.04),0_8px_24px_-12px_rgba(15,23,42,.08)] dark:border-white/[0.06] dark:bg-slate-900/80; }
+    .db-head { @apply flex items-center justify-between gap-3 px-5 pt-4; }
+    .db-title { @apply flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-white; }
+    .db-kpi { @apply db-card relative p-4 transition hover:-translate-y-0.5 hover:shadow-lg; }
+    .db-kpi-label { @apply flex items-center gap-1.5 text-xs font-semibold text-slate-500 dark:text-slate-400; }
+    .db-kpi-value { @apply mt-1.5 text-3xl font-bold tabular-nums tracking-tight text-slate-900 dark:text-white; }
+    .db-quick { @apply inline-flex items-center gap-2 rounded-xl bg-white/15 px-3.5 py-2 text-sm font-semibold text-white ring-1 ring-white/25 backdrop-blur transition hover:bg-white/25; }
+  }
+</style>
+{% endblock %}
 
 {% block content %}
 <div class="space-y-6">
 
-  {# ── হিরো: শুভেচ্ছা + আজকের হার + ফিল্টার ── #}
-  <div class="hero">
-    <div class="relative z-10 flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+  {# ───────── হিরো ───────── #}
+  <section class="relative overflow-hidden rounded-3xl bg-[radial-gradient(120%_120%_at_0%_0%,#4f46e5_0%,#6d28d9_45%,#a21caf_100%)] p-6 text-white shadow-xl shadow-indigo-900/20 sm:p-8">
+    <div class="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-white/10 blur-2xl"></div>
+    <div class="pointer-events-none absolute -bottom-32 left-1/3 h-64 w-64 rounded-full bg-fuchsia-300/20 blur-3xl"></div>
+    <div class="relative flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
       <div class="min-w-0">
         <p class="text-sm font-medium text-white/75">{% now "l, d F Y" %}{% if branch_scope.branch %} · {{ branch_scope.branch.name }}{% endif %}</p>
         <h1 class="mt-1 text-2xl font-bold tracking-tight sm:text-3xl">
           {% now "H" as hour %}{% if hour < "12" %}Good morning{% elif hour < "17" %}Good afternoon{% else %}Good evening{% endif %}, {{ request.user.get_full_name|default:request.user.username }} 👋
         </h1>
-        <p class="mt-1.5 text-sm text-white/80">Today's attendance at a glance, with 30-day trends.</p>
         {% if not error_message %}
+        <p class="mt-1.5 text-sm text-white/80">আজ <b>{{ present }}</b> জন এসেছেন{% if split.late %}, <b>{{ split.late }}</b> জন দেরিতে{% endif %}{% if split.not_in %} · <b>{{ split.not_in }}</b> জন এখনো আসেননি{% endif %}।</p>
         <div class="mt-5 flex flex-wrap gap-2">
-          <a href="{% url 'attendance_app:punch_feed' %}" class="inline-flex items-center gap-2 rounded-xl bg-white/15 px-3.5 py-2 text-sm font-semibold ring-1 ring-white/25 backdrop-blur transition hover:bg-white/25">
-            {% if device_online %}<span class="live-dot"><span></span></span>{% else %}{% include "partials/icon.html" with name="signal" cls="h-4 w-4" %}{% endif %}
-            Live punches
-          </a>
-          <a href="{% url 'attendance_app:device_list' %}" class="inline-flex items-center gap-2 rounded-xl bg-white/15 px-3.5 py-2 text-sm font-semibold ring-1 ring-white/25 backdrop-blur transition hover:bg-white/25">
-            {% include "partials/icon.html" with name="device" cls="h-4 w-4" %}{{ device_online }}/{{ device_total }} devices online
-          </a>
-          <a href="{% url 'attendance_app:shift_roster' %}" class="inline-flex items-center gap-2 rounded-xl bg-white/15 px-3.5 py-2 text-sm font-semibold ring-1 ring-white/25 backdrop-blur transition hover:bg-white/25">
-            {% include "partials/icon.html" with name="grid" cls="h-4 w-4" %}Shift roster
-          </a>
+          <a href="{% url 'attendance_app:attendance_add' %}" class="db-quick">{% include "partials/icon.html" with name="plus" cls="h-4 w-4" %}Add attendance</a>
+          <a href="{% url 'attendance_app:bulk_attendance' %}" class="db-quick">{% include "partials/icon.html" with name="users" cls="h-4 w-4" %}Bulk / duty</a>
+          <a href="{% url 'attendance_app:missing_queue' %}" class="db-quick">{% include "partials/icon.html" with name="alert" cls="h-4 w-4" %}Fix missing</a>
+          {% if can_view_salary or request.user.is_superuser %}<a href="{% url 'payroll:salary_summary_list' %}" class="db-quick">{% include "partials/icon.html" with name="money" cls="h-4 w-4" %}Payroll</a>{% endif %}
+          <a href="{% url 'attendance_app:punch_feed' %}" class="db-quick">{% if device_online %}<span class="live-dot"><span></span></span>{% else %}{% include "partials/icon.html" with name="signal" cls="h-4 w-4" %}{% endif %}{{ device_online }}/{{ device_total }} online</a>
         </div>
         {% endif %}
       </div>
-
       {% if not error_message %}
-      <div class="flex flex-col items-stretch gap-4 sm:flex-row sm:items-center">
-        <div class="flex items-center gap-4 rounded-2xl bg-white/10 p-4 ring-1 ring-white/20 backdrop-blur">
-          <div class="relative h-20 w-20 shrink-0">
-            <svg viewBox="0 0 36 36" class="h-20 w-20 -rotate-90"><circle cx="18" cy="18" r="15.5" fill="none" stroke="rgba(255,255,255,.2)" stroke-width="3.5"/>
-              <circle cx="18" cy="18" r="15.5" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round" stroke-dasharray="{{ attendance_rate }} 100" pathLength="100"/></svg>
-            <span class="absolute inset-0 flex items-center justify-center text-lg font-bold tabular-nums">{{ attendance_rate }}%</span>
-          </div>
-          <div><p class="text-xs uppercase tracking-wide text-white/70">Present rate</p><p class="text-lg font-bold">{{ present }} / {{ total_employees }}</p></div>
+      <div class="flex flex-col gap-3 sm:flex-row sm:items-center lg:flex-col lg:items-end xl:flex-row xl:items-center">
+        <div class="rounded-2xl bg-white/10 px-5 py-3 text-right ring-1 ring-white/20 backdrop-blur" x-data="{ t: '' }" x-init="const f = () => t = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }); f(); setInterval(f, 1000)">
+          <p class="text-[11px] font-semibold uppercase tracking-widest text-white/70">Now</p>
+          <p class="whitespace-nowrap font-mono text-2xl font-bold tabular-nums" x-text="t">{% now "h:i A" %}</p>
         </div>
-        <form method="get" class="flex flex-col gap-2">
+        <form method="get">
           <label for="dash-dept" class="sr-only">Department</label>
           <select id="dash-dept" name="department" class="form-select border-white/20 bg-white/95 sm:w-56" onchange="this.form.submit()">
-            <option value="">All Departments</option>
-            {% for dept in departments %}
-            <option value="{{ dept.id }}" {% if selected_department == dept.id %}selected{% endif %}>{{ dept.name }}</option>
-            {% endfor %}
+            <option value="">All departments</option>
+            {% for dept in departments %}<option value="{{ dept.id }}" {% if selected_department == dept.id %}selected{% endif %}>{{ dept.name }}</option>{% endfor %}
           </select>
-          <noscript><button type="submit" class="btn bg-white text-primary-700">Apply</button></noscript>
         </form>
       </div>
       {% endif %}
     </div>
-  </div>
+  </section>
 
   {% if error_message %}
-  <div class="card flex items-start gap-3 p-5 text-amber-800 dark:text-amber-300">
-    {% include "partials/icon.html" with name="alert" %}
-    <p class="text-sm font-medium">{{ error_message }}</p>
+  <div class="db-card flex items-start gap-3 p-5 text-amber-800 dark:text-amber-300">
+    {% include "partials/icon.html" with name="alert" %}<p class="text-sm font-medium">{{ error_message }}</p>
   </div>
   {% else %}
 
-  {# ── স্ট্যাট কার্ড ── #}
-  <div class="grid grid-cols-2 gap-4 lg:grid-cols-4">
-    <div class="stat-card">
-      <div class="flex items-start justify-between gap-3">
-        <div class="min-w-0">
-          <p class="stat-label">Total Employees</p>
-          <p class="stat-value">{{ total_employees }}</p>
-        </div>
-        <span class="stat-icon bg-primary-50 text-primary-600 dark:bg-primary-500/10 dark:text-primary-400">{% include "partials/icon.html" with name="users" %}</span>
-      </div>
-      <p class="mt-3 text-xs text-slate-500 dark:text-slate-400">Across selected departments</p>
-    </div>
-
-    <div class="stat-card">
-      <div class="flex items-start justify-between gap-3">
-        <div class="min-w-0">
-          <p class="stat-label">Present Today</p>
-          <p class="stat-value text-emerald-600 dark:text-emerald-400">{{ present }}</p>
-        </div>
-        <span class="stat-icon bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400">{% include "partials/icon.html" with name="check-circle" %}</span>
-      </div>
-      <div class="mt-3 h-1.5 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
-        <div class="h-full rounded-full bg-emerald-500" style="width: {% widthratio present total_employees|default:1 100 %}%"></div>
-      </div>
-    </div>
-
-    <div class="stat-card">
-      <div class="flex items-start justify-between gap-3">
-        <div class="min-w-0">
-          <p class="stat-label">Absent Today</p>
-          <p class="stat-value text-rose-600 dark:text-rose-400">{{ absent }}</p>
-        </div>
-        <span class="stat-icon bg-rose-50 text-rose-600 dark:bg-rose-500/10 dark:text-rose-400">{% include "partials/icon.html" with name="x-circle" %}</span>
-      </div>
-      <div class="mt-3 h-1.5 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
-        <div class="h-full rounded-full bg-rose-500" style="width: {% widthratio absent total_employees|default:1 100 %}%"></div>
-      </div>
-    </div>
-
-    <div class="stat-card">
-      <div class="flex items-start justify-between gap-3">
-        <div class="min-w-0">
-          <p class="stat-label">Late Today</p>
-          <p class="stat-value text-amber-600 dark:text-amber-400">{{ late }}</p>
-        </div>
-        <span class="stat-icon bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-400">{% include "partials/icon.html" with name="clock" %}</span>
-      </div>
-      <div class="mt-3 h-1.5 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
-        <div class="h-full rounded-full bg-amber-500" style="width: {% widthratio late total_employees|default:1 100 %}%"></div>
-      </div>
+  {# ───────── KPI (৩০ দিনের ছোট ট্রেন্ডসহ) ───────── #}
+  <div class="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-6">
+    <a href="{% url 'attendance_app:employee_list' %}" class="db-kpi">
+      <p class="db-kpi-label"><span class="h-2 w-2 rounded-full bg-indigo-500"></span>Employees</p>
+      <p class="db-kpi-value">{{ total_employees }}</p>
+      <p class="mt-1 text-xs text-slate-500">{{ attendance_rate }}% present today</p>
+    </a>
+    <a href="{% url 'attendance_app:attendance_list' %}?status=present_all" class="db-kpi">
+      <p class="db-kpi-label"><span class="h-2 w-2 rounded-full bg-emerald-500"></span>On time</p>
+      <p class="db-kpi-value">{{ split.on_time }}</p>
+      <svg viewBox="0 0 100 28" preserveAspectRatio="none" class="mt-1 h-7 w-full"><polyline points="{{ spark.present }}" fill="none" stroke="#10b981" stroke-width="2" vector-effect="non-scaling-stroke" stroke-linejoin="round"/></svg>
+    </a>
+    <a href="{% url 'attendance_app:attendance_list' %}?status=late" class="db-kpi">
+      <p class="db-kpi-label"><span class="h-2 w-2 rounded-full bg-amber-400"></span>Late</p>
+      <p class="db-kpi-value {% if split.late %}text-amber-600 dark:text-amber-400{% endif %}">{{ split.late }}</p>
+      <svg viewBox="0 0 100 28" preserveAspectRatio="none" class="mt-1 h-7 w-full"><polyline points="{{ spark.late }}" fill="none" stroke="#f59e0b" stroke-width="2" vector-effect="non-scaling-stroke" stroke-linejoin="round"/></svg>
+    </a>
+    <a href="{% url 'attendance_app:attendance_list' %}?status=absent" class="db-kpi">
+      <p class="db-kpi-label"><span class="h-2 w-2 rounded-full bg-rose-500"></span>Not in yet</p>
+      <p class="db-kpi-value {% if split.not_in %}text-rose-600 dark:text-rose-400{% endif %}">{{ split.not_in }}</p>
+      <svg viewBox="0 0 100 28" preserveAspectRatio="none" class="mt-1 h-7 w-full"><polyline points="{{ spark.absent }}" fill="none" stroke="#f43f5e" stroke-width="2" vector-effect="non-scaling-stroke" stroke-linejoin="round"/></svg>
+    </a>
+    <a href="{% url 'attendance_app:leave_list' %}" class="db-kpi">
+      <p class="db-kpi-label"><span class="h-2 w-2 rounded-full bg-sky-500"></span>On leave</p>
+      <p class="db-kpi-value">{{ split.leave }}</p>
+      <p class="mt-1 truncate text-xs text-slate-500">{% for e in on_leave_today|slice:":2" %}{{ e.name }}{% if not forloop.last %}, {% endif %}{% empty %}কেউ ছুটিতে নেই{% endfor %}</p>
+    </a>
+    <div class="db-kpi">
+      <p class="db-kpi-label"><span class="h-2 w-2 rounded-full bg-slate-400"></span>Off / holiday</p>
+      <p class="db-kpi-value">{{ split.off }}</p>
+      <p class="mt-1 text-xs text-slate-500">Weekly off & holidays</p>
     </div>
   </div>
 
-  {# ── সব ব্রাঞ্চ দেখার সময়: ব্রাঞ্চ অনুযায়ী আজকের তুলনা ── #}
+  <div class="grid grid-cols-1 gap-6 xl:grid-cols-3">
+    {# ───────── ট্রেন্ড ───────── #}
+    <section class="db-card xl:col-span-2" x-data="{ range: 30 }">
+      <div class="db-head">
+        <h2 class="db-title">{% include "partials/icon.html" with name="trend" cls="h-4 w-4 text-indigo-500" %}Attendance trend</h2>
+        <div class="flex rounded-lg bg-slate-100 p-0.5 text-xs font-semibold dark:bg-white/5">
+          <button type="button" class="rounded-md px-2.5 py-1" :class="range === 7 ? 'bg-white text-slate-900 shadow-sm dark:bg-slate-700 dark:text-white' : 'text-slate-500'" @click="range = 7; window.dashTrend && window.dashTrend(7)">7 days</button>
+          <button type="button" class="rounded-md px-2.5 py-1" :class="range === 30 ? 'bg-white text-slate-900 shadow-sm dark:bg-slate-700 dark:text-white' : 'text-slate-500'" @click="range = 30; window.dashTrend && window.dashTrend(30)">30 days</button>
+        </div>
+      </div>
+      <div class="p-4 sm:p-5"><div class="relative h-64 w-full sm:h-72"><canvas id="trendChart" aria-label="Attendance trend" role="img"></canvas></div></div>
+    </section>
+
+    {# ───────── আজকের ভাগ ───────── #}
+    <section class="db-card">
+      <div class="db-head"><h2 class="db-title">Today</h2><span class="text-xs text-slate-500">{% now "d M" %}</span></div>
+      <div class="flex flex-col items-center gap-5 p-5 sm:flex-row xl:flex-col">
+        <div class="relative h-40 w-40 shrink-0">
+          <canvas id="summaryChart" aria-label="Today's attendance split" role="img"></canvas>
+          <div class="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+            <span class="text-3xl font-bold tabular-nums text-slate-900 dark:text-white">{{ attendance_rate }}%</span>
+            <span class="text-[11px] font-medium text-slate-500">present</span>
+          </div>
+        </div>
+        <ul class="grid w-full grid-cols-2 gap-2 text-sm">
+          <li class="flex items-center justify-between rounded-xl bg-emerald-50/70 px-3 py-2 dark:bg-emerald-500/5"><span class="text-emerald-700 dark:text-emerald-300">On time</span><b class="tabular-nums">{{ split.on_time }}</b></li>
+          <li class="flex items-center justify-between rounded-xl bg-amber-50/70 px-3 py-2 dark:bg-amber-500/5"><span class="text-amber-700 dark:text-amber-300">Late</span><b class="tabular-nums">{{ split.late }}</b></li>
+          <li class="flex items-center justify-between rounded-xl bg-rose-50/70 px-3 py-2 dark:bg-rose-500/5"><span class="text-rose-700 dark:text-rose-300">Not in</span><b class="tabular-nums">{{ split.not_in }}</b></li>
+          <li class="flex items-center justify-between rounded-xl bg-sky-50/70 px-3 py-2 dark:bg-sky-500/5"><span class="text-sky-700 dark:text-sky-300">Leave</span><b class="tabular-nums">{{ split.leave }}</b></li>
+        </ul>
+      </div>
+    </section>
+  </div>
+
+  <div class="grid grid-cols-1 gap-6 xl:grid-cols-3">
+    {# ───────── যা দেখা দরকার ───────── #}
+    <section class="db-card">
+      <div class="db-head"><h2 class="db-title">{% include "partials/icon.html" with name="bolt" cls="h-4 w-4 text-amber-500" %}Needs attention</h2>{% if attention %}<span class="rounded-full bg-rose-500 px-2 text-xs font-bold text-white">{{ attention|length }}</span>{% endif %}</div>
+      <ul class="space-y-2 p-4">
+        {% for a in attention %}
+        <li class="flex items-start gap-3 rounded-xl p-3 ring-1 ring-inset
+          {% if a.level == 'danger' %}bg-rose-50 ring-rose-200 dark:bg-rose-500/10 dark:ring-rose-500/20{% elif a.level == 'warn' %}bg-amber-50 ring-amber-200 dark:bg-amber-500/10 dark:ring-amber-500/20{% else %}bg-indigo-50 ring-indigo-200 dark:bg-indigo-500/10 dark:ring-indigo-500/20{% endif %}">
+          <span class="mt-0.5 {% if a.level == 'danger' %}text-rose-600{% elif a.level == 'warn' %}text-amber-600{% else %}text-indigo-600{% endif %}">{% include "partials/icon.html" with name=a.icon cls="h-5 w-5" %}</span>
+          <div class="min-w-0 flex-1">
+            <p class="text-sm font-semibold text-slate-900 dark:text-white">{{ a.title }}</p>
+            <p class="mt-0.5 text-xs text-slate-600 dark:text-slate-300">{{ a.text }}</p>
+          </div>
+          <a href="{{ a.url }}" class="shrink-0 rounded-lg bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 shadow-sm ring-1 ring-slate-200 hover:text-indigo-700 dark:bg-slate-800 dark:text-slate-200 dark:ring-white/10">{{ a.cta }}</a>
+        </li>
+        {% empty %}
+        <li class="flex flex-col items-center gap-2 py-8 text-center">
+          <span class="flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10">{% include "partials/icon.html" with name="check-circle" cls="h-6 w-6" %}</span>
+          <p class="text-sm font-semibold text-slate-900 dark:text-white">সব ঠিক আছে</p>
+          <p class="text-xs text-slate-500">কোনো জরুরি কাজ বাকি নেই।</p>
+        </li>
+        {% endfor %}
+      </ul>
+    </section>
+
+    {# ───────── আজ কে কখন এল ───────── #}
+    <section class="db-card">
+      <div class="db-head"><h2 class="db-title">{% include "partials/icon.html" with name="clock" cls="h-4 w-4 text-indigo-500" %}Arrivals today</h2><span class="text-xs text-slate-500">{{ present }} punched in</span></div>
+      <div class="p-5">
+        <div class="flex h-36 items-end gap-1.5">
+          {% for b in arrival_bars %}
+          <div class="flex h-full flex-1 flex-col items-center justify-end gap-1" title="{{ b.count }} জন {{ b.label }} এ">
+            <span class="text-[10px] font-semibold tabular-nums text-slate-500">{% if b.count %}{{ b.count }}{% endif %}</span>
+            <span class="w-full rounded-t-md {% if b.count %}bg-gradient-to-t from-indigo-500 to-violet-400{% else %}bg-slate-100 dark:bg-white/5{% endif %}" style="height: {% if b.count %}{{ b.pct }}{% else %}4{% endif %}%"></span>
+          </div>
+          {% endfor %}
+        </div>
+        <div class="mt-1.5 flex gap-1.5">{% for b in arrival_bars %}<span class="flex-1 text-center text-[10px] font-medium text-slate-400">{{ b.label }}</span>{% endfor %}</div>
+        {% if last_punch %}<p class="mt-3 text-xs text-slate-500">Last punch: <b class="text-slate-700 dark:text-slate-300">{{ last_punch|date:"d M, h:i A" }}</b></p>{% endif %}
+      </div>
+    </section>
+
+    {# ───────── আসছে ───────── #}
+    <section class="db-card">
+      <div class="db-head"><h2 class="db-title">{% include "partials/icon.html" with name="calendar" cls="h-4 w-4 text-sky-500" %}Coming up</h2></div>
+      <div class="space-y-4 p-5">
+        <div>
+          <p class="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">On leave today</p>
+          <div class="flex flex-wrap gap-1.5">
+            {% for e in on_leave_today %}<span class="inline-flex items-center gap-1.5 rounded-full bg-sky-50 py-0.5 pl-0.5 pr-2.5 text-xs font-medium text-sky-800 dark:bg-sky-500/10 dark:text-sky-200"><span class="flex h-5 w-5 items-center justify-center rounded-full text-[9px] font-bold" style="{{ e.name|avatar_style }}">{{ e.name|initials }}</span>{{ e.name }}</span>
+            {% empty %}<span class="text-xs text-slate-500">কেউ নেই</span>{% endfor %}
+          </div>
+        </div>
+        <div>
+          <p class="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Holidays</p>
+          <ul class="space-y-1.5">
+            {% for h in upcoming_holidays %}
+            <li class="flex items-center gap-3 text-sm"><span class="flex h-9 w-9 shrink-0 flex-col items-center justify-center rounded-lg bg-violet-50 text-violet-700 dark:bg-violet-500/10 dark:text-violet-300"><span class="text-[9px] font-bold uppercase leading-none">{{ h.start_date|date:"M" }}</span><span class="text-sm font-bold leading-none">{{ h.start_date|date:"j" }}</span></span>
+              <span class="min-w-0"><span class="block truncate font-medium text-slate-900 dark:text-white">{{ h.title }}</span><span class="block text-xs text-slate-500">{{ h.start_date|date:"D" }}{% if h.end_date != h.start_date %} – {{ h.end_date|date:"D, d M" }}{% endif %}</span></span></li>
+            {% empty %}<li class="text-xs text-slate-500">সামনের ৪৫ দিনে কোনো ছুটি নেই</li>{% endfor %}
+          </ul>
+        </div>
+        {% if birthdays %}
+        <div>
+          <p class="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Birthdays 🎂</p>
+          <ul class="space-y-1">{% for b in birthdays %}<li class="flex items-center justify-between text-sm"><span class="font-medium text-slate-900 dark:text-white">{{ b.employee.name }}</span><span class="text-xs {% if b.today %}font-bold text-fuchsia-600{% else %}text-slate-500{% endif %}">{% if b.today %}Today!{% else %}{{ b.date|date:"D, d M" }}{% endif %}</span></li>{% endfor %}</ul>
+        </div>
+        {% endif %}
+      </div>
+    </section>
+  </div>
+
+  {# ───────── ব্রাঞ্চ ───────── #}
   {% if branch_stats %}
-  <div class="card overflow-hidden">
-    <div class="card-header">
-      <h2 class="card-title">{% include "partials/icon.html" with name="building" cls="h-5 w-5 text-primary-500" %}Branches today</h2>
-      <a href="{% url 'attendance_app:branch_list' %}" class="btn-ghost btn-sm">Manage {% include "partials/icon.html" with name="arrow-right" cls="h-4 w-4" %}</a>
-    </div>
-    <div class="grid grid-cols-1 divide-y divide-slate-100 sm:grid-cols-2 sm:divide-y-0 xl:grid-cols-4 dark:divide-slate-800">
+  <section class="db-card">
+    <div class="db-head pb-3"><h2 class="db-title">{% include "partials/icon.html" with name="building" cls="h-4 w-4 text-indigo-500" %}Branches today</h2><a href="{% url 'attendance_app:branch_list' %}" class="text-xs font-semibold text-indigo-600 hover:underline">Manage</a></div>
+    <div class="grid grid-cols-1 gap-3 px-5 pb-5 sm:grid-cols-2 xl:grid-cols-4">
       {% for st in branch_stats %}
-      <form method="post" action="{% url 'attendance_app:branch_switch' %}" class="contents">
-        {% csrf_token %}
-        <input type="hidden" name="next" value="{{ request.path }}">
+      <form method="post" action="{% url 'attendance_app:branch_switch' %}">{% csrf_token %}<input type="hidden" name="next" value="{{ request.path }}">
         <button type="submit" name="branch" value="{% if st.branch %}{{ st.branch.id }}{% else %}all{% endif %}" {% if not st.branch %}disabled{% endif %}
-                class="group p-5 text-left transition-all duration-300 hover:bg-slate-50 sm:border-r sm:border-slate-100 dark:hover:bg-slate-800/40 sm:dark:border-slate-800">
-          <div class="flex items-center justify-between gap-2">
-            <p class="truncate text-sm font-semibold text-slate-900 group-hover:text-primary-600 dark:text-white">{{ st.branch.name|default:"No branch" }}</p>
-            <span class="text-xs font-semibold tabular-nums {% if st.rate >= 80 %}text-emerald-600{% elif st.rate >= 50 %}text-amber-600{% else %}text-rose-600{% endif %}">{{ st.rate }}%</span>
-          </div>
-          <div class="mt-3 h-1.5 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
-            <div class="h-full rounded-full bg-emerald-500" style="width: {{ st.rate }}%"></div>
-          </div>
-          <p class="mt-2 text-xs text-slate-500">
-            <span class="font-medium text-emerald-600 dark:text-emerald-400">{{ st.present }}</span> present ·
-            <span class="font-medium text-rose-600 dark:text-rose-400">{{ st.absent }}</span> absent ·
-            <span class="font-medium text-amber-600 dark:text-amber-400">{{ st.late }}</span> late
-          </p>
+                class="w-full rounded-xl border border-slate-200 p-4 text-left transition hover:border-indigo-300 hover:shadow-md dark:border-white/10">
+          <div class="flex items-center justify-between gap-2"><p class="truncate text-sm font-semibold text-slate-900 dark:text-white">{{ st.branch.name|default:"No branch" }}</p>
+            <span class="text-sm font-bold tabular-nums {% if st.rate >= 80 %}text-emerald-600{% elif st.rate >= 50 %}text-amber-600{% else %}text-rose-600{% endif %}">{{ st.rate }}%</span></div>
+          <div class="mt-3 h-1.5 overflow-hidden rounded-full bg-slate-100 dark:bg-white/10"><div class="h-full rounded-full bg-emerald-500" style="width: {{ st.rate }}%"></div></div>
+          <p class="mt-2 text-xs text-slate-500"><b class="text-emerald-600">{{ st.present }}</b> present · <b class="text-rose-600">{{ st.absent }}</b> absent · <b class="text-amber-600">{{ st.late }}</b> late</p>
         </button>
       </form>
       {% endfor %}
     </div>
-  </div>
+  </section>
   {% endif %}
 
-  {# ── চার্ট ── #}
   <div class="grid grid-cols-1 gap-6 xl:grid-cols-3">
-    <div class="card xl:col-span-2">
-      <div class="card-header">
-        <h2 class="card-title">{% include "partials/icon.html" with name="trend" cls="h-5 w-5 text-primary-500" %}Monthly Trend</h2>
-        <span class="badge-neutral">Last 30 days</span>
+    {# ───────── আজকের লগ ───────── #}
+    <section class="lx-card xl:col-span-2">
+      <div class="flex items-center justify-between gap-3 border-b border-slate-100 px-5 py-4 dark:border-white/[0.06]">
+        <h2 class="db-title">{% include "partials/icon.html" with name="clock" cls="h-4 w-4 text-indigo-500" %}Today's attendance</h2>
+        <a href="{% url 'attendance_app:attendance_list' %}" class="text-xs font-semibold text-indigo-600 hover:underline">Full list →</a>
       </div>
-      <div class="p-4 sm:p-5">
-        <div class="relative h-64 w-full sm:h-72"><canvas id="trendChart" aria-label="30 day attendance trend" role="img"></canvas></div>
+      <div class="overflow-x-auto">
+        <table class="lx-table responsive-table">
+          <thead><tr><th>Employee</th><th>Check in</th><th>Check out</th><th>Worked</th><th class="text-right">Status</th></tr></thead>
+          <tbody id="employeeTableBody">
+            {% include "partials/dashboard_log_rows.html" with rows=employee_rows %}
+            {% if not employee_rows %}
+            <tr><td colspan="5" class="px-6 py-16 text-center"><p class="font-semibold text-slate-700 dark:text-slate-200">No employees yet</p><p class="text-sm text-slate-500">Add employees or sync your device.</p></td></tr>
+            {% endif %}
+          </tbody>
+        </table>
       </div>
-    </div>
-
-    <div class="card">
-      <div class="card-header">
-        <h2 class="card-title">Today's Summary</h2>
-        <span class="text-xs text-slate-500 dark:text-slate-400">{% now "d M" %}</span>
+      {% if log_total > employee_rows|length %}
+      <div class="flex flex-col items-center gap-1 border-t border-slate-100 p-4 dark:border-white/[0.06]">
+        <button id="loadMoreBtn" type="button" class="btn-secondary btn-sm" data-offset="{{ employee_rows|length }}" data-total="{{ log_total }}">Load more {% include "partials/icon.html" with name="chevron-down" cls="h-4 w-4" %}</button>
+        <p class="text-xs text-slate-400" id="loadMoreInfo">Showing {{ employee_rows|length }} of {{ log_total }}</p>
       </div>
-      <div class="flex flex-col items-center gap-6 p-5 sm:flex-row xl:flex-col">
-        <div class="relative h-44 w-44 shrink-0">
-          <canvas id="summaryChart" aria-label="Today's attendance split" role="img"></canvas>
-          <div class="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-            <span class="text-xs font-medium text-slate-500">Total</span>
-            <span class="text-2xl font-bold tabular-nums text-slate-900 dark:text-white">{{ total_employees }}</span>
-          </div>
-        </div>
-        <ul class="w-full space-y-2.5 text-sm">
-          <li class="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2.5 dark:bg-slate-800/60">
-            <span class="flex items-center gap-2 text-slate-600 dark:text-slate-300"><span class="h-2.5 w-2.5 rounded-full bg-emerald-500"></span>Present</span>
-            <span class="font-semibold tabular-nums text-slate-900 dark:text-white">{{ present }}</span>
-          </li>
-          <li class="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2.5 dark:bg-slate-800/60">
-            <span class="flex items-center gap-2 text-slate-600 dark:text-slate-300"><span class="h-2.5 w-2.5 rounded-full bg-rose-500"></span>Absent</span>
-            <span class="font-semibold tabular-nums text-slate-900 dark:text-white">{{ absent }}</span>
-          </li>
-          <li class="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2.5 dark:bg-slate-800/60">
-            <span class="flex items-center gap-2 text-slate-600 dark:text-slate-300"><span class="h-2.5 w-2.5 rounded-full bg-amber-500"></span>Late</span>
-            <span class="font-semibold tabular-nums text-slate-900 dark:text-white">{{ late }}</span>
-          </li>
-        </ul>
-      </div>
-    </div>
-  </div>
+      {% endif %}
+    </section>
 
-  {# ── সর্বশেষ মেশিন পাঞ্চ (মেশিন থাকলে) ── #}
-  {% if recent_punches %}
-  <div class="card overflow-hidden">
-    <div class="card-header">
-      <h2 class="card-title"><span class="live-dot"><span></span></span>Latest punches from machines</h2>
-      <a href="{% url 'attendance_app:punch_feed' %}" class="link text-sm">Live view →</a>
-    </div>
-    <div class="grid grid-cols-1 divide-y divide-slate-100 sm:grid-cols-2 sm:divide-y-0 xl:grid-cols-3 dark:divide-white/[0.05]">
-      {% for p in recent_punches %}
-      <div class="flex items-center gap-3 px-5 py-3">
-        {% include "devices/_method_icon.html" with method=p.method %}
-        <div class="min-w-0 flex-1">
-          <p class="truncate text-sm font-semibold text-slate-900 dark:text-white">{% if p.employee %}{{ p.employee.name }}{% else %}Unknown ID {{ p.device_user_id }}{% endif %}</p>
-          <p class="truncate text-xs text-slate-500">{{ p.device.name|default:"—" }} · {{ p.get_method_display }}</p>
-        </div>
-        <div class="text-right"><p class="text-sm font-semibold tabular-nums text-slate-900 dark:text-white">{{ p.timestamp|date:"h:i A" }}</p><p class="text-[11px] text-slate-500">{{ p.timestamp|date:"d M" }}</p></div>
-      </div>
-      {% endfor %}
-    </div>
-  </div>
-  {% endif %}
-
-  {# ── আজকের লগ ── #}
-  <div class="card overflow-hidden">
-    <div class="card-header">
-      <h2 class="card-title">{% include "partials/icon.html" with name="clock" cls="h-5 w-5 text-primary-500" %}Today's Attendance Log</h2>
-      <a href="{% url 'attendance_app:attendance_list' %}" class="btn-ghost btn-sm">View all {% include "partials/icon.html" with name="arrow-right" cls="h-4 w-4" %}</a>
-    </div>
-
-    <div class="overflow-x-auto">
-      <table class="responsive-table table-modern">
-        <thead>
-          <tr>
-            <th>Employee</th>
-            <th>In Time</th>
-            <th>Out Time</th>
-            <th class="text-center">Worked</th>
-            <th class="text-center">Late</th>
-            <th class="text-center">Less</th>
-            <th class="text-center">Over</th>
-            <th class="text-right">Status</th>
-          </tr>
-        </thead>
-        <tbody id="employeeTableBody">
-          {% include "partials/dashboard_log_rows.html" with rows=employee_rows %}
-          {% if not employee_rows %}
-          <tr>
-            <td colspan="8" class="px-6 py-16 text-center">
-              <div class="flex flex-col items-center gap-2 text-slate-500">
-                {% include "partials/icon.html" with name="inbox" cls="h-10 w-10 text-slate-300" %}
-                <p class="font-semibold text-slate-700 dark:text-slate-200">No employees yet</p>
-                <p class="text-sm">Add employees or sync your device to see today's log.</p>
-              </div>
-            </td>
-          </tr>
-          {% endif %}
-        </tbody>
-      </table>
-    </div>
-
-    {% if log_total > employee_rows|length %}
-    <div class="flex flex-col items-center gap-1 border-t border-slate-100 p-4 dark:border-slate-800">
-      <button id="loadMoreBtn" type="button" class="btn-secondary" data-offset="{{ employee_rows|length }}" data-total="{{ log_total }}">
-        Load more {% include "partials/icon.html" with name="chevron-down" cls="h-4 w-4" %}
-      </button>
-      <p class="text-xs text-slate-400" id="loadMoreInfo">Showing {{ employee_rows|length }} of {{ log_total }}</p>
-    </div>
-    {% endif %}
+    {# ───────── লাইভ পাঞ্চ ───────── #}
+    <section class="db-card">
+      <div class="db-head pb-3"><h2 class="db-title">{% if device_online %}<span class="live-dot"><span></span></span>{% endif %}Live punches</h2><a href="{% url 'attendance_app:punch_feed' %}" class="text-xs font-semibold text-indigo-600 hover:underline">Open →</a></div>
+      <ul class="divide-y divide-slate-100 dark:divide-white/[0.05]">
+        {% for p in recent_punches %}
+        <li class="flex items-center gap-3 px-5 py-3">
+          {% include "devices/_method_icon.html" with method=p.method %}
+          <div class="min-w-0 flex-1"><p class="truncate text-sm font-semibold text-slate-900 dark:text-white">{% if p.employee %}{{ p.employee.name }}{% else %}Unknown ID {{ p.device_user_id }}{% endif %}</p><p class="truncate text-xs text-slate-500">{{ p.device.name|default:"—" }} · {{ p.get_method_display }}</p></div>
+          <div class="text-right"><p class="text-sm font-semibold tabular-nums text-slate-900 dark:text-white">{{ p.timestamp|date:"h:i A" }}</p><p class="text-[11px] text-slate-500">{{ p.timestamp|date:"d M" }}</p></div>
+        </li>
+        {% empty %}
+        <li class="px-5 py-10 text-center text-sm text-slate-500">মেশিন থেকে এখনো লাইভ পাঞ্চ আসেনি</li>
+        {% endfor %}
+      </ul>
+    </section>
   </div>
   {% endif %}
 </div>
@@ -267,7 +273,6 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script>
 document.addEventListener("DOMContentLoaded", function () {
-  // Load More: প্রতি ক্লিকে আরও ১০টা সারি
   // Load more: সার্ভার থেকে পরের ৫০ জন (শুধু আজকের হিসাব) — হাজার কর্মচারীতেও পেজ হালকা থাকে
   const loadMoreBtn = document.getElementById("loadMoreBtn");
   if (loadMoreBtn) {
@@ -290,64 +295,51 @@ document.addEventListener("DOMContentLoaded", function () {
 
   if (typeof Chart === "undefined") return;
   const dark = document.documentElement.classList.contains("dark");
-  const gridColor = dark ? "rgba(148,163,184,0.12)" : "#f1f5f9";
-  const tickColor = dark ? "#94a3b8" : "#64748b";
   Chart.defaults.font.family = "Inter, ui-sans-serif, system-ui, sans-serif";
-  Chart.defaults.color = tickColor;
-
+  Chart.defaults.color = dark ? "#94a3b8" : "#64748b";
   try {
-    const raw = '{{ attendance_trend_json|escapejs }}';
-    const trend = raw ? JSON.parse(raw) : [];
-    const labels = trend.map(i => i.date.slice(5));   // MM-DD (মোবাইলে ছোট)
-
-    const trendCtx = document.getElementById("trendChart")?.getContext("2d");
-    if (trendCtx) {
-      const fill = trendCtx.createLinearGradient(0, 0, 0, 280);
-      fill.addColorStop(0, "rgba(79,70,229,0.22)");
-      fill.addColorStop(1, "rgba(79,70,229,0)");
-      new Chart(trendCtx, {
+    const trend = JSON.parse('{{ attendance_trend_json|escapejs }}' || '[]');
+    const ctx = document.getElementById("trendChart")?.getContext("2d");
+    if (ctx) {
+      const fill = ctx.createLinearGradient(0, 0, 0, 280);
+      fill.addColorStop(0, "rgba(79,70,229,0.25)"); fill.addColorStop(1, "rgba(79,70,229,0)");
+      const chart = new Chart(ctx, {
         type: "line",
-        data: {
-          labels,
-          datasets: [
-            { label: "Present", data: trend.map(i => +i.present || 0), borderColor: "#4f46e5", backgroundColor: fill, fill: true, tension: 0.4, borderWidth: 2.5, pointRadius: 0, pointHoverRadius: 5, pointBackgroundColor: "#4f46e5" },
-            { label: "Absent", data: trend.map(i => +i.absent || 0), borderColor: "#f43f5e", borderDash: [5, 5], tension: 0.4, borderWidth: 2, pointRadius: 0, pointHoverRadius: 4 },
-            { label: "Late", data: trend.map(i => +i.late || 0), borderColor: "#f59e0b", tension: 0.4, borderWidth: 2, pointRadius: 0, pointHoverRadius: 4 }
-          ]
-        },
+        data: { labels: [], datasets: [
+          { label: "Present", data: [], borderColor: "#4f46e5", backgroundColor: fill, fill: true, tension: 0.4, borderWidth: 2.5, pointRadius: 0, pointHoverRadius: 5 },
+          { label: "Late", data: [], borderColor: "#f59e0b", tension: 0.4, borderWidth: 2, pointRadius: 0, pointHoverRadius: 4 },
+          { label: "Absent", data: [], borderColor: "#f43f5e", borderDash: [5, 5], tension: 0.4, borderWidth: 2, pointRadius: 0, pointHoverRadius: 4 },
+        ] },
         options: {
-          responsive: true, maintainAspectRatio: false,
+          responsive: true, maintainAspectRatio: false, animation: { duration: 250 },
           interaction: { mode: "index", intersect: false },
-          plugins: {
-            legend: { position: "bottom", align: "center", labels: { usePointStyle: true, pointStyle: "circle", boxWidth: 6, boxHeight: 6, padding: 18 } },
-            tooltip: { backgroundColor: "rgba(15,23,42,0.92)", padding: 12, cornerRadius: 10, titleFont: { weight: "600" }, boxPadding: 4 }
-          },
-          scales: {
-            x: { grid: { display: false }, border: { display: false }, ticks: { maxRotation: 0, autoSkip: true, maxTicksLimit: 8, font: { size: 11 } } },
-            y: { beginAtZero: true, grid: { color: gridColor }, border: { display: false }, ticks: { precision: 0, font: { size: 11 } } }
-          }
+          plugins: { legend: { position: "bottom", labels: { usePointStyle: true, pointStyle: "circle", boxWidth: 6, boxHeight: 6, padding: 18 } },
+                     tooltip: { backgroundColor: "rgba(15,23,42,0.92)", padding: 12, cornerRadius: 10, boxPadding: 4 } },
+          scales: { x: { grid: { display: false }, border: { display: false }, ticks: { maxRotation: 0, autoSkip: true, maxTicksLimit: 8, font: { size: 11 } } },
+                    y: { beginAtZero: true, grid: { color: dark ? "rgba(148,163,184,0.12)" : "#f1f5f9" }, border: { display: false }, ticks: { precision: 0, font: { size: 11 } } } }
         }
       });
+      window.dashTrend = function (n) {
+        const t = trend.slice(-n);
+        chart.data.labels = t.map(i => { const d = new Date(i.date + "T00:00"); return d.toLocaleDateString([], { day: "numeric", month: "short" }); });
+        chart.data.datasets[0].data = t.map(i => +i.present || 0);
+        chart.data.datasets[1].data = t.map(i => +i.late || 0);
+        chart.data.datasets[2].data = t.map(i => +i.absent || 0);
+        chart.update();
+      };
+      window.dashTrend(30);
     }
-
-    const summaryCtx = document.getElementById("summaryChart")?.getContext("2d");
-    if (summaryCtx) {
-      new Chart(summaryCtx, {
+    const sctx = document.getElementById("summaryChart")?.getContext("2d");
+    if (sctx) {
+      new Chart(sctx, {
         type: "doughnut",
-        data: {
-          labels: ["Present", "Absent", "Late"],
-          datasets: [{
-            data: [{{ present|default:0 }}, {{ absent|default:0 }}, {{ late|default:0 }}],
-            backgroundColor: ["#10b981", "#f43f5e", "#f59e0b"],
-            borderColor: dark ? "#0f172a" : "#ffffff", borderWidth: 3, hoverOffset: 6
-          }]
-        },
-        options: { responsive: true, maintainAspectRatio: false, cutout: "74%", plugins: { legend: { display: false } } }
+        data: { labels: ["On time", "Late", "Not in", "Leave", "Off"],
+                datasets: [{ data: [{{ split.on_time|default:0 }}, {{ split.late|default:0 }}, {{ split.not_in|default:0 }}, {{ split.leave|default:0 }}, {{ split.off|default:0 }}],
+                             backgroundColor: ["#10b981", "#f59e0b", "#f43f5e", "#0ea5e9", "#cbd5e1"], borderColor: dark ? "#0f172a" : "#ffffff", borderWidth: 3, hoverOffset: 6 }] },
+        options: { responsive: true, maintainAspectRatio: false, cutout: "76%", animation: { duration: 300 }, plugins: { legend: { display: false } } }
       });
     }
-  } catch (err) {
-    console.error("Chart Error:", err);
-  }
+  } catch (err) { console.error("Chart Error:", err); }
 });
 </script>
 {% endblock %}

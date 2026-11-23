@@ -385,6 +385,13 @@ class LeaveRequest(models.Model):
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='Pending')
     approved_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
     applied_on = models.DateTimeField(auto_now_add=True)
+    # কখন Approve/Reject হলো (অনুমোদনপত্রে দেখায়)
+    decided_at = models.DateTimeField(null=True, blank=True, editable=False)
+
+    @property
+    def reference(self):
+        """অনুমোদনপত্রের নম্বর, যেমন LV-2026-0042"""
+        return f"LV-{self.start_date:%Y}-{self.pk:04d}" if self.pk else ''
 
     def __str__(self):
         return f"{self.employee.name} - {self.leave_type} ({self.start_date} to {self.end_date})"
@@ -853,7 +860,8 @@ class MissingPunch(models.Model):
 
 class Notification(models.Model):
     """সফটওয়্যারের ভেতরের নোটিফিকেশন (হেডারের ঘণ্টা)"""
-    KIND_CHOICES = [('missing_punch', 'Missing punch'), ('device', 'Device'), ('payroll', 'Payroll'), ('info', 'Info')]
+    KIND_CHOICES = [('missing_punch', 'Missing punch'), ('device', 'Device'), ('payroll', 'Payroll'), ('info', 'Info'),
+                    ('leave', 'Leave request')]
 
     company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name='notifications')
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='notifications')

@@ -51,6 +51,8 @@ urlpatterns = [
     path('leaves/add/', leave_create, name='leave_create'),
     path('leaves/<int:pk>/edit/', leave_update, name='leave_update'),
     path('leaves/<int:pk>/delete/', leave_delete, name='leave_delete'),
+    path('leaves/<int:pk>/letter/', leave_views.leave_letter, name='leave_letter'),
+    path('leaves/<int:pk>/decide/', leave_views.leave_decide, name='leave_decide'),
 
     path('leave-summary/', leave_summary, name='leave_summary'),
     path('leave-summary-pdf/', leave_summary_pdf, name='leave_summary_pdf'),

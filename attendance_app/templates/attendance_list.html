@@ -1,144 +1,181 @@
 {% extends "base.html" %}
-{% block title %}Attendance Records{% endblock %}
+{% load ui %}
+{% block title %}Attendance{% endblock %}
 {% block content %}
-<div class="space-y-6">
+{% with qs_base="start_date="|add:start_date|add:"&end_date="|add:end_date %}
+<div class="space-y-5">
 
-  <div class="page-header">
+  {# ───────── হেডার ───────── #}
+  <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
     <div>
-      <p class="eyebrow">Attendance</p>
-      <h1 class="page-title">Attendance Records</h1>
-      <p class="page-subtitle">Daily punch logs with status for every employee.</p>
+      <p class="eyebrow">{% include "partials/icon.html" with name="clock" cls="h-3.5 w-3.5" %}Attendance</p>
+      <h1 class="page-title">Attendance <span class="text-gradient">records</span></h1>
+      <p class="page-subtitle">
+        {% if multi_day %}{{ start_d|date:"d M Y" }} → {{ end_d|date:"d M Y" }}{% else %}{{ start_d|date:"l, d F Y" }}{% endif %}
+        · {{ counts.all }} record{{ counts.all|pluralize }}{% if branch_scope.branch %} · {{ branch_scope.branch.name }}{% endif %}
+      </p>
     </div>
-    <div class="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
-      <a href="{% url 'attendance_app:attendance_add' %}" class="btn-primary">
-        {% include "partials/icon.html" with name="plus" cls="h-4 w-4" %}Add Attendance
-      </a>
-      <a href="{% url 'attendance_app:attendance_list_pdf' %}?start_date={{ start_date }}&end_date={{ end_date }}{% if selected_employee %}&employee={{ selected_employee }}{% endif %}{% if selected_department %}&department={{ selected_department }}{% endif %}"
-         target="_blank" rel="noopener" class="btn-secondary">
-        {% include "partials/icon.html" with name="download" cls="h-4 w-4" %}Export PDF
-      </a>
-      <a href="{% url 'attendance_app:attendance_list_excel' %}?start_date={{ start_date }}&end_date={{ end_date }}{% if selected_employee %}&employee={{ selected_employee }}{% endif %}{% if selected_department %}&department={{ selected_department }}{% endif %}"
-         class="btn-secondary">{% include "partials/excel_icon.html" %}Export Excel</a>
+    <div class="flex flex-wrap gap-2" x-data="{ open: false }">
+      <div class="relative">
+        <button type="button" class="btn-primary" @click="open = !open" @click.outside="open = false" :aria-expanded="open">
+          {% include "partials/icon.html" with name="plus" cls="h-4 w-4" %}Add attendance {% include "partials/icon.html" with name="chevron-down" cls="h-4 w-4" %}
+        </button>
+        <div x-show="open" x-cloak x-transition.origin.top.right class="absolute right-0 z-30 mt-2 w-64 overflow-hidden rounded-xl border border-slate-200 bg-white p-1 shadow-xl dark:border-white/10 dark:bg-slate-900">
+          <a href="{% url 'attendance_app:attendance_add' %}" class="flex flex-col rounded-lg px-3 py-2 hover:bg-slate-50 dark:hover:bg-white/5"><span class="text-sm font-semibold text-slate-900 dark:text-white">Single punch</span><span class="text-xs text-slate-500">একজনের একটা In/Out</span></a>
+          <a href="{% url 'attendance_app:bulk_attendance' %}" class="flex flex-col rounded-lg px-3 py-2 hover:bg-slate-50 dark:hover:bg-white/5"><span class="text-sm font-semibold text-slate-900 dark:text-white">Bulk / Official duty</span><span class="text-xs text-slate-500">অনেকজন, অনেক দিন একসাথে</span></a>
+          <a href="{% url 'attendance_app:missing_queue' %}" class="flex flex-col rounded-lg px-3 py-2 hover:bg-slate-50 dark:hover:bg-white/5"><span class="text-sm font-semibold text-slate-900 dark:text-white">Fix missing punches</span><span class="text-xs text-slate-500">No punch / Out নেই এমন দিন</span></a>
+        </div>
+      </div>
+      <a href="{% url 'attendance_app:attendance_list_excel' %}?{{ qs_base }}{% if selected_employee %}&employee={{ selected_employee }}{% endif %}{% if selected_department %}&department={{ selected_department }}{% endif %}" class="btn-secondary">{% include "partials/excel_icon.html" %}Excel</a>
+      <a href="{% url 'attendance_app:attendance_list_pdf' %}?{{ qs_base }}{% if selected_employee %}&employee={{ selected_employee }}{% endif %}{% if selected_department %}&department={{ selected_department }}{% endif %}" target="_blank" rel="noopener" class="btn-secondary">{% include "partials/icon.html" with name="download" cls="h-4 w-4" %}PDF</a>
     </div>
   </div>
 
-  {# ── ফিল্টার ── #}
-  <div class="card p-4 sm:p-5">
-    <form method="get" class="grid grid-cols-1 items-end gap-4 sm:grid-cols-2 xl:grid-cols-5">
-      <div>
-        <label class="form-label" for="f-start">Start date</label>
-        <input id="f-start" type="date" name="start_date" value="{{ start_date }}" class="form-input">
+  {# ───────── সারাংশ ───────── #}
+  <div class="lx-card p-4 sm:p-5">
+    <div class="flex flex-col gap-4 lg:flex-row lg:items-center">
+      <div class="flex items-center gap-4 lg:w-56 lg:shrink-0">
+        <div class="relative h-16 w-16 shrink-0">
+          <svg viewBox="0 0 36 36" class="h-16 w-16 -rotate-90"><circle cx="18" cy="18" r="15.5" fill="none" stroke-width="4" class="stroke-slate-100 dark:stroke-white/10"/>
+            <circle cx="18" cy="18" r="15.5" fill="none" stroke-width="4" stroke-linecap="round" class="stroke-emerald-500" stroke-dasharray="{{ attendance_rate|default:0 }} 100" pathLength="100"/></svg>
+          <span class="absolute inset-0 flex items-center justify-center text-sm font-bold tabular-nums text-slate-900 dark:text-white">{% if attendance_rate is None %}—{% else %}{{ attendance_rate }}%{% endif %}</span>
+        </div>
+        <div><p class="text-xs font-medium uppercase tracking-wide text-slate-500">Attendance rate</p><p class="text-sm text-slate-600 dark:text-slate-300"><b class="tabular-nums text-slate-900 dark:text-white">{{ present_total }}</b> present of {{ present_total|add:counts.absent }} working</p></div>
       </div>
-      <div>
-        <label class="form-label" for="f-end">End date</label>
-        <input id="f-end" type="date" name="end_date" value="{{ end_date }}" class="form-input">
+      <div class="min-w-0 flex-1 space-y-3">
+        <div class="lx-bar">
+          {% for k, w in bar %}{% if w %}<span class="block h-full {% if k == 'present' %}bg-emerald-500{% elif k == 'late' %}bg-amber-400{% elif k == 'missing_out' %}bg-orange-500{% elif k == 'leave' %}bg-sky-500{% elif k == 'absent' %}bg-rose-500{% else %}bg-slate-300 dark:bg-slate-600{% endif %}" style="width: {{ w }}%" title="{{ k }} {{ w }}%"></span>{% endif %}{% endfor %}
+        </div>
+        <div class="grid grid-cols-3 gap-2 sm:grid-cols-6">
+          <div class="lx-stat bg-emerald-50/70 dark:bg-emerald-500/5"><span class="text-[11px] font-medium text-emerald-700 dark:text-emerald-300">On time</span><span class="text-lg font-bold tabular-nums text-slate-900 dark:text-white">{{ counts.present }}</span></div>
+          <div class="lx-stat bg-amber-50/70 dark:bg-amber-500/5"><span class="text-[11px] font-medium text-amber-700 dark:text-amber-300">Late</span><span class="text-lg font-bold tabular-nums text-slate-900 dark:text-white">{{ counts.late }}</span></div>
+          <div class="lx-stat bg-orange-50/70 dark:bg-orange-500/5"><span class="text-[11px] font-medium text-orange-700 dark:text-orange-300">Missing out</span><span class="text-lg font-bold tabular-nums text-slate-900 dark:text-white">{{ counts.missing_out }}</span></div>
+          <div class="lx-stat bg-sky-50/70 dark:bg-sky-500/5"><span class="text-[11px] font-medium text-sky-700 dark:text-sky-300">On leave</span><span class="text-lg font-bold tabular-nums text-slate-900 dark:text-white">{{ counts.leave }}</span></div>
+          <div class="lx-stat bg-rose-50/70 dark:bg-rose-500/5"><span class="text-[11px] font-medium text-rose-700 dark:text-rose-300">Absent</span><span class="text-lg font-bold tabular-nums text-slate-900 dark:text-white">{{ counts.absent }}</span></div>
+          <div class="lx-stat bg-slate-50 dark:bg-white/[0.03]"><span class="text-[11px] font-medium text-slate-500">Off / holiday</span><span class="text-lg font-bold tabular-nums text-slate-900 dark:text-white">{{ counts.off }}</span></div>
+        </div>
       </div>
-      <div>
-        <label class="form-label" for="f-emp">Employee</label>
-        <select id="f-emp" name="employee" class="form-select">
-          <option value="">All employees</option>
-          {% for emp in all_employees %}
-            <option value="{{ emp.id }}" {% if selected_employee == emp.id %}selected{% endif %}>{{ emp.name }}</option>
-          {% endfor %}
-        </select>
+    </div>
+  </div>
+
+  {# ───────── তালিকা ───────── #}
+  <div class="lx-card">
+    {# সময় + ফিল্টার #}
+    <form method="get" class="lx-toolbar xl:flex-row lg:flex-col lg:items-stretch xl:items-center" x-data x-ref="f">
+      <div class="flex flex-wrap items-center gap-1.5">
+        {% for q in quick_ranges %}
+        <a href="?start_date={{ q.start }}&end_date={{ q.end }}{% if selected_department %}&department={{ selected_department }}{% endif %}{% if selected_employee %}&employee={{ selected_employee }}{% endif %}" class="lx-chip {% if q.on %}is-on{% endif %}">{{ q.label }}</a>
+        {% endfor %}
+        <span class="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2 py-0.5 dark:border-slate-700 dark:bg-slate-800">
+          {% include "partials/icon.html" with name="calendar" cls="h-3.5 w-3.5 text-slate-400" %}
+          <input type="date" name="start_date" value="{{ start_date }}" class="w-[7.6rem] border-0 bg-transparent p-1 text-xs font-medium text-slate-700 focus:outline-none focus:ring-0 dark:text-slate-200" aria-label="From" @change="$refs.f.submit()">
+          <span class="text-slate-300">→</span>
+          <input type="date" name="end_date" value="{{ end_date }}" class="w-[7.6rem] border-0 bg-transparent p-1 text-xs font-medium text-slate-700 focus:outline-none focus:ring-0 dark:text-slate-200" aria-label="To" @change="$refs.f.submit()">
+        </span>
       </div>
-      <div>
-        <label class="form-label" for="f-dept">Department</label>
-        <select id="f-dept" name="department" class="form-select">
+      <div class="flex flex-wrap items-center gap-2">
+        <select name="department" class="form-select !w-auto !rounded-full !py-1.5 text-xs" aria-label="Department" @change="$refs.f.submit()">
           <option value="">All departments</option>
-          {% for dept in departments %}
-            <option value="{{ dept.id }}" {% if selected_department == dept.id %}selected{% endif %}>{{ dept.name }}</option>
-          {% endfor %}
+          {% for dept in departments %}<option value="{{ dept.id }}" {% if selected_department == dept.id %}selected{% endif %}>{{ dept.name }}</option>{% endfor %}
         </select>
-      </div>
-      <div class="flex gap-2 sm:col-span-2 xl:col-span-1">
-        <button type="submit" class="btn-primary flex-1">
-          {% include "partials/icon.html" with name="filter" cls="h-4 w-4" %}Apply
-        </button>
-        <a href="{% url 'attendance_app:attendance_list' %}" class="btn-secondary px-3" title="Clear filters" aria-label="Clear filters">
-          {% include "partials/icon.html" with name="x" cls="h-4 w-4" %}
-        </a>
+        <select name="employee" class="form-select !w-auto max-w-[12rem] !rounded-full !py-1.5 text-xs" aria-label="Employee" @change="$refs.f.submit()">
+          <option value="">All employees</option>
+          {% for emp in all_employees %}<option value="{{ emp.id }}" {% if selected_employee == emp.id %}selected{% endif %}>{{ emp.name }}</option>{% endfor %}
+        </select>
+        {% if status_filter %}<input type="hidden" name="status" value="{{ status_filter }}">{% endif %}
+        {% if selected_department or selected_employee or status_filter %}<a href="?{{ qs_base }}" class="text-xs font-semibold text-slate-500 hover:text-rose-600">Clear</a>{% endif %}
       </div>
     </form>
-  </div>
 
-  {# ── টেবিল ── #}
-  <div class="card overflow-hidden">
-    <div class="card-header">
-      <h2 class="card-title">{% include "partials/icon.html" with name="calendar" cls="h-5 w-5 text-primary-500" %}
-        {% if start_date == end_date %}{{ start_date }}{% else %}{{ start_date }} → {{ end_date }}{% endif %}
-      </h2>
-      <span class="badge-neutral">{{ page_obj.paginator.count }} record{{ page_obj.paginator.count|pluralize }}</span>
+    {# স্ট্যাটাস ট্যাব #}
+    <div class="border-b border-slate-100 px-3 py-2 sm:px-4 dark:border-white/[0.06]">
+      <nav class="lx-tabs" aria-label="Filter by status">
+        {% with base="?"|add:qs_base %}
+        <a href="{{ base }}{% if selected_department %}&department={{ selected_department }}{% endif %}{% if selected_employee %}&employee={{ selected_employee }}{% endif %}" class="lx-tab {% if not status_filter %}is-on{% endif %}">All <span class="lx-count">{{ counts.all }}</span></a>
+        <a href="{{ base }}&status=present_all{% if selected_department %}&department={{ selected_department }}{% endif %}{% if selected_employee %}&employee={{ selected_employee }}{% endif %}" class="lx-tab {% if status_filter == 'present_all' %}is-on{% endif %}">Present <span class="lx-count">{{ present_total }}</span></a>
+        <a href="{{ base }}&status=late{% if selected_department %}&department={{ selected_department }}{% endif %}{% if selected_employee %}&employee={{ selected_employee }}{% endif %}" class="lx-tab {% if status_filter == 'late' %}is-on{% endif %}">Late <span class="lx-count">{{ counts.late }}</span></a>
+        <a href="{{ base }}&status=missing_out{% if selected_department %}&department={{ selected_department }}{% endif %}{% if selected_employee %}&employee={{ selected_employee }}{% endif %}" class="lx-tab {% if status_filter == 'missing_out' %}is-on{% endif %}">Missing out <span class="lx-count">{{ counts.missing_out }}</span></a>
+        <a href="{{ base }}&status=absent{% if selected_department %}&department={{ selected_department }}{% endif %}{% if selected_employee %}&employee={{ selected_employee }}{% endif %}" class="lx-tab {% if status_filter == 'absent' %}is-on{% endif %}">Absent <span class="lx-count">{{ counts.absent }}</span></a>
+        <a href="{{ base }}&status=leave{% if selected_department %}&department={{ selected_department }}{% endif %}{% if selected_employee %}&employee={{ selected_employee }}{% endif %}" class="lx-tab {% if status_filter == 'leave' %}is-on{% endif %}">Leave <span class="lx-count">{{ counts.leave }}</span></a>
+        <a href="{{ base }}&status=off{% if selected_department %}&department={{ selected_department }}{% endif %}{% if selected_employee %}&employee={{ selected_employee }}{% endif %}" class="lx-tab {% if status_filter == 'off' %}is-on{% endif %}">Off <span class="lx-count">{{ counts.off }}</span></a>
+        {% endwith %}
+      </nav>
     </div>
 
-    <div class="overflow-x-auto">
-      <table class="responsive-table table-modern">
+    <div class="max-h-[calc(100vh-14rem)] overflow-auto">
+      <table class="lx-table responsive-table">
         <thead>
           <tr>
             <th>Employee</th>
-            <th>Date</th>
             <th>Check in</th>
             <th>Check out</th>
+            <th class="w-48">Worked</th>
+            <th>Overtime</th>
             <th>Status</th>
-            <th class="text-right">Actions</th>
+            <th class="text-right"><span class="sr-only">Actions</span></th>
           </tr>
         </thead>
         <tbody>
-          {% for record in attendance_summary %}
+          {% for r in attendance_summary %}
+          {% if multi_day %}{% ifchanged r.date %}
+          <tr class="lx-group"><td colspan="7">{% include "partials/icon.html" with name="calendar" cls="mr-1.5 inline h-3.5 w-3.5 text-slate-400" %}{{ r.date|date:"l, d F Y" }}</td></tr>
+          {% endifchanged %}{% endif %}
           <tr class="group">
             <td class="rt-title">
-              <div class="flex items-center gap-3">
-                <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary-50 text-xs font-bold text-primary-700 dark:bg-primary-500/10 dark:text-primary-300">{{ record.employee.name|slice:":1"|upper }}</span>
-                <div class="min-w-0">
-                  <p class="truncate font-semibold text-slate-900 dark:text-white">{{ record.employee.name }}</p>
-                  <p class="truncate text-xs font-normal text-slate-500">{{ record.employee.department.name|default:"General" }}</p>
-                </div>
-              </div>
-            </td>
-            <td class="whitespace-nowrap text-slate-600 dark:text-slate-300">{{ record.date|date:"D, d M Y" }}</td>
-            <td class="whitespace-nowrap tabular-nums">
-              {% if record.in_time %}<span class="font-medium text-slate-900 dark:text-white">{{ record.in_time|time:"h:i A" }}</span>{% else %}<span class="text-slate-400">—</span>{% endif %}
+              <a href="{% url 'attendance_app:employee_attendance_detail' r.employee.id %}" class="flex items-center gap-3">
+                <span class="lx-avatar" style="{{ r.employee.name|avatar_style }}">{{ r.employee.name|initials }}</span>
+                <span class="min-w-0">
+                  <span class="block truncate font-semibold text-slate-900 hover:text-indigo-600 dark:text-white">{{ r.employee.name }}</span>
+                  <span class="block truncate text-xs font-normal text-slate-500">{{ r.employee.department.name|default:"—" }} · ID {{ r.employee.device_user_id }}</span>
+                </span>
+              </a>
             </td>
             <td class="whitespace-nowrap tabular-nums">
-              {% if record.out_time %}<span class="font-medium text-slate-900 dark:text-white">{{ record.out_time|time:"h:i A" }}</span>{% else %}<span class="text-slate-400">—</span>{% endif %}
+              {% if r.in_time %}<span class="font-semibold text-slate-900 dark:text-white">{{ r.in_time|time:"h:i A" }}</span>
+                {% if r.late.total_seconds > 0 %}<span class="lx-mini ml-1 bg-amber-100 text-amber-800 dark:bg-amber-500/15 dark:text-amber-300">{{ r.late|short_late }}</span>{% endif %}
+              {% else %}<span class="text-slate-300 dark:text-slate-600">—</span>{% endif %}
+            </td>
+            <td class="whitespace-nowrap tabular-nums">
+              {% if r.out_time %}<span class="font-semibold text-slate-900 dark:text-white">{{ r.out_time|time:"h:i A" }}</span>
+              {% elif r.missing_out %}<a href="{% url 'attendance_app:missing_queue' %}?from={{ r.date|date:'Y-m-d' }}&to={{ r.date|date:'Y-m-d' }}&issue=missing_out" class="lx-mini bg-orange-100 text-orange-800 hover:bg-orange-200 dark:bg-orange-500/15 dark:text-orange-300">No out · fix</a>
+              {% else %}<span class="text-slate-300 dark:text-slate-600">—</span>{% endif %}
             </td>
             <td>
-              {% if record.status == 'Present' %}<span class="badge-success"><span class="badge-dot"></span>Present</span>
-              {% elif record.status == 'Absent' %}<span class="badge-danger"><span class="badge-dot"></span>Absent</span>
-              {% elif record.status == 'Weekly Off' %}<span class="badge-neutral"><span class="badge-dot"></span>Weekly off</span>
-              {% elif record.status == 'Public Holiday' %}<span class="badge-purple"><span class="badge-dot"></span>Holiday</span>
-              {% elif record.status == 'Leave' %}<span class="badge-info"><span class="badge-dot"></span>On leave</span>
-              {% else %}<span class="badge-neutral">{{ record.status }}</span>{% endif %}
+              {% if r.work.total_seconds > 0 %}
+              <div class="flex items-center gap-2">
+                <span class="h-1.5 w-20 overflow-hidden rounded-full bg-slate-100 dark:bg-white/10"><span class="block h-full rounded-full {% if r.over.total_seconds > 0 %}bg-violet-500{% elif r.work >= r.shift_duration %}bg-emerald-500{% else %}bg-indigo-400{% endif %}" style="width: {{ r.work|pct_of:r.shift_duration }}%"></span></span>
+                <span class="whitespace-nowrap text-xs font-medium tabular-nums text-slate-600 dark:text-slate-300">{{ r.work|hm }}</span>
+              </div>
+              {% else %}<span class="text-slate-300 dark:text-slate-600">—</span>{% endif %}
+            </td>
+            <td class="whitespace-nowrap text-xs font-semibold tabular-nums {% if r.over.total_seconds > 0 %}text-violet-600 dark:text-violet-400{% else %}text-slate-300 dark:text-slate-600{% endif %}">{{ r.over|hm }}</td>
+            <td>
+              {% if r.kind == 'present' %}<span class="lx-present">Present</span>
+              {% elif r.kind == 'late' %}<span class="lx-late">Late</span>
+              {% elif r.kind == 'missing_out' %}<span class="lx-warn">Missing out</span>
+              {% elif r.kind == 'absent' %}<span class="lx-absent">Absent</span>
+              {% elif r.kind == 'leave' %}<span class="lx-leave">{{ r.label|default:"Leave" }}</span>
+              {% else %}<span class="lx-off">{{ r.label|default:r.status }}</span>{% endif %}
             </td>
             <td class="text-right">
-              {% if record.attendance_id %}
-              <div class="flex items-center justify-end gap-1 md:opacity-60 transition-opacity duration-300 group-hover:opacity-100">
-                <a href="{% url 'attendance_app:attendance_edit' record.attendance_id %}" class="btn-icon h-9 w-9 hover:bg-amber-50 hover:text-amber-600 dark:hover:bg-amber-500/10" title="Edit" aria-label="Edit {{ record.employee.name }} {{ record.date }}">
-                  {% include "partials/icon.html" with name="pencil" cls="h-4 w-4" %}
-                </a>
-                <form action="{% url 'attendance_app:attendance_delete' record.attendance_id %}" method="post"
-                      onsubmit="return confirm('এই দিনের সব পাঞ্চ মুছে ফেলবেন?');" class="inline">
-                  {% csrf_token %}
-                  <button type="submit" class="btn-icon h-9 w-9 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-500/10" title="Delete" aria-label="Delete {{ record.employee.name }} {{ record.date }}">
-                    {% include "partials/icon.html" with name="trash" cls="h-4 w-4" %}
-                  </button>
-                </form>
+              <div class="lx-actions">
+                <a href="{% url 'attendance_app:employee_attendance_detail' r.employee.id %}" class="lx-act" title="Employee report" aria-label="Report of {{ r.employee.name }}">{% include "partials/icon.html" with name="chart" cls="h-4 w-4" %}</a>
+                {% if r.attendance_id %}
+                <a href="{% url 'attendance_app:attendance_edit' r.attendance_id %}" class="lx-act hover:!text-amber-600" title="Edit" aria-label="Edit {{ r.employee.name }} {{ r.date }}">{% include "partials/icon.html" with name="pencil" cls="h-4 w-4" %}</a>
+                <form action="{% url 'attendance_app:attendance_delete' r.attendance_id %}" method="post" onsubmit="return confirm('এই দিনের সব পাঞ্চ মুছে ফেলবেন?');" class="inline">{% csrf_token %}
+                  <button type="submit" class="lx-act hover:!text-rose-600" title="Delete" aria-label="Delete {{ r.employee.name }} {{ r.date }}">{% include "partials/icon.html" with name="trash" cls="h-4 w-4" %}</button></form>
+                {% endif %}
               </div>
-              {% else %}
-              <span class="text-xs text-slate-400">—</span>
-              {% endif %}
             </td>
           </tr>
           {% empty %}
-          <tr>
-            <td colspan="6" class="px-6 py-16 text-center">
-              <div class="flex flex-col items-center gap-2 text-slate-500">
-                {% include "partials/icon.html" with name="inbox" cls="h-10 w-10 text-slate-300" %}
-                <p class="font-semibold text-slate-700 dark:text-slate-200">No records found</p>
-                <p class="text-sm">Try a different date range or clear the filters.</p>
-              </div>
-            </td>
-          </tr>
+          <tr><td colspan="7" class="px-6 py-20 text-center">
+            <div class="mx-auto flex max-w-sm flex-col items-center gap-2">
+              <span class="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 text-slate-400 dark:bg-white/[0.05]">{% include "partials/icon.html" with name="inbox" cls="h-6 w-6" %}</span>
+              <p class="font-semibold text-slate-900 dark:text-white">কোনো রেকর্ড নেই</p>
+              <p class="text-sm text-slate-500">অন্য তারিখ বা ফিল্টার বেছে দেখুন।</p>
+            </div>
+          </td></tr>
           {% endfor %}
         </tbody>
       </table>
@@ -146,4 +183,5 @@
     {% include "partials/pagination.html" with page=page_obj %}
   </div>
 </div>
+{% endwith %}
 {% endblock content %}

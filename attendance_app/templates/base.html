@@ -216,14 +216,18 @@
       {% if request.user.is_authenticated and branch_scope.company %}
       {# নোটিফিকেশন ঘণ্টা #}
       <div class="relative" x-data="{ open: false }" @click.outside="open = false">
-        <button type="button" class="btn-icon relative" @click="open = !open" :aria-expanded="open" aria-label="Notifications" title="Notifications">
+        <button type="button" id="notif-bell" class="btn-icon relative" @click="open = !open" :aria-expanded="open" aria-label="Notifications" title="Notifications">
           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.7" stroke="currentColor" class="h-5 w-5"><path stroke-linecap="round" stroke-linejoin="round" d="M14.857 17.082a23.848 23.848 0 0 0 5.454-1.31A8.967 8.967 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.967 8.967 0 0 1-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0"/></svg>
-          {% if notif_unread_count %}<span class="absolute right-1 top-1 flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-bold text-white ring-2 ring-white dark:ring-slate-900">{% if notif_unread_count > 9 %}9+{% else %}{{ notif_unread_count }}{% endif %}</span>{% endif %}
+          <span id="notif-count" class="{% if not notif_unread_count %}hidden {% endif %}absolute right-0.5 top-0.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-bold text-white ring-2 ring-white dark:ring-slate-900">{% if notif_unread_count > 9 %}9+{% else %}{{ notif_unread_count }}{% endif %}</span>
         </button>
         <div x-show="open" x-cloak x-transition.origin.top.right
              class="absolute right-0 mt-2 w-[22rem] max-w-[calc(100vw-2rem)] origin-top-right overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-lift dark:border-slate-700 dark:bg-slate-900">
           <div class="flex items-center justify-between border-b border-slate-100 px-4 py-3 dark:border-slate-800">
-            <p class="text-sm font-semibold text-slate-900 dark:text-white">Notifications</p>
+            <div class="flex items-center gap-2" x-data="notifSettings()">
+              <p class="text-sm font-semibold text-slate-900 dark:text-white">Notifications</p>
+              <button type="button" class="rounded-md px-1.5 py-0.5 text-[11px] font-semibold text-slate-500 ring-1 ring-slate-200 hover:text-slate-900 dark:ring-white/10" @click.stop="toggleSound()" :title="sound ? 'শব্দ বন্ধ করুন' : 'শব্দ চালু করুন'" x-text="sound ? '🔔 Sound on' : '🔕 Sound off'"></button>
+              <button type="button" x-show="perm === 'default'" class="rounded-md bg-indigo-50 px-1.5 py-0.5 text-[11px] font-semibold text-indigo-700 hover:bg-indigo-100 dark:bg-indigo-500/10 dark:text-indigo-300" @click.stop="askDesktop()" title="অন্য ট্যাবে থাকলেও কম্পিউটারে নোটিফিকেশন">Desktop alerts</button>
+            </div>
             {% if notif_unread_count %}
             <form method="post" action="{% url 'attendance_app:notification_read_all' %}">{% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}">
               <button class="text-xs font-medium text-primary-600 hover:underline dark:text-primary-400">Mark all read</button></form>
@@ -417,38 +421,164 @@
 </script>
 
 {% if request.user.is_authenticated and branch_scope.company %}
-{# ── লাইভ পপ-আপ: নতুন নোটিফিকেশন (অচেনা ID, missing punch, ছুটির আবেদন) এলে ৩০ সেকেন্ডের মধ্যে দেখায় ── #}
-<div id="toasts" class="pointer-events-none fixed right-4 top-20 z-[70] flex w-[22rem] max-w-[calc(100vw-2rem)] flex-col gap-2" aria-live="polite"></div>
+{# ── লাইভ নোটিফিকেশন: নতুন ছুটির আবেদন/সতর্কতা এলে — বড় পপআপ (Approve/Reject সহ), টিং শব্দ, ডেস্কটপ নোটিফিকেশন,
+     ট্যাবের লেখা জ্বলে-নেভে, ঘণ্টা দোলে। ব্যাকগ্রাউন্ডে থাকলেও ২০ সেকেন্ড পরপর দেখে। ── #}
+<div id="toasts" class="pointer-events-none fixed right-4 top-20 z-[70] flex w-[24rem] max-w-[calc(100vw-2rem)] flex-col gap-3" aria-live="polite"></div>
 <script>
 (function () {
-  let since = {{ notif_latest.0.id|default:0 }};
-  const box = document.getElementById('toasts');
+  const POLL = '{% url "attendance_app:notification_poll" %}';
+  const DECIDE = '{% url "attendance_app:leave_decide" 0 %}';
   const csrf = '{{ csrf_token }}';
-  function toast(n) {
-    const el = document.createElement('form');
-    el.method = 'post'; el.action = n.url;
-    el.className = 'pointer-events-auto card flex cursor-pointer items-start gap-3 border-l-4 p-4 shadow-lift ' +
-      (n.kind === 'device' || n.kind === 'missing_punch' ? 'border-l-rose-500' : 'border-l-primary-500');
-    el.innerHTML = '<input type="hidden" name="csrfmiddlewaretoken"><div class="min-w-0 flex-1"><p class="t text-sm font-semibold text-slate-900 dark:text-white"></p><p class="m mt-0.5 line-clamp-2 text-xs text-slate-500"></p></div><button type="button" class="x text-slate-400 hover:text-slate-700" aria-label="Dismiss">✕</button>';
-    el.querySelector('input').value = csrf;
-    el.querySelector('.t').textContent = n.title;
-    el.querySelector('.m').textContent = n.message;
-    el.addEventListener('click', e => { if (!e.target.classList.contains('x')) el.submit(); });
-    el.querySelector('.x').addEventListener('click', e => { e.stopPropagation(); el.remove(); });
-    box.appendChild(el);
-    setTimeout(() => el.remove(), 15000);
-  }
-  async function poll() {
-    if (document.hidden) return;
+  const box = document.getElementById('toasts');
+  const bell = document.getElementById('notif-bell');
+  const baseTitle = document.title;
+  let since = 0, first = true, unread = {{ notif_unread_count|default:0 }}, blinkTimer = null, latestTitle = '';
+  let seenList = [];
+  try { seenList = JSON.parse(sessionStorage.getItem('notifSeen') || '[]'); } catch (e) {}
+  const seen = new Set(seenList);
+  const remember = id => { seen.add(id); try { sessionStorage.setItem('notifSeen', JSON.stringify(Array.from(seen).slice(-50))); } catch (e) {} };
+  const soundOn = () => { try { return localStorage.getItem('notifSound') !== 'off'; } catch (e) { return true; } };
+
+  // টিং শব্দ (কোনো ফাইল লাগে না)
+  function chime() {
+    if (!soundOn()) return;
     try {
-      const r = await fetch('{% url "attendance_app:notification_poll" %}?since=' + since, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
-      if (!r.ok) return;
-      const d = await r.json();
-      d.items.forEach(toast);
-      since = d.last_id;
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      [[880, 0], [1320, 0.16]].forEach(function (p) {
+        const o = ctx.createOscillator(), g = ctx.createGain();
+        o.type = 'sine'; o.frequency.value = p[0]; o.connect(g); g.connect(ctx.destination);
+        g.gain.setValueAtTime(0.0001, ctx.currentTime + p[1]);
+        g.gain.exponentialRampToValueAtTime(0.25, ctx.currentTime + p[1] + 0.02);
+        g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + p[1] + 0.45);
+        o.start(ctx.currentTime + p[1]); o.stop(ctx.currentTime + p[1] + 0.5);
+      });
     } catch (e) {}
   }
-  setInterval(poll, 30000);
+
+  // ঘণ্টা ও সংখ্যা
+  function setUnread(n) {
+    unread = n;
+    const badge = document.getElementById('notif-count');
+    if (badge) { badge.textContent = n > 9 ? '9+' : n; badge.classList.toggle('hidden', !n); }
+    if (bell) bell.classList.toggle('bell-alert', n > 0);
+    if (!blinkTimer) document.title = n ? '(' + n + ') ' + baseTitle : baseTitle;
+  }
+
+  // ট্যাবের লেখা জ্বলে-নেভে (অন্য ট্যাবে থাকলে)
+  function blink(text) {
+    latestTitle = text;
+    if (blinkTimer || !document.hidden) return;
+    let on = false;
+    blinkTimer = setInterval(function () {
+      if (!document.hidden) { clearInterval(blinkTimer); blinkTimer = null; setUnread(unread); return; }
+      on = !on; document.title = on ? '🔔 ' + latestTitle : '(' + unread + ') ' + baseTitle;
+    }, 1200);
+  }
+
+  function openNotif(n) {
+    const f = document.createElement('form'); f.method = 'post'; f.action = n.url;
+    const i = document.createElement('input'); i.type = 'hidden'; i.name = 'csrfmiddlewaretoken'; i.value = csrf;
+    f.appendChild(i); document.body.appendChild(f); f.submit();
+  }
+
+  function desktop(n) {
+    if (!('Notification' in window) || Notification.permission !== 'granted' || !document.hidden) return;
+    try {
+      const d = new Notification(n.title, { body: n.message, tag: 'notif-' + n.id, requireInteraction: n.kind === 'leave' });
+      d.onclick = function () { window.focus(); d.close(); openNotif(n); };
+    } catch (e) {}
+  }
+
+  const ICON = { leave: ['bg-amber-100 text-amber-600', '📅'], missing_punch: ['bg-rose-100 text-rose-600', '⏰'],
+                 device: ['bg-rose-100 text-rose-600', '📡'], payroll: ['bg-emerald-100 text-emerald-600', '৳'], info: ['bg-indigo-100 text-indigo-600', '🔔'] };
+
+  function toast(n) {
+    const leave = n.kind === 'leave' && n.leave_id;
+    const icon = ICON[n.kind] || ICON.info;
+    const el = document.createElement('div');
+    el.className = 'toast-in pointer-events-auto overflow-hidden rounded-2xl border bg-white shadow-2xl ring-1 ring-black/5 dark:bg-slate-900 dark:ring-white/10 ' +
+      (leave ? 'border-amber-300 dark:border-amber-500/40' : 'border-slate-200 dark:border-white/10');
+    el.innerHTML =
+      '<div class="flex items-start gap-3 p-4">' +
+        '<span class="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-lg ' + icon[0] + '">' + icon[1] +
+          (leave ? '<span class="absolute -right-1 -top-1 flex h-3 w-3"><span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-400 opacity-75"></span><span class="relative inline-flex h-3 w-3 rounded-full bg-amber-500"></span></span>' : '') +
+        '</span>' +
+        '<div class="min-w-0 flex-1">' +
+          '<p class="text-[11px] font-bold uppercase tracking-wide ' + (leave ? 'text-amber-600' : 'text-slate-400') + '">' + (leave ? 'New leave application' : 'Notification') + '</p>' +
+          '<p class="t mt-0.5 text-sm font-bold text-slate-900 dark:text-white"></p>' +
+          '<p class="m mt-0.5 line-clamp-3 text-xs text-slate-600 dark:text-slate-300"></p>' +
+        '</div>' +
+        '<button type="button" class="x -mr-1 -mt-1 rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-white/10" aria-label="Dismiss">✕</button>' +
+      '</div>' +
+      '<div class="acts flex items-center gap-2 border-t border-slate-100 bg-slate-50/80 px-4 py-2.5 dark:border-white/10 dark:bg-white/[0.03]">' +
+        (leave ? '<button type="button" data-a="approve" class="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white shadow-sm hover:bg-emerald-700">✓ Approve</button>' +
+                 '<button type="button" data-a="reject" class="rounded-lg border border-rose-200 bg-white px-3 py-1.5 text-xs font-bold text-rose-600 hover:bg-rose-50 dark:border-rose-500/30 dark:bg-transparent">✕ Reject</button>' : '') +
+        '<button type="button" class="open ml-auto text-xs font-bold text-indigo-600 hover:underline dark:text-indigo-300">' + (leave ? 'Review →' : 'Open →') + '</button>' +
+      '</div>' +
+      (leave ? '' : '<div class="bar h-0.5 bg-indigo-500" style="transition: width 20s linear; width: 100%"></div>');
+    el.querySelector('.t').textContent = n.title;
+    el.querySelector('.m').textContent = n.message;
+    const close = function () { remember(n.id); el.classList.add('toast-out'); setTimeout(function () { el.remove(); }, 250); };
+    el.querySelector('.x').addEventListener('click', close);
+    el.querySelector('.open').addEventListener('click', function () { remember(n.id); openNotif(n); });
+    el.querySelectorAll('[data-a]').forEach(function (b) {
+      b.addEventListener('click', async function () {
+        if (b.dataset.a === 'reject' && !confirm('এই ছুটির আবেদন Reject করবেন?')) return;
+        el.querySelectorAll('[data-a]').forEach(function (x) { x.disabled = true; });
+        try {
+          const body = new URLSearchParams({ action: b.dataset.a, csrfmiddlewaretoken: csrf });
+          const r = await fetch(DECIDE.replace('/0/', '/' + n.leave_id + '/'), { method: 'POST', body: body, headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+          const d = await r.json();
+          if (!r.ok || !d.ok) throw new Error();
+          remember(n.id); setUnread(Math.max(unread - 1, 0));
+          el.querySelector('.acts').innerHTML = '<p class="text-xs font-semibold ' + (d.status === 'Approved' ? 'text-emerald-700' : 'text-rose-700') + '">' +
+            (d.status === 'Approved' ? '✓ Approved' : '✕ Rejected') + '</p>' +
+            (d.letter ? '<a href="' + d.letter + '" target="_blank" class="ml-auto text-xs font-bold text-indigo-600 hover:underline">অনুমোদনপত্র (A4) →</a>' : '');
+          setTimeout(close, 6000);
+        } catch (e) {
+          el.querySelectorAll('[data-a]').forEach(function (x) { x.disabled = false; });
+          alert('কাজটা হয়নি — আবার চেষ্টা করুন।');
+        }
+      });
+    });
+    box.prepend(el);
+    if (!leave) {
+      requestAnimationFrame(function () { const bar = el.querySelector('.bar'); if (bar) bar.style.width = '0%'; });
+      setTimeout(close, 20000);
+    }
+  }
+
+  async function poll() {
+    try {
+      const r = await fetch(POLL + '?since=' + since, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+      if (!r.ok) return;
+      const d = await r.json();
+      // প্রথমবার (পেজ খুলতেই): শুধু না-দেখা ছুটির আবেদনগুলো দেখাই; পরে সব নতুন নোটিফিকেশন
+      const fresh = d.items.filter(function (n) { return !seen.has(n.id) && (!first || n.kind === 'leave'); });
+      fresh.forEach(toast);
+      if (fresh.length) {
+        if (!first) { chime(); fresh.forEach(desktop); }
+        blink(fresh[fresh.length - 1].title);
+        if (bell) { bell.classList.remove('bell-ring'); void bell.offsetWidth; bell.classList.add('bell-ring'); }
+      }
+      setUnread(d.unread);
+      since = d.last_id; first = false;
+    } catch (e) {}
+  }
+
+  // ড্রপডাউনের সেটিং: শব্দ চালু/বন্ধ, ডেস্কটপ নোটিফিকেশন
+  window.notifSettings = function () {
+    return {
+      sound: soundOn(),
+      perm: ('Notification' in window) ? Notification.permission : 'unsupported',
+      toggleSound() { this.sound = !this.sound; try { localStorage.setItem('notifSound', this.sound ? 'on' : 'off'); } catch (e) {} if (this.sound) chime(); },
+      async askDesktop() { if (!('Notification' in window)) return; this.perm = await Notification.requestPermission(); },
+    };
+  };
+
+  setUnread(unread);
+  poll();
+  setInterval(poll, 20000);
 })();
 </script>
 {% endif %}

@@ -1,60 +1,121 @@
 {% extends "portal/base.html" %}
-{% load time_filters %}
+{% load ui %}
 {% block title %}My Attendance{% endblock %}
 {% block content %}
 
-{# ── আজ ── #}
-<div class="card p-5">
-  <div class="flex items-start justify-between gap-3">
+{# ───────── আজ ───────── #}
+<section class="card overflow-hidden">
+  <div class="flex items-center justify-between gap-3 px-5 pt-4">
     <div>
-      <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Today · {{ today|date:"D, d M" }}</p>
-      {% if today_rec.in_time %}
-        <p class="mt-1 text-2xl font-bold text-slate-900 dark:text-white">{{ today_rec.in_time|date:"h:i A" }}{% if today_rec.out_time %} <span class="text-slate-300">→</span> {{ today_rec.out_time|date:"h:i A" }}{% endif %}</p>
-        <p class="mt-1 text-sm {% if today_rec.late %}text-amber-600{% else %}text-emerald-600{% endif %}">{% if today_rec.late %}Late {{ today_rec.late|format_timedelta|slice:":5" }}{% else %}On time{% endif %}{% if today_rec.shift.name %} · {{ today_rec.shift.name }} shift{% endif %}</p>
-      {% else %}
-        <p class="mt-1 text-2xl font-bold text-slate-900 dark:text-white">{% if today_rec.status == 'Weekly Off' or today_rec.status == 'Public Holiday' or today_rec.status == 'Leave' %}{{ today_rec.label }}{% else %}Not punched yet{% endif %}</p>
-        <p class="mt-1 text-sm text-slate-500">{% if today_rec.shift %}Shift starts {{ today_rec.shift.in_time|time:"h:i A" }}{% endif %}</p>
-      {% endif %}
+      <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Today · {{ today|date:"l, d M" }}</p>
+      {% if today_rec.shift %}<p class="mt-0.5 text-xs text-slate-500">{{ today_rec.shift.name|default:"Office time" }} · {{ today_rec.shift.in_time|time:"h:i A" }} – {{ today_rec.shift.out_time|time:"h:i A" }}</p>{% endif %}
     </div>
-    {% if gps_enabled %}
-    <a href="{% url 'portal:punch' %}" class="btn-primary shrink-0 flex-col py-3">{% include "partials/icon.html" with name="face" cls="h-6 w-6" %}<span class="text-xs">Remote Punch</span></a>
-    {% endif %}
+    {% if today_rec.in_time %}
+      {% if today_rec.late.total_seconds > 0 %}<span class="lx-late">Late {{ today_rec.late|short_late }}</span>{% else %}<span class="lx-present">On time</span>{% endif %}
+    {% elif today_rec.status == 'Leave' %}<span class="lx-leave">{{ today_rec.label }}</span>
+    {% elif today_rec.status == 'Weekly Off' or today_rec.status == 'Public Holiday' %}<span class="lx-off">{{ today_rec.label }}</span>
+    {% else %}<span class="lx-absent">Not punched</span>{% endif %}
   </div>
-</div>
 
-{# ── মাসের সারাংশ ── #}
+  {# In / Out — বড় করে পাশাপাশি #}
+  <div class="grid grid-cols-2 gap-3 p-5">
+    <div class="rounded-2xl bg-emerald-50 p-4 dark:bg-emerald-500/10">
+      <p class="flex items-center gap-1.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300"><span class="h-2 w-2 rounded-full bg-emerald-500"></span>IN</p>
+      <p class="mt-1 text-2xl font-bold tabular-nums text-slate-900 dark:text-white">{% if today_rec.in_time %}{{ today_rec.in_time|date:"h:i" }}<span class="text-sm font-semibold"> {{ today_rec.in_time|date:"A" }}</span>{% else %}--:--{% endif %}</p>
+    </div>
+    <div class="rounded-2xl bg-indigo-50 p-4 dark:bg-indigo-500/10">
+      <p class="flex items-center gap-1.5 text-xs font-semibold text-indigo-700 dark:text-indigo-300"><span class="h-2 w-2 rounded-full bg-indigo-500"></span>OUT</p>
+      <p class="mt-1 text-2xl font-bold tabular-nums text-slate-900 dark:text-white">{% if today_rec.out_time %}{{ today_rec.out_time|date:"h:i" }}<span class="text-sm font-semibold"> {{ today_rec.out_time|date:"A" }}</span>{% else %}--:--{% endif %}</p>
+    </div>
+  </div>
+
+  {# কাজের সময় — অফিসে থাকলে চলমান #}
+  {% if today_rec.in_time %}
+  <div class="border-t border-slate-100 px-5 py-4 dark:border-white/[0.06]"
+       x-data="{ secs: {{ today_rec.work.total_seconds|floatformat:0 }}, live: {{ today_info.on_duty|yesno:'true,false' }}, start: '{{ today_info.in_iso }}', shift: {{ today_info.shift_seconds|default:0 }},
+                 tick() { if (this.live) this.secs = Math.max(0, Math.floor((Date.now() - new Date(this.start)) / 1000)); },
+                 fmt(s) { const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60); return h + 'h ' + String(m).padStart(2, '0') + 'm'; } }"
+       x-init="tick(); setInterval(() => tick(), 30000)">
+    <div class="flex items-baseline justify-between gap-3">
+      <p class="text-sm text-slate-600 dark:text-slate-300"><span x-show="live">{% if today_info.on_duty %}<span class="live-dot mr-1"><span></span></span>{% endif %}Working for</span><span x-show="!live">Worked today</span></p>
+      <p class="text-lg font-bold tabular-nums text-slate-900 dark:text-white" x-text="fmt(secs)">{{ today_rec.work|hm }}</p>
+    </div>
+    <div class="mt-2 h-2 overflow-hidden rounded-full bg-slate-100 dark:bg-white/10"><div class="h-full rounded-full bg-gradient-to-r from-emerald-500 to-indigo-500 transition-all" :style="'width:' + (shift ? Math.min(100, secs * 100 / shift) : 0) + '%'"></div></div>
+    <p class="mt-1.5 text-xs text-slate-500" x-show="live && shift">{% if today_info.shift_end %}Shift ends {{ today_info.shift_end|time:"h:i A" }} · {% endif %}<span x-text="secs >= shift ? 'শিফট পূর্ণ হয়েছে' : fmt(shift - secs) + ' বাকি'"></span></p>
+    {% if not today_info.on_duty and today_rec.over.total_seconds > 0 %}<p class="mt-1.5 text-xs font-semibold text-violet-600">Overtime {{ today_rec.over|hm }}</p>{% endif %}
+  </div>
+  {% elif today_rec.shift and today_rec.status == 'Absent' %}
+  <p class="border-t border-slate-100 px-5 py-3 text-sm text-slate-500 dark:border-white/[0.06]">শিফট শুরু {{ today_rec.shift.in_time|time:"h:i A" }} — মেশিনে পাঞ্চ দিলে এখানে দেখাবে।</p>
+  {% endif %}
+
+  {% if gps_enabled %}
+  <div class="border-t border-slate-100 p-4 dark:border-white/[0.06]">
+    <a href="{% url 'portal:punch' %}" class="btn-primary w-full">{% include "partials/icon.html" with name="face" cls="h-5 w-5" %}Remote Punch (GPS + selfie)</a>
+  </div>
+  {% endif %}
+</section>
+
+{# ───────── মাসের সারাংশ ───────── #}
 {% if summary %}
-<div class="grid grid-cols-4 gap-2">
-  <div class="card p-3 text-center"><p class="text-[11px] text-slate-500">Present</p><p class="text-xl font-bold text-emerald-600">{{ summary.present }}</p></div>
-  <div class="card p-3 text-center"><p class="text-[11px] text-slate-500">Absent</p><p class="text-xl font-bold text-rose-600">{{ summary.absent }}</p></div>
-  <div class="card p-3 text-center"><p class="text-[11px] text-slate-500">Late</p><p class="text-xl font-bold text-amber-600">{{ summary.late_days }}</p></div>
-  <div class="card p-3 text-center"><p class="text-[11px] text-slate-500">Leave</p><p class="text-xl font-bold text-sky-600">{{ summary.leave }}</p></div>
-</div>
+<section class="card p-5">
+  <div class="flex items-center justify-between gap-3">
+    <p class="font-semibold text-slate-900 dark:text-white">{{ month_label }}</p>
+    <div class="flex items-center gap-1">
+      <a href="?month={{ prev_month }}" class="btn-icon h-8 w-8" aria-label="Previous month">‹</a>
+      {% if next_month %}<a href="?month={{ next_month }}" class="btn-icon h-8 w-8" aria-label="Next month">›</a>{% endif %}
+    </div>
+  </div>
+  <div class="mt-4 flex items-center gap-4">
+    <div class="relative h-20 w-20 shrink-0">
+      <svg viewBox="0 0 36 36" class="h-20 w-20 -rotate-90"><circle cx="18" cy="18" r="15.5" fill="none" stroke-width="3.5" class="stroke-slate-100 dark:stroke-white/10"/>
+        <circle cx="18" cy="18" r="15.5" fill="none" stroke-width="3.5" stroke-linecap="round" class="stroke-emerald-500" stroke-dasharray="{{ stats.rate|default:0 }} 100" pathLength="100"/></svg>
+      <span class="absolute inset-0 flex flex-col items-center justify-center"><span class="text-lg font-bold tabular-nums text-slate-900 dark:text-white">{% if stats.rate is None %}—{% else %}{{ stats.rate }}%{% endif %}</span><span class="text-[9px] font-medium uppercase text-slate-400">present</span></span>
+    </div>
+    <div class="grid flex-1 grid-cols-2 gap-2 sm:grid-cols-4">
+      <div class="rounded-xl bg-emerald-50 px-3 py-2 dark:bg-emerald-500/10"><p class="text-[11px] font-medium text-emerald-700 dark:text-emerald-300">Present</p><p class="text-xl font-bold tabular-nums text-slate-900 dark:text-white">{{ summary.present }}</p></div>
+      <div class="rounded-xl bg-rose-50 px-3 py-2 dark:bg-rose-500/10"><p class="text-[11px] font-medium text-rose-700 dark:text-rose-300">Absent</p><p class="text-xl font-bold tabular-nums text-slate-900 dark:text-white">{{ summary.absent }}</p></div>
+      <div class="rounded-xl bg-amber-50 px-3 py-2 dark:bg-amber-500/10"><p class="text-[11px] font-medium text-amber-700 dark:text-amber-300">Late</p><p class="text-xl font-bold tabular-nums text-slate-900 dark:text-white">{{ summary.late_days }}</p></div>
+      <div class="rounded-xl bg-sky-50 px-3 py-2 dark:bg-sky-500/10"><p class="text-[11px] font-medium text-sky-700 dark:text-sky-300">Leave</p><p class="text-xl font-bold tabular-nums text-slate-900 dark:text-white">{{ summary.leave }}</p></div>
+    </div>
+  </div>
+  <div class="mt-4 grid grid-cols-3 gap-2 text-center">
+    <div class="rounded-xl bg-slate-50 px-2 py-2.5 dark:bg-white/[0.04]"><p class="text-[11px] text-slate-500">Worked</p><p class="font-bold tabular-nums text-slate-900 dark:text-white">{{ stats.worked|hm }}</p><p class="text-[10px] text-slate-400">of {{ stats.expected|hm }}</p></div>
+    <div class="rounded-xl bg-slate-50 px-2 py-2.5 dark:bg-white/[0.04]"><p class="text-[11px] text-slate-500">Overtime</p><p class="font-bold tabular-nums text-violet-600 dark:text-violet-400">{{ stats.over|hm }}</p></div>
+    <div class="rounded-xl bg-slate-50 px-2 py-2.5 dark:bg-white/[0.04]"><p class="text-[11px] text-slate-500">Late total</p><p class="font-bold tabular-nums text-amber-600 dark:text-amber-400">{{ stats.late|hm }}</p></div>
+  </div>
+  <div class="mt-3 h-1.5 overflow-hidden rounded-full bg-slate-100 dark:bg-white/10" title="Worked vs expected"><div class="h-full rounded-full bg-indigo-500" style="width: {{ stats.work_pct }}%"></div></div>
+</section>
 {% endif %}
 
-{# ── ক্যালেন্ডার ── #}
-<div class="card overflow-hidden">
+{# ───────── ক্যালেন্ডার (In ও Out দুটোই) ───────── #}
+<section class="card overflow-hidden">
   <div class="flex items-center justify-between border-b border-slate-100 px-4 py-3 dark:border-white/[0.06]">
     <a href="?month={{ prev_month }}" class="btn-icon h-9 w-9" aria-label="Previous month">‹</a>
     <p class="font-bold text-slate-900 dark:text-white">{{ month_label }}</p>
     {% if next_month %}<a href="?month={{ next_month }}" class="btn-icon h-9 w-9" aria-label="Next month">›</a>{% else %}<span class="h-9 w-9"></span>{% endif %}
   </div>
-  <div class="grid grid-cols-7 gap-1 p-3 text-center">
-    {% for w in weekdays %}<p class="pb-1 text-[11px] font-semibold uppercase text-slate-400">{{ w }}</p>{% endfor %}
+  <div class="grid grid-cols-7 gap-1 p-2 text-center sm:gap-1.5 sm:p-3">
+    {% for w in weekdays %}<p class="pb-1 text-[10px] font-semibold uppercase text-slate-400">{{ w }}</p>{% endfor %}
     {% for week in weeks %}{% for c in week %}
       {% with d=c.day %}
-      <div class="relative flex aspect-square flex-col items-center justify-center rounded-xl text-sm
+      <div class="relative flex min-h-[3.9rem] flex-col items-center justify-center gap-0.5 rounded-xl px-0.5 py-1.5
         {% if not c.in_month %}opacity-30{% endif %}
         {% if c.today %}ring-2 ring-primary-500{% endif %}
-        {% if d.status == 'Present' %}{% if d.late %}bg-amber-100 text-amber-800 dark:bg-amber-500/15 dark:text-amber-200{% else %}bg-emerald-100 text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-200{% endif %}
+        {% if d.status == 'Present' %}{% if d.late.total_seconds > 0 %}bg-amber-100 text-amber-900 dark:bg-amber-500/15 dark:text-amber-100{% else %}bg-emerald-100 text-emerald-900 dark:bg-emerald-500/15 dark:text-emerald-100{% endif %}
         {% elif d.status == 'Absent' %}bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-300
         {% elif d.status == 'Leave' %}bg-sky-100 text-sky-800 dark:bg-sky-500/15 dark:text-sky-200
         {% elif d.status == 'Public Holiday' %}bg-violet-100 text-violet-800 dark:bg-violet-500/15 dark:text-violet-200
         {% elif d.status == 'Weekly Off' %}bg-slate-100 text-slate-500 dark:bg-white/5
         {% else %}text-slate-400{% endif %}"
-        {% if d %}title="{{ d.label }}{% if d.in_time %} · {{ d.in_time|date:'h:i A' }}{% if d.out_time %}–{{ d.out_time|date:'h:i A' }}{% endif %}{% endif %}"{% endif %}>
-        <span class="font-semibold">{{ c.date.day }}</span>
-        {% if d.in_time %}<span class="text-[9px] leading-tight opacity-80">{{ d.in_time|date:"H:i" }}</span>{% endif %}
+        {% if d %}title="{{ d.label }}{% if d.in_time %} · In {{ d.in_time|date:'h:i A' }}{% endif %}{% if d.out_time %} · Out {{ d.out_time|date:'h:i A' }}{% endif %}"{% endif %}>
+        <span class="text-sm font-bold leading-none">{{ c.date.day }}</span>
+        {% if d.in_time %}
+          <span class="text-[9.5px] font-semibold leading-tight tabular-nums">{{ d.in_time|date:"H:i" }}</span>
+          <span class="text-[9.5px] leading-tight tabular-nums opacity-75">{% if d.out_time %}{{ d.out_time|date:"H:i" }}{% elif c.today %}<span class="font-semibold text-indigo-600">on duty</span>{% else %}<span class="font-semibold text-orange-600">no out</span>{% endif %}</span>
+        {% elif d.status == 'Absent' %}<span class="text-[9px] font-semibold">Absent</span>
+        {% elif d.status == 'Leave' %}<span class="text-[9px] font-semibold">Leave</span>
+        {% elif d.status == 'Public Holiday' %}<span class="text-[9px] font-semibold">Holiday</span>
+        {% elif d.status == 'Weekly Off' %}<span class="text-[9px]">Off</span>{% endif %}
       </div>
       {% endwith %}
     {% endfor %}{% endfor %}
@@ -66,22 +127,93 @@
     <span class="flex items-center gap-1"><span class="h-2.5 w-2.5 rounded bg-sky-400"></span>Leave</span>
     <span class="flex items-center gap-1"><span class="h-2.5 w-2.5 rounded bg-violet-400"></span>Holiday</span>
     <span class="flex items-center gap-1"><span class="h-2.5 w-2.5 rounded bg-slate-300"></span>Weekly off</span>
+    <span class="ml-auto">উপরে In, নিচে Out</span>
   </div>
-</div>
+</section>
 
-{# ── ছুটির ব্যালান্স ── #}
-{% if balances %}
-<div class="card p-4">
-  <div class="mb-3 flex items-center justify-between"><p class="font-semibold text-slate-900 dark:text-white">Leave balance {{ today.year }}</p><a href="{% url 'portal:leave' %}" class="link text-sm">Apply →</a></div>
-  <div class="grid grid-cols-2 gap-2 sm:grid-cols-3">
+{# ───────── দিনভিত্তিক বিস্তারিত ───────── #}
+{% if daily %}
+<section class="card overflow-hidden" x-data="{ all: false }">
+  <div class="flex items-center justify-between border-b border-slate-100 px-5 py-3.5 dark:border-white/[0.06]">
+    <p class="font-semibold text-slate-900 dark:text-white">Day by day</p>
+    <span class="text-xs text-slate-500">{{ daily|length }} days</span>
+  </div>
+  <ul class="divide-y divide-slate-100 dark:divide-white/[0.05]">
+    {% for d in daily %}
+    <li class="flex items-center gap-3 px-4 py-3 sm:px-5" {% if forloop.counter > 10 %}x-show="all" x-cloak{% endif %}>
+      <div class="flex w-11 shrink-0 flex-col items-center rounded-xl py-1 {% if d.status == 'Present' %}{% if d.late.total_seconds > 0 %}bg-amber-50 text-amber-800 dark:bg-amber-500/10 dark:text-amber-200{% else %}bg-emerald-50 text-emerald-800 dark:bg-emerald-500/10 dark:text-emerald-200{% endif %}{% elif d.status == 'Absent' %}bg-rose-50 text-rose-700 dark:bg-rose-500/10 dark:text-rose-300{% elif d.status == 'Leave' %}bg-sky-50 text-sky-800 dark:bg-sky-500/10 dark:text-sky-200{% else %}bg-slate-100 text-slate-500 dark:bg-white/5{% endif %}">
+        <span class="text-[10px] font-semibold uppercase leading-none">{{ d.date|date:"D" }}</span>
+        <span class="text-base font-bold leading-tight">{{ d.date|date:"j" }}</span>
+      </div>
+      <div class="min-w-0 flex-1">
+        {% if d.in_time %}
+        <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm tabular-nums">
+          <span><span class="text-[11px] font-semibold text-emerald-600">IN</span> <b class="text-slate-900 dark:text-white">{{ d.in_time|date:"h:i A" }}</b></span>
+          <span><span class="text-[11px] font-semibold text-indigo-600">OUT</span> {% if d.out_time %}<b class="text-slate-900 dark:text-white">{{ d.out_time|date:"h:i A" }}</b>{% else %}<b class="text-orange-600">—</b>{% endif %}</span>
+        </div>
+        <p class="mt-0.5 text-xs text-slate-500">
+          {% if d.work.total_seconds > 0 %}Worked {{ d.work|hm }}{% elif not d.out_time and d.date == today %}এখনো অফিসে আছেন{% elif not d.out_time %}Out punch নেই — অফিসে জানান{% endif %}
+          {% if d.late.total_seconds > 0 %} · <span class="font-semibold text-amber-600">Late {{ d.late|short_late }}</span>{% endif %}
+          {% if d.over.total_seconds > 0 %} · <span class="font-semibold text-violet-600">OT {{ d.over|hm }}</span>{% endif %}
+        </p>
+        {% else %}
+        <p class="text-sm font-medium text-slate-700 dark:text-slate-300">{{ d.label }}</p>
+        {% if d.status == 'Absent' %}<p class="text-xs text-slate-500">কোনো পাঞ্চ নেই</p>{% endif %}
+        {% endif %}
+      </div>
+      {% if d.status == 'Present' %}{% if not d.out_time and d.date == today %}<span class="lx-pill bg-indigo-50 text-indigo-700 ring-indigo-600/15 dark:bg-indigo-500/10 dark:text-indigo-300">On duty</span>{% elif not d.out_time %}<span class="lx-warn">No out</span>{% elif d.late.total_seconds > 0 %}<span class="lx-late">Late</span>{% else %}<span class="lx-present">Present</span>{% endif %}
+      {% elif d.status == 'Absent' %}<span class="lx-absent">Absent</span>
+      {% elif d.status == 'Leave' %}<span class="lx-leave">Leave</span>
+      {% else %}<span class="lx-off">Off</span>{% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+  {% if daily|length > 10 %}
+  <button type="button" class="w-full border-t border-slate-100 py-3 text-sm font-semibold text-indigo-600 dark:border-white/[0.06]" @click="all = !all" x-text="all ? 'Show less' : 'Show all {{ daily|length }} days'"></button>
+  {% endif %}
+</section>
+{% endif %}
+
+{# ───────── ছুটি ───────── #}
+<section class="card p-5">
+  <div class="mb-3 flex items-center justify-between"><p class="font-semibold text-slate-900 dark:text-white">Leave {{ today.year }}</p><a href="{% url 'portal:leave' %}" class="btn-secondary btn-sm">Apply</a></div>
+  {% if leave_total.allocated is not None %}
+  <div class="flex items-end justify-between gap-3">
+    <p class="text-3xl font-bold tabular-nums {% if leave_total.remaining <= 0 %}text-rose-600{% else %}text-emerald-600 dark:text-emerald-400{% endif %}">{% if leave_total.remaining < 0 %}0{% else %}{{ leave_total.remaining }}{% endif %}<span class="text-base font-medium text-slate-400"> / {{ leave_total.allocated }} days left</span></p>
+    <p class="text-right text-xs text-slate-500">{{ leave_total.used }} taken{% if leave_total.pending %}<br>{{ leave_total.pending }} pending{% endif %}</p>
+  </div>
+  <div class="mt-2 flex h-2 overflow-hidden rounded-full bg-slate-100 dark:bg-white/10">
+    <span class="block h-full bg-indigo-500" style="width: {% widthratio leave_total.used leave_total.allocated|default:1 100 %}%"></span>
+    <span class="block h-full bg-amber-400" style="width: {% widthratio leave_total.pending leave_total.allocated|default:1 100 %}%"></span>
+  </div>
+  {% endif %}
+  {% if balances %}
+  <div class="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3">
     {% for b in balances %}
     <div class="rounded-xl bg-slate-50 p-3 dark:bg-white/[0.04]">
-      <p class="text-xs text-slate-500">{{ b.label }}</p>
-      {% if b.limited %}<p class="text-lg font-bold {% if b.remaining <= 0 %}text-rose-600{% else %}text-slate-900 dark:text-white{% endif %}">{{ b.remaining }} <span class="text-sm font-normal text-slate-400">/ {{ b.allocated }} left</span></p>
-      {% else %}<p class="text-lg font-bold text-slate-900 dark:text-white">{{ b.used }} <span class="text-sm font-normal text-slate-400">used</span></p>{% endif %}
+      <p class="truncate text-xs text-slate-500">{{ b.label }}{% if not b.counts %} <span class="text-[10px] font-semibold uppercase text-sky-600">extra</span>{% endif %}</p>
+      {% if b.limited %}<p class="text-lg font-bold tabular-nums {% if b.remaining <= 0 %}text-rose-600{% else %}text-slate-900 dark:text-white{% endif %}">{% if b.remaining < 0 %}0{% else %}{{ b.remaining }}{% endif %} <span class="text-sm font-normal text-slate-400">/ {{ b.allocated }} left</span></p>
+      {% else %}<p class="text-lg font-bold tabular-nums text-slate-900 dark:text-white">{{ b.used }} <span class="text-sm font-normal text-slate-400">taken</span></p>{% endif %}
+      {% if b.pending %}<p class="text-[11px] text-amber-600">{{ b.pending }} pending</p>{% endif %}
     </div>
     {% endfor %}
   </div>
-</div>
+  {% elif leave_total.allocated is None %}
+  <p class="text-sm text-slate-500">এই বছর এখনো কোনো ছুটি নেওয়া হয়নি।</p>
+  {% endif %}
+</section>
+
+{# ───────── শেষ পে-স্লিপ ───────── #}
+{% if last_slip %}
+<section class="card p-5">
+  <div class="flex items-center justify-between gap-3">
+    <div>
+      <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Last payslip · {{ last_slip_month|date:"F Y" }}</p>
+      <p class="mt-1 text-2xl font-bold tabular-nums text-slate-900 dark:text-white">৳{{ last_slip.final_salary|floatformat:"0g" }}</p>
+      <p class="text-xs text-slate-500">Bank ৳{{ last_slip.bank_transfer|floatformat:"0g" }} · Cash ৳{{ last_slip.payable_cash|floatformat:"0g" }}</p>
+    </div>
+    <a href="{% url 'portal:payslip_pdf' last_slip_month|date:'Y-m' %}" class="btn-secondary btn-sm shrink-0">{% include "partials/icon.html" with name="download" cls="h-4 w-4" %}PDF</a>
+  </div>
+</section>
 {% endif %}
 {% endblock %}

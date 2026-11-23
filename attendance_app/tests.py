@@ -1366,6 +1366,56 @@ class ScaleTests(Base):
         self.assertEqual(r.context['totals']['net'], total)
 
 
+class LeaveLetterTests(Base):
+    """ছুটির আবেদন ও অনুমোদনপত্র (A4)"""
+
+    def setUp(self):
+        super().setUp()
+        from attendance_app.models import LeaveAllocation
+        LeaveAllocation.objects.create(company=self.company, leave_type='TOTAL', days_per_year=12)
+        LeaveRequest.objects.create(company=self.company, employee=self.emp, leave_type='Sick', status='Approved',
+                                    start_date=date(2026, 2, 1), end_date=date(2026, 2, 5))          # আগে ৫ দিন
+        # বৃহস্পতি–শনি (মাঝে শুক্রবার সাপ্তাহিক বন্ধ), Pending
+        self.lv = LeaveRequest.objects.create(company=self.company, employee=self.emp, leave_type='Casual', status='Pending',
+                                              start_date=date(2026, 12, 3), end_date=date(2026, 12, 5), reason='Family')
+        self.client.force_login(self.owner)
+
+    def test_approve_sets_decision_and_letter_shows_everything(self):
+        r = self.client.post(reverse('attendance_app:leave_update', args=[self.lv.pk]), {
+            'company': self.company.pk, 'employee': self.emp.pk, 'leave_type': 'Casual', 'start_date': '2026-12-03',
+            'end_date': '2026-12-05', 'status': 'Approved', 'reason': 'Family'})
+        self.assertEqual(r.status_code, 302)
+        self.lv.refresh_from_db()
+        self.assertIsNotNone(self.lv.decided_at)
+        self.assertEqual(self.lv.approved_by, self.owner)
+        msgs = [str(m) for m in r.wsgi_request._messages]
+        self.assertTrue(any(reverse('attendance_app:leave_letter', args=[self.lv.pk]) in m for m in msgs))
+
+        r = self.client.get(reverse('attendance_app:leave_letter', args=[self.lv.pk]))
+        self.assertEqual(r.status_code, 200)
+        self.assertContains(r, self.lv.reference)
+        self.assertContains(r, 'APPROVED')
+        ctx = r.context
+        self.assertEqual((ctx['total_days'], ctx['working_days'], ctx['off_days']), (3, 2, 1))
+        self.assertEqual(ctx['resume_date'], date(2026, 12, 6))                       # রবিবার কাজে যোগদান
+        self.assertEqual((ctx['balance']['allocated'], ctx['balance']['taken_before'], ctx['balance']['this'],
+                          ctx['balance']['remaining_after']), (12, 5, 3, 4))
+        r = self.client.get(reverse('attendance_app:leave_letter', args=[self.lv.pk]), {'format': 'pdf'})
+        self.assertEqual((r.status_code, r['Content-Type']), (200, 'application/pdf'))
+        self.assertTrue(r.content.startswith(b'%PDF'))
+
+    def test_portal_own_letter_only(self):
+        user = User.objects.create_user('rahim', password='x')
+        self.emp.user = user
+        self.emp.save()
+        other = Employee.objects.create(company=self.company, department=self.dept, name='Karim', device_user_id=2)
+        other_lv = LeaveRequest.objects.create(company=self.company, employee=other, leave_type='Casual', status='Approved',
+                                               start_date=date(2026, 12, 3), end_date=date(2026, 12, 3))
+        self.client.force_login(user)
+        self.assertEqual(self.client.get(reverse('portal:leave_letter', args=[self.lv.pk])).status_code, 200)
+        self.assertEqual(self.client.get(reverse('portal:leave_letter', args=[other_lv.pk])).status_code, 404)
+
+
 class EmployeeDocumentTests(Base):
     """কর্মচারীর ডকুমেন্ট: আপলোড, গোপন ফাইল, অন্য কোম্পানি আটকানো, মোছা"""
 

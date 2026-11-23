@@ -1,4 +1,4 @@
-{# leave_list ও HTMX রেসপন্স দুটোই এই টেবিল ব্যবহার করে #}
+{% load ui %}{# leave_list ও HTMX রেসপন্স দুটোই এই টেবিল ব্যবহার করে #}
 <div class="card overflow-hidden">
   <div class="overflow-x-auto">
     <table class="responsive-table table-modern" id="leaveTable">
@@ -14,11 +14,11 @@
       </thead>
       <tbody>
         {% for leave in leaves %}
-        <tr data-search="{{ leave.employee.name|lower }} {{ leave.leave_type|lower }} {{ leave.status|lower }}">
+        <tr data-search="{{ leave.employee.name|lower }} {{ leave.leave_type|lower }} {{ leave.status|lower }}" {% if leave.status == 'Pending' %}class="bg-amber-50/60 shadow-[inset_3px_0_0_#f59e0b] dark:bg-amber-500/[0.06]"{% endif %}>
           <td class="rt-hide text-xs tabular-nums text-slate-400">{{ forloop.counter }}</td>
           <td class="rt-title">
             <div class="flex items-center gap-3">
-              <span class="avatar">{{ leave.employee.name|slice:":1" }}</span>
+              <span class="lx-avatar" style="{{ leave.employee.name|avatar_style }}">{{ leave.employee.name|initials }}</span>
               <div class="min-w-0">
                 <p class="truncate font-semibold text-slate-900 dark:text-white">{{ leave.employee.name }}</p>
                 <p class="truncate text-xs font-normal text-slate-500">{{ leave.employee.department.name|default:"General" }}</p>
@@ -36,11 +36,19 @@
           </td>
           <td>
             {% if leave.status == 'Approved' %}<span class="badge-success"><span class="badge-dot"></span>Approved</span>
-            {% elif leave.status == 'Pending' %}<span class="badge-warning"><span class="badge-dot"></span>Pending</span>
+            {% elif leave.status == 'Pending' %}<span class="badge-warning"><span class="badge-dot animate-pulse"></span>Pending</span>
+              <span class="mt-1 block text-[11px] text-slate-500">applied {{ leave.applied_on|timesince }} ago</span>
             {% else %}<span class="badge-danger"><span class="badge-dot"></span>Rejected</span>{% endif %}
           </td>
           <td class="text-right">
             <div class="flex items-center justify-end gap-1">
+              {% if leave.status == 'Pending' %}
+              <form method="post" action="{% url 'attendance_app:leave_decide' leave.pk %}" class="contents">{% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}">
+                <button name="action" value="approve" class="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-2.5 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-emerald-700" title="Approve">✓ Approve</button>
+                <button name="action" value="reject" class="inline-flex items-center gap-1 rounded-lg border border-rose-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-rose-600 hover:bg-rose-50 dark:border-rose-500/30 dark:bg-transparent" title="Reject" onclick="return confirm('এই ছুটির আবেদন Reject করবেন?');">✕</button>
+              </form>
+              {% endif %}
+              <a href="{% url 'attendance_app:leave_letter' leave.pk %}" target="_blank" rel="noopener" class="btn-icon h-9 w-9 {% if leave.status == 'Approved' %}text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-500/10{% else %}hover:bg-indigo-50 hover:text-indigo-600 dark:hover:bg-indigo-500/10{% endif %}" title="{% if leave.status == 'Approved' %}Approval letter (A4){% else %}Application (A4){% endif %}" aria-label="Leave letter of {{ leave.employee.name }}">{% include "partials/icon.html" with name="document" cls="h-4 w-4" %}</a>
               <a href="{% url 'attendance_app:leave_update' leave.pk %}" class="btn-icon h-9 w-9 hover:bg-amber-50 hover:text-amber-600 dark:hover:bg-amber-500/10" title="Edit" aria-label="Edit leave of {{ leave.employee.name }}">{% include "partials/icon.html" with name="pencil" cls="h-4 w-4" %}</a>
               <form action="{% url 'attendance_app:leave_delete' leave.pk %}" method="post" onsubmit="return confirm('এই ছুটির আবেদনটি মুছে ফেলবেন?');">
                 {% csrf_token %}

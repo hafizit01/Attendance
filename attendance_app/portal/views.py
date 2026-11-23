@@ -85,12 +85,52 @@ def home(request):
     prev_m = (first.replace(day=1) - timedelta(days=1)).strftime('%Y-%m')
     next_m = (last + timedelta(days=1)).strftime('%Y-%m')
     recent_remote = Attendance.objects.filter(employee=emp, is_remote_punch=True).order_by('-timestamp')[:3]
+
+    # মাসের সারাংশ (কাজের ঘণ্টা, ওভারটাইম, উপস্থিতির হার)
+    stats = None
+    if summary:
+        counted = summary['present'] + summary['absent']
+        stats = {
+            'rate': round(100 * summary['present'] / counted) if counted else None,
+            'worked': summary['total_work'], 'expected': summary['expected'], 'over': summary['total_over'],
+            'late': summary['total_late'],
+            'work_pct': min(round(100 * summary['total_work'] / summary['expected']), 100) if summary['expected'] else 0,
+        }
+
+    # আজ: অফিসে থাকলে কতক্ষণ কাজ করছেন (চলমান ঘড়ির জন্য In সময়)
+    today_info = None
+    if today_rec:
+        shift = today_rec.get('shift')
+        today_info = {
+            'on_duty': bool(today_rec['in_time'] and not today_rec['out_time']),
+            'in_iso': timezone.localtime(today_rec['in_time']).isoformat() if today_rec['in_time'] else '',
+            'shift_seconds': int(shift.duration.total_seconds()) if shift else 0,
+            'shift_end': shift.out_time if shift else None,
+        }
+
+    # দিনভিত্তিক তালিকা (নতুন থেকে পুরনো) — প্রতিদিনের In, Out, কাজ, দেরি, ওভারটাইম
+    daily = [d for d in reversed(days) if d['date'] <= today]
+
+    # শেষ পে-স্লিপ (চলতি মাস বাদ — শেষ হওয়া মাস)
+    last_slip, last_slip_month = None, None
+    months = services.payslip_months(emp, limit=1)
+    if months:
+        last_slip_month = months[0]
+        try:
+            last_slip = services.payslip(emp, last_slip_month.strftime('%Y-%m'))
+        except Exception:
+            last_slip = None
+
     return render(request, 'portal/home.html', {
         **_common(request, 'home'),
-        'weeks': weeks, 'month_label': first.strftime('%B %Y'), 'summary': summary,
+        'weeks': weeks, 'month_label': first.strftime('%B %Y'), 'summary': summary, 'stats': stats,
         'prev_month': prev_m, 'next_month': next_m if first <= today.replace(day=1) else None,
-        'today_rec': today_rec, 'today': today,
+        'is_current_month': first.year == today.year and first.month == today.month,
+        'today_rec': today_rec, 'today': today, 'today_info': today_info,
+        'daily': daily,
         'balances': leave_balance.balance(emp, today.year),
+        'leave_total': leave_balance.total_balance(emp, today.year),
+        'last_slip': last_slip, 'last_slip_month': last_slip_month,
         'recent_remote': recent_remote,
         'weekdays': ['Sat', 'Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri'],
     })
@@ -166,7 +206,7 @@ def _notify_admins_leave(lv, over_days=0):
     branch_id = lv.employee.department.branch_id if lv.employee.department_id else None
     days = (lv.end_date - lv.start_date).days + 1
     Notification.objects.bulk_create([
-        Notification(company=lv.company, user=u, kind='info',
+        Notification(company=lv.company, user=u, kind='leave',
                      title=f"ছুটির আবেদন: {lv.employee.name}",
                      message=(f"{lv.get_leave_type_display()} · {lv.start_date:%d %b} – {lv.end_date:%d %b} ({days} দিন)"
                               + (f" — ⚠ {over_days} দিন সীমার অতিরিক্ত" if over_days else '') + f"। {lv.reason or ''}")[:500],
@@ -263,3 +303,12 @@ def punch_submit(request):
     local = timezone.localtime(att.timestamp)
     return JsonResponse({'status': 'success', 'punch': att.status, 'time': local.strftime('%I:%M %p'),
                          'message': f"Punch {att.status} সফল — {local:%I:%M %p}"})
+
+
+@portal_view
+def leave_letter(request, pk):
+    """কর্মচারী নিজের ছুটির আবেদন/অনুমোদনপত্র দেখতে ও PDF নিতে পারে"""
+    from attendance_app.leave_views import render_leave_letter
+    lv = get_object_or_404(LeaveRequest.objects.select_related('employee', 'employee__company', 'approved_by'),
+                           pk=pk, employee=request.employee)
+    return render_leave_letter(request, lv)

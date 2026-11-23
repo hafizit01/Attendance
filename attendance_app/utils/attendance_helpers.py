@@ -452,5 +452,11 @@ def generate_attendance_table(employee_qs, start_date, end_date, branch_id=None)
                 'work': d['work'],
                 'attendance_id': d['attendance_id'],
                 'editable': bool(d['attendance_id']),
+                # তালিকার পেজের জন্য বাড়তি (PDF/Excel আগের কী-গুলোই ব্যবহার করে)
+                'label': d.get('label', d['status']),
+                'late': d['late'],
+                'over': d['over'],
+                'shift_duration': (d.get('shift') or _shift).duration,
+                'missing_out': bool(d['in_time'] and not d['out_time']),
             })
     return rows
