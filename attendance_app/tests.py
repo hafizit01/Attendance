@@ -410,22 +410,54 @@ class LeaveBalanceTests(Base):
         r = self._post(start_date='2026-03-01', end_date='2026-03-30')
         self.assertEqual(r.status_code, 302)
 
-    def test_balance_deducts_on_approval_and_blocks_when_exhausted(self):
+    def test_type_limit_warns_then_saves_when_confirmed(self):
         from attendance_app.hr import leave_balance
         from attendance_app.models import LeaveAllocation
         LeaveAllocation.objects.create(company=self.company, leave_type='Casual', days_per_year=5)
         self.assertEqual(self._post().status_code, 302)                                  # 3 দিন approved
         bal = {b['type']: b for b in leave_balance.balance(self.emp, 2026)}
         self.assertEqual((bal['Casual']['used'], bal['Casual']['remaining']), (3, 2))
-        r = self._post(start_date='2026-04-01', end_date='2026-04-03')                   # 3 চাই, বাকি 2
+        r = self._post(start_date='2026-04-01', end_date='2026-04-03')                   # 3 চাই, বাকি 2 → সতর্কতা
         self.assertEqual(r.status_code, 200)
         self.assertContains(r, 'বাকি আছে মাত্র 2 দিন')
-        self.assertEqual(self._post(start_date='2026-04-01', end_date='2026-04-02').status_code, 302)
+        self.assertContains(r, 'Limit পার হলেও সেভ করুন')
+        self.assertEqual(r.context['form'].over_days, 1)
+        r = self._post(start_date='2026-04-01', end_date='2026-04-03', confirm_over_limit='on')   # নিশ্চিত → সেভ
+        self.assertEqual(r.status_code, 302)
+        self.assertEqual(LeaveRequest.objects.count(), 2)
         r = self._post(start_date='2026-05-01', end_date='2026-05-01')                   # শেষ
-        self.assertContains(r, 'ব্যালান্স শেষ')
+        self.assertContains(r, 'সীমা শেষ')
         # Reject করলে ফেরত আসে
         LeaveRequest.objects.filter(start_date=date(2026, 3, 1)).update(status='Rejected')
         self.assertEqual(self._post(start_date='2026-05-01', end_date='2026-05-01').status_code, 302)
+
+    def test_yearly_total_limit_across_types(self):
+        """সব মিলিয়ে বছরে ১২ দিন: Casual + Sick + নিজের বানানো ধরন একসাথে; Jamat/Earned (কোম্পানির অতিরিক্ত) মোটে গোনা হয় না"""
+        from attendance_app.hr import leave_balance
+        from attendance_app.models import LeaveAllocation, LeaveType
+        LeaveAllocation.objects.create(company=self.company, leave_type=leave_balance.TOTAL, days_per_year=12)
+        LeaveType.for_company(self.company)
+        LeaveType.objects.create(company=self.company, code='Hajj Leave', is_paid=True, counts_in_limit=True)
+        self.assertEqual(self._post(leave_type='Casual', start_date='2026-02-01', end_date='2026-02-05').status_code, 302)  # 5
+        self.assertEqual(self._post(leave_type='Sick', start_date='2026-03-01', end_date='2026-03-03').status_code, 302)    # 3
+        tb = leave_balance.total_balance(self.emp, 2026)
+        self.assertEqual((tb['used'], tb['remaining']), (8, 4))
+        self.assertEqual(self._post(leave_type='Earned', start_date='2026-04-01', end_date='2026-04-10').status_code, 302)  # মোটে নয়
+        self.assertEqual(self._post(leave_type='Jamat', start_date='2026-05-01', end_date='2026-05-07').status_code, 302)   # অতিরিক্ত, মোটে নয়
+        self.assertEqual(leave_balance.total_balance(self.emp, 2026)['used'], 8)
+        r = self._post(leave_type='Hajj Leave', start_date='2026-06-01', end_date='2026-06-06')                            # 6 চাই, বাকি 4
+        self.assertEqual(r.status_code, 200)
+        self.assertContains(r, 'মোট ছুটি বাকি আছে মাত্র 4 দিন')
+        self.assertEqual(r.context['form'].over_days, 2)
+        r = self._post(leave_type='Hajj Leave', start_date='2026-06-01', end_date='2026-06-06', confirm_over_limit='on')
+        self.assertEqual(r.status_code, 302)
+        tb = leave_balance.total_balance(self.emp, 2026)
+        self.assertEqual((tb['used'], tb['remaining'], tb['over']), (14, -2, 2))
+        # তালিকায় কোন ছুটিতে কত দিন অতিরিক্ত
+        r = self.client.get(reverse('attendance_app:leave_list'))
+        over = {lv.leave_type: lv.over_limit_days for lv in r.context['leaves']}
+        self.assertEqual(over, {'Casual': 0, 'Sick': 0, 'Earned': 0, 'Jamat': 0, 'Hajj Leave': 2})
+        self.assertContains(r, '+2 days over limit')
 
     def test_employee_override_and_cross_year(self):
         from attendance_app.hr import leave_balance
@@ -447,12 +479,153 @@ class LeaveBalanceTests(Base):
             'end_date': '2026-03-10', 'status': 'Approved', 'reason': 'updated'})
         self.assertEqual(r.status_code, 302)
 
-    def test_pages_and_json(self):
+    def test_leave_rules_page_and_json(self):
+        from attendance_app.models import LeaveAllocation, LeaveType
         self.client.force_login(self.owner)
-        self.client.post(reverse('attendance_app:leave_allocation_save'), {'alloc_Casual': '10', 'alloc_Sick': '14', 'alloc_Unpaid': ''})
         self.assertEqual(self.client.get(reverse('attendance_app:leave_balance')).status_code, 200)
+        types = {t.code: t for t in LeaveType.for_company(self.company)}
+        post = {'total_limit': '12', 'new_name': 'Hajj Leave', 'new_paid': 'on', 'new_counts': 'on', 'new_alloc': '3'}
+        for code, t in types.items():
+            post[f'present_{t.pk}'] = '1'
+            post[f'active_{t.pk}'] = 'on'
+            if code != 'Unpaid':
+                post[f'paid_{t.pk}'] = 'on'
+            if code not in ('Earned', 'Unpaid', 'Jamat'):
+                post[f'counts_{t.pk}'] = 'on'
+        post[f"alloc_{types['Sick'].pk}"] = '14'
+        r = self.client.post(reverse('attendance_app:leave_allocation_save'), post)
+        self.assertEqual(r.status_code, 302)
+        self.assertEqual(dict(LeaveAllocation.objects.filter(company=self.company).values_list('leave_type', 'days_per_year')),
+                         {'TOTAL': 12, 'Sick': 14, 'Hajj Leave': 3})
+        hajj = LeaveType.objects.get(company=self.company, code='Hajj Leave')
+        self.assertTrue(hajj.is_paid and hajj.counts_in_limit and not hajj.is_builtin)
+        # ভুল সংখ্যা → কিছুই বদলায় না
+        bad = dict(post, total_limit='500', new_name='')
+        self.client.post(reverse('attendance_app:leave_allocation_save'), bad)
+        self.assertEqual(LeaveAllocation.objects.get(company=self.company, leave_type='TOTAL').days_per_year, 12)
+        # ফর্মে নতুন ধরন দেখায়
+        r = self.client.get(reverse('attendance_app:leave_create'))
+        self.assertIn(('Hajj Leave', 'Hajj Leave'), r.context['form'].fields['leave_type'].choices)
         data = self.client.get(reverse('attendance_app:employee_leave_balance_json', args=[self.emp.pk])).json()
-        self.assertEqual({b['type']: b['allocated'] for b in data['balance']}, {'Casual': 10, 'Sick': 14})
+        self.assertEqual({b['type']: b['allocated'] for b in data['balance']}, {'Sick': 14, 'Hajj Leave': 3})
+        self.assertEqual(data['total']['allocated'], 12)
+        self.assertFalse(data['types']['Unpaid']['paid'])
+        # ব্যবহার হয়নি এমন নিজের ধরন মুছে ফেলা যায়
+        self.client.post(reverse('attendance_app:leave_allocation_save'), dict(post, new_name='', **{f'remove_{hajj.pk}': 'on'}))
+        self.assertFalse(LeaveType.objects.filter(pk=hajj.pk).exists())
+
+    def test_unpaid_leave_cuts_salary_paid_does_not(self):
+        from payroll.models import EmployeeSalary
+        from django.test import RequestFactory
+        from payroll.views import get_salary_summary_data
+        EmployeeSalary.objects.create(employee=self.emp, company=self.company, base_salary=Decimal('26000'),
+                                      bank_transfer_amount=Decimal('0'))
+        for d in h.date_range(date(2026, 11, 1), date(2026, 11, 30)):
+            if d.strftime('%A') != 'Friday' and d.day > 5:
+                Attendance.objects.create(employee=self.emp, company=self.company, status='In',
+                                          timestamp=timezone.make_aware(datetime.combine(d, time(10, 0))))
+                Attendance.objects.create(employee=self.emp, company=self.company, status='Out',
+                                          timestamp=timezone.make_aware(datetime.combine(d, time(18, 0))))
+
+        def row():
+            req = RequestFactory().get('/'); req.user, req.session = self.owner, {}
+            return get_salary_summary_data(req, '2026-11')['summaries'][0]
+
+        lv = LeaveRequest.objects.create(company=self.company, employee=self.emp, leave_type='Casual', status='Approved',
+                                         start_date=date(2026, 11, 2), end_date=date(2026, 11, 5))     # ৪ কর্মদিবস, Paid
+        paid = row()
+        lv.leave_type = 'Unpaid'
+        lv.save()
+        unpaid = row()
+        self.assertEqual((paid['leave_days'], unpaid['leave_days'], unpaid['unpaid_leave_days']), (4, 4, 1 * 4))
+        self.assertEqual(paid['absent_days'], unpaid['absent_days'])
+        self.assertLess(unpaid['final_salary'], paid['final_salary'])
+        # ১ তারিখ (রবিবার) অনুপস্থিত — ২৬ কর্মদিবসে ৪ দিন unpaid = ৪/২৬ বেতন কম
+        self.assertAlmostEqual(float(paid['final_salary'] - unpaid['final_salary']), 26000 * 4 / 26, delta=1)
+        from payroll.payslip import payslip_lines
+        self.assertTrue(any('unpaid leave' in n for n, _a in payslip_lines(unpaid)['deductions']))
+        # হাজিরার রিপোর্টও বেতনের সাথে মেলে: Leave হিসেবে গোনা, কিন্তু কাজের ক্রেডিট নেই
+        [(_e, sh, days)] = h.build_attendance([self.emp], date(2026, 11, 1), date(2026, 11, 30))
+        s = h.summarize(days, sh)
+        self.assertEqual((s['leave'], s['absent'], s['present']), (unpaid['leave_days'], unpaid['absent_days'], unpaid['present_days']))
+        nov3 = next(d for d in days if d['date'] == date(2026, 11, 3))
+        self.assertEqual((nov3['status'], nov3['label'], nov3['work']), ('Leave', 'Unpaid leave', timedelta()))
+
+    def test_salary_sheet_warns_missing_out_and_bank_excess(self):
+        from payroll.models import EmployeeSalary
+        EmployeeSalary.objects.create(employee=self.emp, company=self.company, base_salary=Decimal('26000'),
+                                      bank_transfer_amount=Decimal('26000'))
+        for d in h.date_range(date(2026, 10, 1), date(2026, 10, 31)):
+            if d.strftime('%A') != 'Friday':
+                Attendance.objects.create(employee=self.emp, company=self.company, status='In',
+                                          timestamp=timezone.make_aware(datetime.combine(d, time(10, 0))))
+                if d.day not in (5, 6):   # ২ দিন Out নেই
+                    Attendance.objects.create(employee=self.emp, company=self.company, status='Out',
+                                              timestamp=timezone.make_aware(datetime.combine(d, time(18, 0))))
+        self.client.force_login(self.owner)
+        r = self.client.get(reverse('payroll:salary_summary_list'), {'month': '2026-10'})
+        row = r.context['summaries'][0]
+        self.assertEqual(row['missing_out_days'], 2)
+        self.assertGreater(row['bank_excess'], 0)                       # Out নেই → বেতন কম, অথচ ব্যাংকে পুরো 26000
+        self.assertEqual(row['bank_excess'], Decimal('26000') - row['final_salary'])
+        self.assertContains(r, 'দিন Out punch নেই')
+        self.assertContains(r, 'ব্যাংক ট্রান্সফার Net বেতনের চেয়ে বেশি')
+
+    def test_employee_report_shows_salary_and_leave(self):
+        """কর্মচারীর রিপোর্ট: বেতন Salary summary এর সাথে হুবহু, ছুটি বাকি ঠিক"""
+        from payroll.models import EmployeeSalary
+        from attendance_app.hr import leave_balance
+        from attendance_app.models import LeaveAllocation
+        from django.test import RequestFactory
+        from payroll.views import get_salary_summary_data
+        EmployeeSalary.objects.create(employee=self.emp, company=self.company, base_salary=Decimal('20000'),
+                                      bank_transfer_amount=Decimal('5000'))
+        for d in h.date_range(date(2026, 10, 1), date(2026, 10, 31)):
+            if d.strftime('%A') != 'Friday' and d.day != 7:
+                Attendance.objects.create(employee=self.emp, company=self.company, status='In',
+                                          timestamp=timezone.make_aware(datetime.combine(d, time(10, 15 if d.day == 8 else 0))))
+                Attendance.objects.create(employee=self.emp, company=self.company, status='Out',
+                                          timestamp=timezone.make_aware(datetime.combine(d, time(18, 0))))
+        LeaveAllocation.objects.create(company=self.company, leave_type=leave_balance.TOTAL, days_per_year=12)
+        LeaveRequest.objects.create(company=self.company, employee=self.emp, leave_type='Sick', status='Approved',
+                                    start_date=date(2026, 3, 1), end_date=date(2026, 3, 5))
+        self.client.force_login(self.owner)
+        r = self.client.get(reverse('attendance_app:employee_attendance_detail', args=[self.emp.pk]), {'month': '2026-10'})
+        self.assertEqual(r.status_code, 200)
+        ctx = r.context
+        self.assertEqual((ctx['start_date'], ctx['end_date'], ctx['active_chip'] in ('last', '')), ('2026-10-01', '2026-10-31', True))
+        self.assertEqual((ctx['stats']['present'], ctx['stats']['absent'], ctx['stats']['late_days']), (25, 1, 1))
+        req = RequestFactory().get('/'); req.user, req.session = self.owner, {}
+        expected = get_salary_summary_data(req, '2026-10')['summaries'][0]['final_salary']
+        self.assertEqual(ctx['salary']['final_salary'], expected)
+        self.assertEqual((ctx['leave_total']['allocated'], ctx['leave_total']['remaining']), (12, 7))
+        self.assertEqual(len([c for c in ctx['calendar_cells'] if c]), 31)
+        self.assertContains(r, 'Net payable')
+        # 'attendance' গ্রুপের ইউজার বেতন দেখে না
+        from django.contrib.auth.models import Group
+        self.owner.groups.add(Group.objects.create(name='attendance'))
+        r = self.client.get(reverse('attendance_app:employee_attendance_detail', args=[self.emp.pk]), {'month': '2026-10'})
+        self.assertIsNone(r.context['salary'])
+        self.assertNotContains(r, 'Net payable')
+
+    def test_portal_over_limit_needs_confirmation(self):
+        from attendance_app.hr import leave_balance
+        from attendance_app.models import LeaveAllocation
+        LeaveAllocation.objects.create(company=self.company, leave_type=leave_balance.TOTAL, days_per_year=2)
+        user = User.objects.create_user('rahim', password='x')
+        self.emp.user = user
+        self.emp.save()
+        self.client.force_login(user)
+        start = timezone.localdate() + timedelta(days=3)
+        data = {'leave_type': 'Sick', 'start_date': start.isoformat(), 'end_date': (start + timedelta(days=2)).isoformat(),
+                'reason': 'fever'}
+        r = self.client.post(reverse('portal:leave'), data)
+        self.assertEqual(r.status_code, 200)
+        self.assertContains(r, 'সীমা পার হচ্ছে')
+        self.assertFalse(LeaveRequest.objects.exists())
+        r = self.client.post(reverse('portal:leave'), dict(data, confirm_over_limit='on'))
+        self.assertEqual(r.status_code, 302)
+        self.assertEqual(LeaveRequest.objects.get().status, 'Pending')
 
 
 class LoanTests(Base):
@@ -1191,6 +1364,91 @@ class ScaleTests(Base):
         r = self.client.get(reverse('payroll:payslip_list'), {'month': '2026-10'})
         self.assertEqual((r.context['row_count'], len(r.context['rows'])), (125, 100))
         self.assertEqual(r.context['totals']['net'], total)
+
+
+class EmployeeDocumentTests(Base):
+    """কর্মচারীর ডকুমেন্ট: আপলোড, গোপন ফাইল, অন্য কোম্পানি আটকানো, মোছা"""
+
+    def setUp(self):
+        super().setUp()
+        self.client.force_login(self.owner)
+        self.url = reverse('attendance_app:employee_documents', args=[self.emp.pk])
+
+    def tearDown(self):
+        from attendance_app.models import EmployeeDocument
+        for d in EmployeeDocument.objects.all():
+            d.file.delete(save=False)
+        super().tearDown()
+
+    def _upload(self, *files, **data):
+        payload = {'doc_type': 'nid', 'files': list(files)}
+        payload.update(data)
+        return self.client.post(self.url, payload)
+
+    def test_upload_view_download_delete(self):
+        from attendance_app.models import EmployeeDocument
+        pdf = SimpleUploadedFile('nid.pdf', b'%PDF-1.4 test', content_type='application/pdf')
+        png = SimpleUploadedFile('photo.png', b'\x89PNG fake', content_type='image/png')
+        r = self._upload(pdf, png, expiry_date='2027-01-31', note='front & back')
+        self.assertEqual(r.status_code, 302)
+        docs = list(EmployeeDocument.objects.filter(employee=self.emp).order_by('original_name'))
+        self.assertEqual([d.original_name for d in docs], ['nid.pdf', 'photo.png'])
+        self.assertEqual((docs[0].company, docs[0].uploaded_by, docs[0].size), (self.company, self.owner, 13))
+        # পাবলিক /media/ এ নয় — গোপন স্টোরেজে
+        from django.conf import settings
+        self.assertTrue(docs[0].file.path.startswith(str(settings.PRIVATE_MEDIA_ROOT)))
+        page = self.client.get(self.url)
+        self.assertContains(page, 'nid.pdf')
+        r = self.client.get(reverse('attendance_app:document_file', args=[docs[0].pk]))
+        self.assertEqual((r.status_code, r['Content-Type']), (200, 'application/pdf'))
+        self.assertIn('inline', r['Content-Disposition'])
+        self.assertEqual(b''.join(r.streaming_content), b'%PDF-1.4 test')
+        r.close()
+        r = self.client.get(reverse('attendance_app:document_file', args=[docs[0].pk]), {'download': 1})
+        self.assertIn('attachment', r['Content-Disposition'])
+        r.close()
+        path = docs[0].file.path
+        self.client.post(reverse('attendance_app:document_delete', args=[docs[0].pk]))
+        self.assertFalse(EmployeeDocument.objects.filter(pk=docs[0].pk).exists())
+        import os
+        self.assertFalse(os.path.exists(path))
+
+    def test_bad_files_rejected(self):
+        from attendance_app import document_views
+        from attendance_app.models import EmployeeDocument
+        self._upload(SimpleUploadedFile('virus.exe', b'MZ'))
+        self._upload(SimpleUploadedFile('page.html', b'<script>'))
+        orig = document_views.MAX_FILE_MB
+        document_views.MAX_FILE_MB = 0
+        try:
+            self._upload(SimpleUploadedFile('big.pdf', b'%PDF big'))
+        finally:
+            document_views.MAX_FILE_MB = orig
+        self.assertFalse(EmployeeDocument.objects.exists())
+
+    def test_other_company_and_logged_out_blocked(self):
+        from attendance_app.models import EmployeeDocument
+        self._upload(SimpleUploadedFile('cv.pdf', b'%PDF cv'))
+        doc = EmployeeDocument.objects.get()
+        other = User.objects.create_user('other', password='x')
+        other_co = Company.objects.create(name='Other', owner=other)
+        UserProfile.objects.create(user=other, company=other_co)
+        plan = SubscriptionPlan.objects.first()
+        UserSubscription.objects.create(user=other, plan=plan, start_date=date(2020, 1, 1), end_date=date(2099, 1, 1))
+        self.client.force_login(other)
+        self.assertEqual(self.client.get(reverse('attendance_app:document_file', args=[doc.pk])).status_code, 404)
+        self.assertEqual(self.client.get(self.url).status_code, 404)
+        self.assertEqual(self.client.post(reverse('attendance_app:document_delete', args=[doc.pk])).status_code, 404)
+        self.assertTrue(EmployeeDocument.objects.filter(pk=doc.pk).exists())
+        self.client.logout()
+        r = self.client.get(reverse('attendance_app:document_file', args=[doc.pk]))
+        self.assertEqual(r.status_code, 302)   # লগইনে পাঠায়
+
+    def test_report_and_list_link_to_documents(self):
+        r = self.client.get(reverse('attendance_app:employee_attendance_detail', args=[self.emp.pk]))
+        self.assertContains(r, self.url)
+        r = self.client.get(reverse('attendance_app:employee_list'))
+        self.assertContains(r, self.url)
 
 
 class PagesSmokeTests(Base):

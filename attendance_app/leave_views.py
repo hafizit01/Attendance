@@ -4,12 +4,13 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.http import HttpResponseForbidden, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.db import transaction
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
 from . import scoping
 from .hr import leave_balance
-from .models import Department, Employee, LeaveAllocation, LeaveRequest
+from .models import Department, Employee, LeaveAllocation, LeaveRequest, LeaveType
 from .utils.excel import Col, Sheet, excel_response
 from .utils.params import int_param
 
@@ -32,7 +33,11 @@ class EmployeeAllocationForm(forms.ModelForm):
     def __init__(self, *args, scope=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['employee'].required = True
-        self.fields['employee'].queryset = scoping.employees(Employee.objects.filter(is_active=True), scope).order_by('name')
+        self.fields['employee'].queryset = scoping.employees(Employee.objects.filter(is_active=True).select_related('company'), scope).order_by('name')
+        choices = [(leave_balance.TOTAL, 'All leave (yearly total)')]
+        if scope and scope.company:
+            choices += [(t.code, t.label) for t in leave_balance.types_for(scope.company, active_only=True)]
+        self.fields['leave_type'] = forms.ChoiceField(choices=choices, label="Leave type")
 
 
 def _balance_rows(request, year):
@@ -54,17 +59,20 @@ def leave_balance_view(request):
         return redirect('attendance_app:dashboard')
     year = _year(request)
     _s, dept_id, rows, types = _balance_rows(request, year)
-    labels = dict(LeaveRequest.LEAVE_TYPES)
+    labels = leave_balance.labels_for(scope.company)
     company_alloc = dict(LeaveAllocation.objects.filter(company=scope.company, employee__isnull=True)
                          .values_list('leave_type', 'days_per_year'))
     overrides = (LeaveAllocation.objects.filter(company=scope.company, employee__isnull=False)
                  .select_related('employee').order_by('employee__name', 'leave_type'))
     if scope.branch:
         overrides = overrides.filter(employee__department__branch=scope.branch)
+    used_codes = set(LeaveRequest.objects.filter(company=scope.company).values_list('leave_type', flat=True).distinct())
     return render(request, 'leaves/leave_balance.html', {
         'year': year, 'years': list(range(timezone.localdate().year + 1, timezone.localdate().year - 5, -1)),
-        'rows': rows, 'types': [(t, labels[t]) for t in types],
-        'leave_types': [(t, l, company_alloc.get(t)) for t, l in LeaveRequest.LEAVE_TYPES],
+        'rows': rows, 'types': [(t, labels.get(t, t)) for t in types],
+        'leave_types': [{'obj': t, 'limit': company_alloc.get(t.code), 'in_use': t.code in used_codes}
+                        for t in leave_balance.types_for(scope.company)],
+        'total_limit': company_alloc.get(leave_balance.TOTAL),
         'overrides': overrides,
         'override_form': EmployeeAllocationForm(scope=scope),
         'departments': scoping.departments(Department.objects.all(), scope),
@@ -73,31 +81,78 @@ def leave_balance_view(request):
     })
 
 
+class _BadDays(ValueError):
+    pass
+
+
+def _days_value(raw, what):
+    raw = (raw or '').strip()
+    if raw == '':
+        return None
+    try:
+        days = int(raw)
+    except ValueError:
+        raise _BadDays(what)
+    if not 0 <= days <= 366:
+        raise _BadDays(what)
+    return days
+
+
 @login_required
 @require_POST
 def leave_allocation_save(request):
-    """কোম্পানির সবার জন্য বছরের সীমা (প্রতি ধরনে একটা সংখ্যা; খালি = সীমা নেই)"""
+    """
+    ছুটির ধরন ও বছরের সীমা: সব মিলিয়ে মোট সীমা, প্রতিটা ধরনের Paid / মোট সীমায় গোনা / নিজস্ব সীমা / চালু,
+    আর নতুন ধরন যোগ। খালি সীমা = সীমা নেই।
+    """
     if not _can_manage(request):
-        return HttpResponseForbidden("শুধু কোম্পানির মালিক/অ্যাডমিন ছুটির সীমা বদলাতে পারেন।")
+        return HttpResponseForbidden("শুধু কোম্পানির মালিক/অ্যাডমিন ছুটির নিয়ম বদলাতে পারেন।")
     company = scoping.get_scope(request).company
-    changed = 0
-    for lt, _label in LeaveRequest.LEAVE_TYPES:
-        raw = (request.POST.get(f'alloc_{lt}') or '').strip()
-        qs = LeaveAllocation.objects.filter(company=company, employee__isnull=True, leave_type=lt)
-        if raw == '':
-            changed += qs.delete()[0]
-            continue
-        try:
-            days = int(raw)
-            if not 0 <= days <= 366:
-                raise ValueError
-        except ValueError:
-            messages.error(request, f"{lt}: ০ থেকে ৩৬৬ এর মধ্যে সংখ্যা দিন।")
-            return redirect('attendance_app:leave_balance')
-        obj, created = LeaveAllocation.objects.update_or_create(company=company, employee=None, leave_type=lt,
-                                                                defaults={'days_per_year': days})
-        changed += 1
-    messages.success(request, "বছরের ছুটির সীমা সেভ হয়েছে। খালি রাখা ধরনগুলোর কোনো সীমা নেই।")
+    P = request.POST
+    types = leave_balance.types_for(company)
+    try:
+        with transaction.atomic():
+            limits = {leave_balance.TOTAL: _days_value(P.get('total_limit'), 'মোট সীমা')}
+            for t in types:
+                if f'remove_{t.pk}' in P and not t.is_builtin:
+                    if LeaveRequest.objects.filter(company=company, leave_type=t.code).exists():
+                        t.is_active = False   # ব্যবহার হয়েছে — মুছি না, শুধু বন্ধ
+                        t.save(update_fields=['is_active'])
+                    else:
+                        LeaveAllocation.objects.filter(company=company, leave_type=t.code).delete()
+                        t.delete()
+                    continue
+                if f'present_{t.pk}' not in P:
+                    continue   # পুরনো ফর্ম/অন্য পেজ — এই ধরনটা ছুঁই না
+                t.is_paid = f'paid_{t.pk}' in P
+                t.counts_in_limit = f'counts_{t.pk}' in P
+                t.is_active = f'active_{t.pk}' in P
+                t.save(update_fields=['is_paid', 'counts_in_limit', 'is_active'])
+                limits[t.code] = _days_value(P.get(f'alloc_{t.pk}'), t.label)
+
+            new_name = ' '.join((P.get('new_name') or '').split())[:20]
+            if new_name:
+                if new_name.upper() == leave_balance.TOTAL or any(t.code.lower() == new_name.lower() or t.label.lower() == new_name.lower()
+                                                                  for t in types):
+                    raise ValueError(f'"{new_name}" নামে আগেই একটা ছুটির ধরন আছে।')
+                LeaveType.objects.create(company=company, code=new_name, is_paid='new_paid' in P,
+                                         counts_in_limit='new_counts' in P, order=100 + len(types))
+                limits[new_name] = _days_value(P.get('new_alloc'), new_name)
+
+            for code, days in limits.items():
+                qs = LeaveAllocation.objects.filter(company=company, employee__isnull=True, leave_type=code)
+                if days is None:
+                    qs.delete()
+                else:
+                    LeaveAllocation.objects.update_or_create(company=company, employee=None, leave_type=code,
+                                                             defaults={'days_per_year': days})
+    except _BadDays as e:
+        messages.error(request, f"{e}: ০ থেকে ৩৬৬ এর মধ্যে সংখ্যা দিন (খালি = সীমা নেই)।")
+        return redirect('attendance_app:leave_balance')
+    except ValueError as e:
+        messages.error(request, str(e))
+        return redirect('attendance_app:leave_balance')
+    messages.success(request, "ছুটির নিয়ম সেভ হয়েছে। খালি রাখা সীমা = কোনো সীমা নেই।")
     return redirect('attendance_app:leave_balance')
 
 
@@ -136,14 +191,21 @@ def employee_leave_balance_json(request, employee_id):
     scope = scoping.get_scope(request)
     emp = get_object_or_404(scoping.employees(Employee.objects.all(), scope.security), pk=employee_id)
     year = _year(request)
-    return JsonResponse({'employee': emp.name, 'year': year, 'balance': leave_balance.balance(emp, year)})
+    exclude = int_param(request.GET, 'exclude')   # এডিটের সময় এই ছুটিটা বাদ দিয়ে হিসাব
+    return JsonResponse({
+        'employee': emp.name, 'year': year,
+        'balance': leave_balance.balance(emp, year, exclude_id=exclude),
+        'total': leave_balance.total_balance(emp, year, exclude_id=exclude),
+        'types': {t.code: {'label': t.label, 'paid': t.is_paid, 'counts': t.counts_in_limit}
+                  for t in leave_balance.types_for(emp.company)},
+    })
 
 
 @login_required
 def leave_balance_excel(request):
     year = _year(request)
     scope, _d, rows, types = _balance_rows(request, year)
-    labels = dict(LeaveRequest.LEAVE_TYPES)
+    labels = leave_balance.labels_for(scope.company)
     cols = [Col('Employee', lambda r: r['employee'].name, width=24), Col('ID', lambda r: r['employee'].device_user_id, 'int'),
             Col('Department', lambda r: r['employee'].department.name if r['employee'].department_id else '')]
     for i, t in enumerate(types):

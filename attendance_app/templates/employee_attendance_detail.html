@@ -1,49 +1,222 @@
 {% extends "base.html" %}
 {% load tz %}
 {% load time_filters %}
-{% block title %}{{ employee.name }} · Attendance{% endblock %}
+{% block title %}{{ employee.name }} · Report{% endblock %}
+{% block extra_head %}
+<style type="text/tailwindcss">
+  @layer components {
+    .er-card { @apply rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-white/[0.06] dark:bg-slate-900/80; }
+    .er-head { @apply flex items-center justify-between gap-3 border-b border-slate-100 px-5 py-4 dark:border-white/[0.06]; }
+    .er-title { @apply flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-white; }
+    .er-kpi { @apply er-card p-4; }
+    .er-kpi-label { @apply text-xs font-medium text-slate-500 dark:text-slate-400; }
+    .er-kpi-value { @apply mt-1 text-2xl font-bold tabular-nums tracking-tight text-slate-900 dark:text-white; }
+    .er-row { @apply flex items-center justify-between gap-3 py-2 text-sm; }
+    .er-money { @apply font-semibold tabular-nums text-slate-900 dark:text-white; }
+    .er-chip { @apply inline-flex items-center rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 transition hover:border-indigo-300 hover:text-indigo-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300; }
+    .er-chip.is-on { @apply border-indigo-500 bg-indigo-50 text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-300; }
+    .cal-day { @apply flex h-14 flex-col items-center justify-center rounded-lg text-xs font-semibold tabular-nums ring-1 ring-inset; }
+  }
+</style>
+{% endblock %}
 {% block content %}
 <div class="space-y-6">
-  <div class="page-header">
-    <div class="flex items-center gap-4">
-      <span class="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-primary-500 to-indigo-600 text-xl font-bold text-white shadow-lg shadow-primary-600/25">{{ employee.name|slice:":1"|upper }}</span>
-      <div class="min-w-0">
-        <a href="{% url 'attendance_app:employee_list' %}" class="text-xs font-medium text-slate-500 transition hover:text-primary-600">← Employees</a>
-        <h1 class="page-title truncate">{{ employee.name }}</h1>
-        <p class="page-subtitle">Device ID {{ employee.device_user_id }} · {{ employee.department.name|default:"No department" }}</p>
+
+  {# ───────── হেডার ───────── #}
+  <div class="er-card overflow-hidden">
+    <div class="flex flex-col gap-5 p-5 sm:p-6 lg:flex-row lg:items-center lg:justify-between">
+      <div class="flex min-w-0 items-center gap-4">
+        <span class="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-600 text-2xl font-bold text-white shadow-lg shadow-indigo-600/25">{{ employee.name|slice:":1"|upper }}</span>
+        <div class="min-w-0">
+          <a href="{% url 'attendance_app:employee_list' %}" class="text-xs font-medium text-slate-500 transition hover:text-indigo-600">← Employees</a>
+          <h1 class="truncate text-2xl font-bold tracking-tight text-slate-900 dark:text-white">{{ employee.name }}</h1>
+          <div class="mt-1.5 flex flex-wrap items-center gap-1.5 text-xs">
+            <span class="badge-neutral font-mono">ID {{ employee.device_user_id }}</span>
+            {% if employee.department %}<span class="badge-info">{{ employee.department.name }}{% if employee.department.branch %} · {{ employee.department.branch.name }}{% endif %}</span>{% endif %}
+            {% if shift %}<span class="badge-purple">{{ shift.name|default:"Office time" }} · {{ shift.in_time|time:"h:i A" }}–{{ shift.out_time|time:"h:i A" }}</span>{% endif %}
+            {% if employee.is_active %}<span class="badge-success"><span class="badge-dot"></span>Active</span>{% else %}<span class="badge-danger">Inactive</span>{% endif %}
+          </div>
+        </div>
+      </div>
+      <div class="flex flex-wrap gap-2">
+        <a href="{% url 'attendance_app:employee_edit' employee.id %}" class="btn-secondary btn-sm">{% include "partials/icon.html" with name="pencil" cls="h-4 w-4" %}Edit</a>
+        {% if salary %}<a href="{% url 'payroll:payslip_view' employee.id salary_month %}" class="btn-secondary btn-sm">{% include "partials/icon.html" with name="document" cls="h-4 w-4" %}Payslip</a>{% endif %}
+        <a href="{% url 'attendance_app:employee_attendance_excel' employee.id %}?start_date={{ start_date }}&end_date={{ end_date }}" class="btn-secondary btn-sm">{% include "partials/excel_icon.html" %}Excel</a>
+        <a href="{% url 'attendance_app:attendance_pdf' employee.id %}?start_date={{ start_date }}&end_date={{ end_date }}" target="_blank" rel="noopener" class="btn-primary btn-sm">{% include "partials/icon.html" with name="download" cls="h-4 w-4" %}PDF</a>
       </div>
     </div>
-    <div class="flex flex-wrap gap-2 self-start lg:self-auto">
-      <a href="{% url 'attendance_app:employee_attendance_excel' employee.id %}?start_date={{ start_date }}&end_date={{ end_date }}" class="btn-secondary">{% include "partials/excel_icon.html" %}Excel</a>
-      <a href="{% url 'attendance_app:attendance_pdf' employee.id %}?start_date={{ start_date }}&end_date={{ end_date }}" target="_blank" rel="noopener" class="btn-secondary">
-        {% include "partials/icon.html" with name="download" cls="h-4 w-4" %}Download PDF
-      </a>
+
+    {# সময় বাছাই #}
+    <div class="flex flex-col gap-3 border-t border-slate-100 bg-slate-50/70 px-5 py-3.5 sm:px-6 lg:flex-row lg:items-center lg:justify-between dark:border-white/[0.06] dark:bg-white/[0.02]">
+      <div class="flex flex-wrap items-center gap-2">
+        <span class="text-xs font-semibold uppercase tracking-wide text-slate-500">Period</span>
+        <a href="?month={{ this_month }}" class="er-chip {% if active_chip == 'this' %}is-on{% endif %}">This month</a>
+        <a href="?month={{ last_month }}" class="er-chip {% if active_chip == 'last' %}is-on{% endif %}">Last month</a>
+        <span class="ml-1 text-sm font-semibold text-slate-900 dark:text-white">{{ period_label }}</span>
+      </div>
+      <form method="get" class="flex flex-wrap items-end gap-2">
+        <input type="date" name="start_date" value="{{ start_date }}" class="form-input !w-auto !py-1.5 text-sm" aria-label="Start date">
+        <span class="pb-2 text-slate-400">–</span>
+        <input type="date" name="end_date" value="{{ end_date }}" class="form-input !w-auto !py-1.5 text-sm" aria-label="End date">
+        <button class="btn-secondary btn-sm">Apply</button>
+      </form>
     </div>
   </div>
 
-  <div class="grid grid-cols-2 gap-4 lg:grid-cols-5">
-    <div class="stat-card p-4"><p class="stat-label">Present</p><p class="stat-value text-2xl text-emerald-600 dark:text-emerald-400">{{ present_days|default:0 }}</p></div>
-    <div class="stat-card p-4"><p class="stat-label">Absent</p><p class="stat-value text-2xl text-rose-600 dark:text-rose-400">{{ absent_days }}</p></div>
-    <div class="stat-card p-4"><p class="stat-label">Leave</p><p class="stat-value text-2xl text-blue-600 dark:text-blue-400">{{ approved_leave_count }}</p></div>
-    <div class="stat-card p-4"><p class="stat-label">Holiday / Off</p><p class="stat-value text-2xl text-violet-600 dark:text-violet-400">{{ public_holiday_count|add:weekly_holiday_count }}</p></div>
-    <div class="stat-card col-span-2 p-4 lg:col-span-1"><p class="stat-label">Worked</p><p class="stat-value font-mono text-2xl">{{ total_work_duration|format_timedelta }}</p></div>
+  {% include "employees/_tabs.html" with emp_tab="report" doc_count=doc_count %}
+
+  {# ───────── মূল সংখ্যা ───────── #}
+  <div class="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-6">
+    <div class="er-kpi">
+      <p class="er-kpi-label">Attendance rate</p>
+      <p class="er-kpi-value {% if stats.rate is not None and stats.rate < 80 %}text-rose-600 dark:text-rose-400{% else %}text-emerald-600 dark:text-emerald-400{% endif %}">{% if stats.rate is None %}—{% else %}{{ stats.rate }}%{% endif %}</p>
+      <div class="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-100 dark:bg-white/10"><div class="h-full rounded-full bg-emerald-500" style="width: {{ stats.rate|default:0 }}%"></div></div>
+    </div>
+    <div class="er-kpi"><p class="er-kpi-label">Present</p><p class="er-kpi-value">{{ stats.present }}<span class="text-sm font-medium text-slate-400"> days</span></p><p class="mt-1 text-xs text-slate-500">{{ stats.off }} off / holiday</p></div>
+    <div class="er-kpi"><p class="er-kpi-label">Absent</p><p class="er-kpi-value {% if stats.absent %}text-rose-600 dark:text-rose-400{% endif %}">{{ stats.absent }}<span class="text-sm font-medium text-slate-400"> days</span></p><p class="mt-1 text-xs text-slate-500">{{ stats.leave }} on leave</p></div>
+    <div class="er-kpi"><p class="er-kpi-label">Late</p><p class="er-kpi-value {% if stats.late_days %}text-amber-600 dark:text-amber-400{% endif %}">{{ stats.late_days }}<span class="text-sm font-medium text-slate-400"> times</span></p><p class="mt-1 font-mono text-xs text-slate-500">{{ stats.late }} total</p></div>
+    <div class="er-kpi"><p class="er-kpi-label">Overtime</p><p class="er-kpi-value font-mono text-violet-600 dark:text-violet-400">{{ stats.over }}</p><p class="mt-1 font-mono text-xs text-slate-500">short {{ stats.less }}</p></div>
+    <div class="er-kpi">
+      <p class="er-kpi-label">Worked / expected</p>
+      <p class="er-kpi-value font-mono text-xl">{{ stats.worked }}</p>
+      <p class="mt-1 font-mono text-xs text-slate-500">of {{ stats.expected }}</p>
+      <div class="mt-1.5 h-1.5 overflow-hidden rounded-full bg-slate-100 dark:bg-white/10"><div class="h-full rounded-full bg-indigo-500" style="width: {{ stats.work_pct }}%"></div></div>
+    </div>
   </div>
 
-  <div class="card p-4 sm:p-5">
-    <form method="get" class="grid grid-cols-1 items-end gap-4 sm:grid-cols-3">
-      <div>
-        <label class="form-label" for="ed-s">Start date</label>
-        <input id="ed-s" type="date" name="start_date" value="{{ start_date }}" class="form-input">
+  <div class="grid gap-6 xl:grid-cols-3">
+    {# ───────── বেতন ───────── #}
+    {% if can_view_salary %}
+    <section class="er-card overflow-hidden">
+      <div class="er-head">
+        <p class="er-title">{% include "partials/icon.html" with name="money" cls="h-4 w-4 text-emerald-500" %}Salary · {{ salary_month_label }}</p>
+        {% if salary_in_progress %}<span class="badge-warning">In progress</span>{% endif %}
       </div>
-      <div>
-        <label class="form-label" for="ed-e">End date</label>
-        <input id="ed-e" type="date" name="end_date" value="{{ end_date }}" class="form-input">
+      {% if salary %}
+      <div class="p-5">
+        <p class="text-xs font-medium uppercase tracking-wide text-slate-500">{% if salary_in_progress %}Earned so far{% else %}Net payable{% endif %}</p>
+        <p class="mt-1 text-3xl font-bold tabular-nums text-slate-900 dark:text-white">৳{{ salary.final_salary|floatformat:"0g" }}</p>
+        <p class="mt-1 text-xs text-slate-500">Bank ৳{{ salary.bank_transfer|floatformat:"0g" }} · Cash ৳{{ salary.payable_cash|floatformat:"0g" }}</p>
+        {% if salary_in_progress %}<p class="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-500/10 dark:text-amber-200">মাস চলছে — আজ পর্যন্ত হাজিরা অনুযায়ী। বাকি দিনগুলোর হাজিরা এলে বাড়বে।</p>{% endif %}
+
+        <div class="mt-4 divide-y divide-slate-100 dark:divide-white/[0.05]">
+          <div class="er-row"><span class="text-slate-500">Monthly salary (gross)</span><span class="er-money">৳{{ salary.base_salary|floatformat:"0g" }}</span></div>
+          {% for name, amount in salary.lines.earnings %}{% if forloop.counter > 1 %}
+          <div class="er-row"><span class="text-slate-500">{{ name }}</span><span class="er-money text-emerald-600 dark:text-emerald-400">+৳{{ amount|floatformat:"0g" }}</span></div>
+          {% endif %}{% endfor %}
+          {% for name, amount in salary.lines.deductions %}
+          <div class="er-row"><span class="truncate text-slate-500" title="{{ name }}">{{ name }}</span><span class="er-money text-rose-600 dark:text-rose-400">−৳{{ amount|floatformat:"0g" }}</span></div>
+          {% endfor %}
+          <div class="er-row !py-3"><span class="font-semibold text-slate-900 dark:text-white">Net</span><span class="text-lg font-bold tabular-nums text-indigo-700 dark:text-indigo-300">৳{{ salary.final_salary|floatformat:"0g" }}</span></div>
+        </div>
       </div>
-      <button type="submit" class="btn-primary">{% include "partials/icon.html" with name="filter" cls="h-4 w-4" %}Apply</button>
-    </form>
+      {% else %}
+      <div class="p-6 text-center">
+        <p class="font-semibold text-slate-900 dark:text-white">বেতন সেট করা নেই</p>
+        <p class="mt-1 text-sm text-slate-500">এই কর্মচারীর মূল বেতন দিলে এখানে মাসের হিসাব দেখাবে।</p>
+        <a href="{% url 'payroll:add_salary' %}?q={{ employee.device_user_id }}" class="btn-primary btn-sm mt-3">Set salary</a>
+      </div>
+      {% endif %}
+    </section>
+    {% endif %}
+
+    {# ───────── ছুটি ───────── #}
+    <section class="er-card overflow-hidden">
+      <div class="er-head">
+        <p class="er-title">{% include "partials/icon.html" with name="calendar" cls="h-4 w-4 text-sky-500" %}Leave · {{ leave_year }}</p>
+        <a href="{% url 'attendance_app:leave_create' %}" class="text-xs font-semibold text-indigo-600 hover:underline">+ New leave</a>
+      </div>
+      <div class="p-5">
+        {% if leave_total.allocated is not None %}
+        <div class="flex items-end justify-between gap-3">
+          <div>
+            <p class="text-xs font-medium uppercase tracking-wide text-slate-500">Days left</p>
+            <p class="mt-1 text-3xl font-bold tabular-nums {% if leave_total.remaining <= 0 %}text-rose-600 dark:text-rose-400{% else %}text-emerald-600 dark:text-emerald-400{% endif %}">{% if leave_total.remaining < 0 %}0{% else %}{{ leave_total.remaining }}{% endif %}<span class="text-base font-medium text-slate-400"> / {{ leave_total.allocated }}</span></p>
+          </div>
+          <p class="text-right text-xs text-slate-500">{{ leave_total.used }} taken{% if leave_total.pending %}<br>{{ leave_total.pending }} pending{% endif %}</p>
+        </div>
+        <div class="mt-3 flex h-2 overflow-hidden rounded-full bg-slate-100 dark:bg-white/10">
+          <span class="block h-full {% if leave_total.over %}bg-rose-500{% else %}bg-indigo-500{% endif %}" style="width: {% widthratio leave_total.used leave_total.allocated|default:1 100 %}%"></span>
+          <span class="block h-full bg-amber-400" style="width: {% widthratio leave_total.pending leave_total.allocated|default:1 100 %}%"></span>
+        </div>
+        {% if leave_total.over %}<p class="mt-2 text-xs font-semibold text-rose-600">সীমার চেয়ে {{ leave_total.over }} দিন বেশি নেওয়া হয়েছে।</p>{% endif %}
+        {% else %}
+        <p class="text-sm text-slate-500">বছরের মোট ছুটির সীমা সেট করা নেই। <a href="{% url 'attendance_app:leave_balance' %}" class="link">Leave Balance</a> থেকে দিন।</p>
+        {% endif %}
+
+        {% if leave_rows %}
+        <div class="mt-4 divide-y divide-slate-100 dark:divide-white/[0.05]">
+          {% for r in leave_rows %}
+          <div class="er-row">
+            <span class="text-slate-600 dark:text-slate-300">{{ r.label }}{% if not r.paid %} <span class="badge-neutral ml-1">Unpaid</span>{% elif not r.counts %} <span class="text-[10px] font-semibold uppercase text-sky-600">extra</span>{% endif %}</span>
+            <span class="tabular-nums text-slate-900 dark:text-white">{% if r.limited %}<b>{% if r.remaining < 0 %}0{% else %}{{ r.remaining }}{% endif %}</b><span class="text-slate-400"> / {{ r.allocated }} left</span>{% else %}<b>{{ r.used }}</b><span class="text-slate-400"> taken</span>{% endif %}{% if r.pending %} <span class="text-xs text-amber-600">+{{ r.pending }} pending</span>{% endif %}</span>
+          </div>
+          {% endfor %}
+        </div>
+        {% endif %}
+      </div>
+    </section>
+
+    {# ───────── সাম্প্রতিক ছুটির আবেদন ───────── #}
+    <section class="er-card overflow-hidden">
+      <div class="er-head"><p class="er-title">{% include "partials/icon.html" with name="inbox" cls="h-4 w-4 text-violet-500" %}Recent leave requests</p></div>
+      <ul class="divide-y divide-slate-100 dark:divide-white/[0.05]">
+        {% for lv in recent_leaves %}
+        <li class="flex items-center justify-between gap-3 px-5 py-3">
+          <div class="min-w-0">
+            <p class="truncate text-sm font-medium text-slate-900 dark:text-white">{{ lv.get_leave_type_display }}{% if lv.leave_type in unpaid_codes %} <span class="badge-neutral ml-1">Unpaid</span>{% endif %}</p>
+            <p class="text-xs text-slate-500">{{ lv.start_date|date:"d M" }}{% if lv.end_date != lv.start_date %} – {{ lv.end_date|date:"d M Y" }}{% else %} {{ lv.start_date|date:"Y" }}{% endif %} · {{ lv.days }} day{{ lv.days|pluralize }}</p>
+          </div>
+          {% if lv.status == 'Approved' %}<span class="badge-success">Approved</span>{% elif lv.status == 'Pending' %}<span class="badge-warning">Pending</span>{% else %}<span class="badge-danger">Rejected</span>{% endif %}
+        </li>
+        {% empty %}
+        <li class="px-5 py-8 text-center text-sm text-slate-500">কোনো ছুটির আবেদন নেই</li>
+        {% endfor %}
+      </ul>
+    </section>
   </div>
 
-  <div class="card overflow-hidden">
+  {# ───────── ক্যালেন্ডার ───────── #}
+  {% if calendar_cells %}
+  <section class="er-card overflow-hidden">
+    <div class="er-head">
+      <p class="er-title">{% include "partials/icon.html" with name="grid" cls="h-4 w-4 text-indigo-500" %}Attendance calendar</p>
+      <div class="hidden flex-wrap items-center gap-3 text-[11px] text-slate-500 sm:flex">
+        <span class="flex items-center gap-1"><span class="h-2.5 w-2.5 rounded bg-emerald-500"></span>Present</span>
+        <span class="flex items-center gap-1"><span class="h-2.5 w-2.5 rounded bg-amber-400"></span>Late</span>
+        <span class="flex items-center gap-1"><span class="h-2.5 w-2.5 rounded bg-rose-500"></span>Absent</span>
+        <span class="flex items-center gap-1"><span class="h-2.5 w-2.5 rounded bg-sky-500"></span>Leave</span>
+        <span class="flex items-center gap-1"><span class="h-2.5 w-2.5 rounded bg-slate-300"></span>Off / holiday</span>
+      </div>
+    </div>
+    <div class="mx-auto max-w-4xl p-4 sm:p-5">
+      <div class="grid grid-cols-7 gap-1.5 text-center text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+        <span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span>
+      </div>
+      <div class="mt-1.5 grid grid-cols-7 gap-1.5">
+        {% for d in calendar_cells %}
+          {% if d is None %}<span></span>
+          {% else %}
+          <div class="cal-day
+            {% if d.status == 'Present' and d.late.total_seconds > 0 %}bg-amber-50 text-amber-800 ring-amber-200 dark:bg-amber-500/10 dark:text-amber-200 dark:ring-amber-500/20
+            {% elif d.status == 'Present' %}bg-emerald-50 text-emerald-800 ring-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-200 dark:ring-emerald-500/20
+            {% elif d.status == 'Absent' %}bg-rose-50 text-rose-700 ring-rose-200 dark:bg-rose-500/10 dark:text-rose-300 dark:ring-rose-500/20
+            {% elif d.status == 'Leave' %}bg-sky-50 text-sky-800 ring-sky-200 dark:bg-sky-500/10 dark:text-sky-200 dark:ring-sky-500/20
+            {% else %}bg-slate-50 text-slate-400 ring-slate-200 dark:bg-white/[0.03] dark:text-slate-500 dark:ring-white/10{% endif %}"
+               title="{{ d.date|date:'D, d M' }} · {{ d.label|default:d.status }}{% if d.in_time %} · In {{ d.in_time|localtime|time:'h:i A' }}{% endif %}{% if d.out_time %} · Out {{ d.out_time|localtime|time:'h:i A' }}{% endif %}">
+            <span class="text-sm">{{ d.date.day }}</span>
+            <span class="hidden text-[10px] font-medium opacity-80 sm:block">{% if d.in_time %}{{ d.in_time|localtime|time:"H:i" }}{% elif d.status == 'Absent' %}Absent{% elif d.status == 'Leave' %}Leave{% elif d.is_off_day %}Off{% elif d.is_holiday %}Holiday{% endif %}</span>
+          </div>
+          {% endif %}
+        {% endfor %}
+      </div>
+    </div>
+  </section>
+  {% endif %}
+
+  {# ───────── দিনভিত্তিক বিস্তারিত ───────── #}
+  <section class="er-card overflow-hidden">
+    <div class="er-head"><p class="er-title">{% include "partials/icon.html" with name="clock" cls="h-4 w-4 text-indigo-500" %}Daily details</p><span class="text-xs text-slate-500">{{ attendance_summary|length }} days</span></div>
     <div class="overflow-x-auto">
       <table class="responsive-table table-modern">
         <thead>
@@ -51,6 +224,9 @@
             <th>Date</th>
             <th>Check in</th>
             <th>Check out</th>
+            <th class="text-center">Worked</th>
+            <th class="text-center">Late</th>
+            <th class="text-center">Overtime</th>
             <th class="text-right">Status</th>
           </tr>
         </thead>
@@ -59,10 +235,13 @@
           <tr>
             <td class="rt-title whitespace-nowrap">
               <span class="font-semibold text-slate-900 dark:text-white">{{ date|date:"d M Y" }}</span>
-              <span class="ml-1 text-xs font-normal text-slate-500">{{ date|date:"l" }}</span>
+              <span class="ml-1 text-xs font-normal text-slate-500">{{ date|date:"D" }}</span>
             </td>
-            <td class="whitespace-nowrap tabular-nums">{% if data.in_time %}<span class="font-medium text-slate-900 dark:text-white">{{ data.in_time|localtime|time:"h:i A" }}</span>{% if data.late.total_seconds > 0 %} <span class="badge-warning ml-1 px-2 py-0.5">Late</span>{% endif %}{% else %}<span class="text-slate-400">—</span>{% endif %}</td>
-            <td class="whitespace-nowrap tabular-nums">{% if data.out_time %}<span class="font-medium text-slate-900 dark:text-white">{{ data.out_time|localtime|time:"h:i A" }}</span>{% else %}<span class="text-slate-400">—</span>{% endif %}</td>
+            <td class="whitespace-nowrap tabular-nums">{% if data.in_time %}<span class="font-medium text-slate-900 dark:text-white">{{ data.in_time|localtime|time:"h:i A" }}</span>{% else %}<span class="text-slate-400">—</span>{% endif %}</td>
+            <td class="whitespace-nowrap tabular-nums">{% if data.out_time %}<span class="font-medium text-slate-900 dark:text-white">{{ data.out_time|localtime|time:"h:i A" }}</span>{% elif data.in_time %}<span class="badge-warning">No out</span>{% else %}<span class="text-slate-400">—</span>{% endif %}</td>
+            <td class="whitespace-nowrap text-center font-mono text-xs tabular-nums text-slate-600 dark:text-slate-300">{% if data.work.total_seconds > 0 %}{{ data.work|format_timedelta }}{% else %}—{% endif %}</td>
+            <td class="whitespace-nowrap text-center font-mono text-xs tabular-nums {% if data.late.total_seconds > 0 %}font-semibold text-amber-600 dark:text-amber-400{% else %}text-slate-300 dark:text-slate-600{% endif %}">{% if data.late.total_seconds > 0 %}{{ data.late|format_timedelta }}{% else %}—{% endif %}</td>
+            <td class="whitespace-nowrap text-center font-mono text-xs tabular-nums {% if data.over.total_seconds > 0 %}font-semibold text-violet-600 dark:text-violet-400{% else %}text-slate-300 dark:text-slate-600{% endif %}">{% if data.over.total_seconds > 0 %}{{ data.over|format_timedelta }}{% else %}—{% endif %}</td>
             <td class="text-right">
               {% if data.status == 'Present' %}<span class="badge-success"><span class="badge-dot"></span>{{ data.label|default:"Present" }}</span>
               {% elif data.status == 'Absent' %}<span class="badge-danger"><span class="badge-dot"></span>Absent</span>
@@ -72,11 +251,11 @@
             </td>
           </tr>
           {% empty %}
-          <tr><td colspan="4">{% include "partials/empty_state.html" with icon="calendar" title="No days in this range" %}</td></tr>
+          <tr><td colspan="7">{% include "partials/empty_state.html" with icon="calendar" title="No days in this range" %}</td></tr>
           {% endfor %}
         </tbody>
       </table>
     </div>
-  </div>
+  </section>
 </div>
 {% endblock %}

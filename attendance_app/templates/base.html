@@ -129,6 +129,47 @@
     </div>
     {% endwith %}
   </nav>
+  <script>
+  /* মেনু হাইলাইট: ভেতরের পেজেও (যেমন Employees → Add/Edit) যে মেনু থেকে এসেছে সেটাই selected থাকে,
+     আর পেজ বদলালে সাইডবার উপরে লাফায় না — আগের স্ক্রল জায়গায় থাকে, selected মেনু সবসময় দেখা যায়। */
+  (function () {
+    var nav = document.currentScript.previousElementSibling;
+    var KEY = 'sbScroll';
+    var path = location.pathname;
+    // যেসব পেজের নিজের মেনু নেই → কোন মেনুর অধীনে
+    var ALIAS = [['/components/', '/add-summary/'], ['/salary-base/', '/add-summary/'], ['/payslips/', '/summary/'],
+                 ['/salary-summary/', '/summary/'], ['/bonus-overtime/', '/payroll-settings/'], ['/leave-summary', '/leaves/'],
+                 ['/notifications/', '/'], ['/branch/', '/branches/']];
+    for (var i = 0; i < ALIAS.length; i++) if (path.indexOf(ALIAS[i][0]) === 0) { path = ALIAS[i][1]; break; }
+    window.navBestMatch = function (links, p) {
+      var best = null, len = 0;
+      links.forEach(function (a) {
+        var h = a.getAttribute('href') || '';
+        if (!h || h.charAt(0) !== '/') return;
+        var hit = h === '/' ? p === '/' : p.indexOf(h) === 0;
+        if (hit && h.length > len) { best = a; len = h.length; }
+      });
+      return best;
+    };
+    var links = Array.prototype.slice.call(nav.querySelectorAll('a.nav-link[href]'));
+    var active = nav.querySelector('.nav-link.is-active');
+    if (!active) {
+      active = window.navBestMatch(links, path);
+      if (active) { active.classList.add('is-active'); active.setAttribute('aria-current', 'page'); }
+    }
+    try {
+      var saved = sessionStorage.getItem(KEY);
+      if (saved !== null) nav.scrollTop = +saved;
+    } catch (e) {}
+    if (active) {
+      var top = active.offsetTop - nav.offsetTop, bottom = top + active.offsetHeight;
+      if (top < nav.scrollTop || bottom > nav.scrollTop + nav.clientHeight) nav.scrollTop = top - nav.clientHeight / 3;
+    }
+    var save = function () { try { sessionStorage.setItem(KEY, String(nav.scrollTop)); } catch (e) {} };
+    nav.addEventListener('click', save);
+    window.addEventListener('pagehide', save);
+  })();
+  </script>
 
   <div class="shrink-0 space-y-1 border-t border-white/5 p-3">
     {% url 'attendance_app:support_page' as u %}{% include "partials/nav_link.html" with href=u label="Help & Support" icon="chat" name="" %}
@@ -281,6 +322,27 @@
     <button type="button" @click="sidebarOpen = true" class="bnav-link">{% include "partials/icon.html" with name="menu" cls="h-6 w-6" %}Menu</button>
   </div>
 </nav>
+<script>
+/* মোবাইলের নিচের মেনু: পুরো অংশ ধরে হাইলাইট (Payroll এর সব পেজ → Payroll, হাজিরার সব পেজ → Attendance ...) */
+(function () {
+  var bar = document.currentScript.previousElementSibling;
+  if (bar.querySelector('.bnav-link.is-active')) return;
+  var p = location.pathname;
+  var GROUPS = [
+    [['/summary/', '/add-summary/', '/salary-base/', '/components/', '/payslips/', '/bonus-overtime/', '/loans/', '/payroll-settings/', '/salary-summary/'], '/summary/'],
+    [['/leaves/', '/leave-balance/', '/leave-summary'], '/leaves/'],
+    [['/attendance/', '/missing-punches/', '/monthly_report/'], '/attendance/'],
+    [['/employees/', '/profiles/'], '/employees/'],
+  ];
+  for (var i = 0; i < GROUPS.length; i++) {
+    if (GROUPS[i][0].some(function (g) { return p.indexOf(g) === 0; })) {
+      var a = bar.querySelector('a.bnav-link[href="' + GROUPS[i][1] + '"]');
+      if (a) { a.classList.add('is-active'); a.setAttribute('aria-current', 'page'); }
+      return;
+    }
+  }
+})();
+</script>
 {% endwith %}
 {% endif %}
 

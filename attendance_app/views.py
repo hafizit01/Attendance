@@ -863,26 +863,103 @@ def _employee_report(request, employee_id):
     return employee, user_company, start_date, end_date, days, att_rules.summarize(days, shift)
 
 
+def _month_bounds(month_str):
+    """'YYYY-MM' → (প্রথম দিন, শেষ দিন); ভুল হলে None"""
+    try:
+        y, m = (int(x) for x in month_str.split('-'))
+        first = date(y, m, 1)
+    except (ValueError, AttributeError):
+        return None
+    return first, date(y, m, calendar.monthrange(y, m)[1])
+
+
 @login_required
 def employee_attendance_detail(request, employee_id):
-    employee, _company, start_date, end_date, days, s = _employee_report(request, employee_id)
+    """
+    কর্মচারীর পূর্ণ রিপোর্ট: হাজিরা (ক্যালেন্ডার + দিনভিত্তিক), ছুটির ব্যালান্স, আর ওই মাসের বেতন।
+    বেতন payroll এর একই হিসাব (get_salary_summary_data) থেকে — তাই Salary summary/পে-স্লিপের সাথে হুবহু মেলে।
+    """
+    from .hr import leave_balance
+    today = localdate()
+    month_param = request.GET.get('month')
+    if month_param and _month_bounds(month_param) and not request.GET.get('start_date'):
+        first, last = _month_bounds(month_param)
+        request.GET = request.GET.copy()
+        request.GET['start_date'], request.GET['end_date'] = first.isoformat(), min(last, today).isoformat() \
+            if first <= today else last.isoformat()
+    employee, company, start_date, end_date, days, s = _employee_report(request, employee_id)
+    fmt = att_rules.format_timedelta
 
+    counted = s['present'] + s['absent']
+    stats = {
+        'present': s['present'], 'absent': s['absent'], 'leave': s['leave'],
+        'off': s['holiday'] + s['weekly_off'], 'late_days': s['late_days'],
+        'rate': round(100 * s['present'] / counted) if counted else None,
+        'worked': fmt(s['total_work']), 'expected': fmt(s['expected']),
+        'late': fmt(s['total_late']), 'over': fmt(s['total_over']), 'less': fmt(s['total_less']),
+        'work_pct': min(round(100 * s['total_work'] / s['expected']), 100) if s['expected'] else 0,
+    }
+
+    # ক্যালেন্ডার (সপ্তাহের দিন অনুযায়ী সাজানো) — লম্বা সময় হলে বাদ
+    calendar_cells = []
+    if len(days) <= 62:
+        calendar_cells = [None] * ((days[0]['date'].weekday() + 1) % 7 if days else 0)   # রবিবার থেকে শুরু
+        calendar_cells += days
+
+    # বেতন: end_date এর মাস (বেতন দেখার অনুমতি থাকলে)
+    from payroll.views import get_salary_summary_data, is_not_attendance_group
+    salary = None
+    can_view_salary = is_not_attendance_group(request.user)
+    salary_month = end_date.strftime('%Y-%m')
+    if can_view_salary and company is not None:
+        try:
+            rows = get_salary_summary_data(request, salary_month, employee_id=employee.id)['summaries']
+            salary = next((r for r in rows if r['employee'].id == employee.id), None)
+        except PermissionError:
+            salary = None
+        if salary:
+            from payroll.payslip import payslip_lines
+            salary['lines'] = payslip_lines(salary)
+
+    # ছুটি: end_date এর বছর
+    leave_year = end_date.year
+    recent_leaves = list(LeaveRequest.objects.filter(employee=employee).order_by('-start_date', '-id')[:6])
+
+    shift = days[-1].get('shift') if days else None
     context = {
         'employee': employee,
         'attendance_summary': [(d['date'], d) for d in days],
+        'calendar_cells': calendar_cells,
         'start_date': start_date.strftime("%Y-%m-%d"),  # স্ট্রিং হিসেবে পাঠানো হচ্ছে যাতে ফর্মে ভ্যালু থাকে
         'end_date': end_date.strftime("%Y-%m-%d"),
-        'total_work_duration': s['total_work'],
+        'period_label': (start_date.strftime('%B %Y') if start_date.day == 1 and start_date.month == end_date.month
+                         and start_date.year == end_date.year else f"{start_date:%d %b} – {end_date:%d %b %Y}"),
+        'this_month': today.strftime('%Y-%m'),
+        'last_month': (today.replace(day=1) - timedelta(days=1)).strftime('%Y-%m'),
+        'active_chip': ('this' if (start_date, end_date) == (today.replace(day=1), today) else
+                        'last' if (start_date, end_date) == _month_bounds((today.replace(day=1) - timedelta(days=1)).strftime('%Y-%m'))
+                        else ''),
+        'stats': stats,
+        'shift': shift,
+        'can_view_salary': can_view_salary,
+        'salary': salary,
+        'salary_month': salary_month,
+        'salary_month_label': end_date.strftime('%B %Y'),
+        'salary_in_progress': salary_month == today.strftime('%Y-%m'),
+        'leave_year': leave_year,
+        'leave_total': leave_balance.total_balance(employee, leave_year),
+        'leave_rows': leave_balance.balance(employee, leave_year),
+        'recent_leaves': recent_leaves,
+        'unpaid_codes': leave_balance.unpaid_codes(employee.company_id),
+        'doc_count': employee.documents.count(),
 
+        # আগের টেমপ্লেট/অন্য জায়গার জন্য পুরনো নামগুলোও থাকে
+        'total_work_duration': s['total_work'],
         'present_days': s['present'],
         'approved_leave_count': s['leave'],
         'absent_days': s['absent'],
         'public_holiday_count': s['holiday'],
         'weekly_holiday_count': s['weekly_off'],
-
-        'total_leave_requests': LeaveRequest.objects.filter(
-            employee=employee, status='Approved', start_date__lte=end_date, end_date__gte=start_date
-        ).count(),
     }
 
     return render(request, 'employee_attendance_detail.html', context)
@@ -1065,6 +1142,14 @@ def leave_list(request):
     if query:
         leaves = leaves.filter(employee__name__icontains=query)
 
+    # সীমার বেশি দিন (তালিকায় লাল ব্যাজ) আর Unpaid ধরন
+    from .hr import leave_balance
+    leaves = list(leaves)
+    over = leave_balance.over_limit_map(leaves)
+    unpaid = leave_balance.unpaid_codes(user_company.id) if user_company else set()
+    for lv in leaves:
+        lv.over_limit_days = over.get(lv.id, 0)
+        lv.is_unpaid = lv.leave_type in unpaid
     context = {
         'leaves': leaves,
         'query': query
@@ -1098,6 +1183,20 @@ def leave_summary_pdf(request):
     return render_pdf(request, 'leave_summary_pdf.html', context, f"Leave_Summary_{date.today()}.pdf")
 
 
+def _leave_saved_message(request, form, leave, ok_text):
+    """সেভের পর: সীমার ভেতরে হলে বাকি কত দিন, সীমা পার হলে কত দিন অতিরিক্ত"""
+    from .hr import leave_balance
+    if form.over_days:
+        messages.warning(request, f"{leave.employee.name} এর ছুটি সেভ হয়েছে — {form.over_days} দিন সীমার অতিরিক্ত।")
+        return
+    if leave.status != 'Rejected':
+        tb = leave_balance.total_balance(leave.employee, leave.start_date.year)
+        if tb['allocated'] is not None:
+            left = max(tb['allocated'] - tb['used'] - tb['pending'], 0)
+            ok_text += f" {leave.employee.name} এর {leave.start_date.year} সালে মোট ছুটি বাকি: {left} দিন (বছরে {tb['allocated']})।"
+    messages.success(request, ok_text)
+
+
 @login_required
 def leave_create(request):
     user_company = getattr(request.user.profile, 'company', None)
@@ -1110,7 +1209,7 @@ def leave_create(request):
         leave.approved_by = request.user
         leave.company = user_company  # ✅ Ensure Company is set
         leave.save()
-        messages.success(request, "Leave request created successfully.")
+        _leave_saved_message(request, form, leave, "Leave request created successfully.")
         return redirect('attendance_app:leave_list')
         
     return render(request, 'leave_form.html', {'form': form, 'title': 'Create Leave'})
@@ -1124,8 +1223,8 @@ def leave_update(request, pk):
     
     form = LeaveRequestForm(request.POST or None, instance=leave, user=request.user)
     if form.is_valid():
-        form.save()
-        messages.success(request, "Leave updated successfully.")
+        leave = form.save()
+        _leave_saved_message(request, form, leave, "Leave updated successfully.")
         return redirect('attendance_app:leave_list')
         
     return render(request, 'leave_form.html', {'form': form, 'title': 'Update Leave'})

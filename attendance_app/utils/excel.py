@@ -8,6 +8,7 @@
 
 Col.value: dict key, অথবা row → value ফাংশন। kind: text | int | money | decimal | duration | date | datetime | time | percent
 """
+from copy import copy
 from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal
@@ -124,16 +125,25 @@ def build_workbook(sheets):
         r += 1
 
         widths = [len(str(c.header)) + 2 for c in sh.columns]
+        # প্রতিটা (ধরন, জেব্রা) এর স্টাইল একবারই বানিয়ে বাকি ঘরে কপি — হুবহু একই ফাইল, কিন্তু
+        # হাজার সারিতে প্রতি ঘরে আলাদা করে font/border/fill বসানোর চেয়ে বহু গুণ দ্রুত
+        protos = {}
         for n, row in enumerate(sh.rows):
             for i, col in enumerate(sh.columns, start=1):
                 v = _cell_value(col, row)
                 c = ws.cell(row=r, column=i, value=v)
-                c.border = border
-                if col.kind in NUMBER_FORMATS:
-                    c.number_format = NUMBER_FORMATS[col.kind]
-                    c.alignment = Alignment(horizontal='right' if col.kind not in ('date', 'datetime', 'time') else 'center')
-                if n % 2:
-                    c.fill = zebra
+                key = (col.kind, n % 2)
+                proto = protos.get(key)
+                if proto is not None:
+                    c._style = copy(proto)
+                else:
+                    c.border = border
+                    if col.kind in NUMBER_FORMATS:
+                        c.number_format = NUMBER_FORMATS[col.kind]
+                        c.alignment = Alignment(horizontal='right' if col.kind not in ('date', 'datetime', 'time') else 'center')
+                    if n % 2:
+                        c.fill = zebra
+                    protos[key] = copy(c._style)
                 shown = (c.number_format and isinstance(v, (int, float)) and f"{v:,.2f}") or (
                     v.strftime('%d-%b-%Y %H:%M') if isinstance(v, datetime) else str(v if v is not None else ''))
                 widths[i - 1] = max(widths[i - 1], min(len(shown) + 2, 60))

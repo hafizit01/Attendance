@@ -30,6 +30,34 @@
     </div>
   </div>
 
+  {# ── বেতন দেওয়ার আগে যা ঠিক করা দরকার ── #}
+  {% if missing_out_total or bank_excess_rows %}
+  <div class="space-y-3">
+    {% if missing_out_total %}
+    <div class="flex flex-col gap-3 rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900 sm:flex-row sm:items-center sm:justify-between dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">
+      <div class="flex items-start gap-3">
+        {% include "partials/icon.html" with name="alert" cls="mt-0.5 h-5 w-5 shrink-0" %}
+        <div>
+          <p class="font-semibold">{{ missing_out_total }} দিন Out punch নেই ({{ missing_out_rows|length }} জন) — ওই দিনগুলোর কাজ ০ ধরে বেতন কাটা হচ্ছে</p>
+          <p class="mt-0.5 text-xs opacity-90">{% for r in missing_out_rows|slice:":6" %}{{ r.employee.name }} ({{ r.missing_out_days }}){% if not forloop.last %}, {% endif %}{% endfor %}{% if missing_out_rows|length > 6 %} …{% endif %}. ভুলে Out না দিলে বেতন দেওয়ার আগে ঠিক করে নিন।</p>
+        </div>
+      </div>
+      <a href="{% url 'attendance_app:missing_queue' %}?month={{ selected_month }}&issue=missing_out" class="btn-secondary btn-sm shrink-0">Fix missing punches</a>
+    </div>
+    {% endif %}
+    {% if bank_excess_rows %}
+    <div class="flex items-start gap-3 rounded-2xl border border-rose-300 bg-rose-50 p-4 text-sm text-rose-900 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-200">
+      {% include "partials/icon.html" with name="alert" cls="mt-0.5 h-5 w-5 shrink-0" %}
+      <div>
+        <p class="font-semibold">{{ bank_excess_rows|length }} জনের ব্যাংক ট্রান্সফার Net বেতনের চেয়ে বেশি — মোট ৳{{ bank_excess_total|floatformat:"0g" }} বেশি যাবে</p>
+        <p class="mt-0.5 text-xs opacity-90">{% for r in bank_excess_rows|slice:":6" %}{{ r.employee.name }}: ব্যাংক ৳{{ r.bank_transfer|floatformat:"0g" }}, Net ৳{{ r.final_salary|floatformat:"0g" }} (৳{{ r.bank_excess|floatformat:"0g" }} বেশি){% if not forloop.last %} · {% endif %}{% endfor %}{% if bank_excess_rows|length > 6 %} …{% endif %}</p>
+        <p class="mt-1 text-xs opacity-90">এই মাসে ব্যাংকে কম পাঠান, অথবা পরের মাসে সমন্বয় করুন। সফটওয়্যার নিজে থেকে কিছু বদলায়নি।</p>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+  {% endif %}
+
   {# ── মোট হিসাব ── #}
   {% if summaries %}
   <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -213,10 +241,10 @@
             <td class="sticky left-0 z-10 bg-white text-center text-slate-400 dark:bg-slate-900">{{ forloop.counter|add:page_offset }}</td>
             <td class="sticky left-10 z-10 max-w-[14rem] bg-white shadow-[6px_0_8px_-6px_rgba(15,23,42,0.15)] dark:bg-slate-900" title="{{ s.employee.name }}">
               <p class="truncate text-sm font-semibold text-slate-900 dark:text-white">{{ s.employee.name }}</p>
-              <p class="truncate text-[11px] text-slate-400">{{ s.employee.department.name|default:"—" }}</p>
+              <p class="truncate text-[11px] text-slate-400">{{ s.employee.department.name|default:"—" }}{% if s.missing_out_days %} · <span class="font-semibold text-amber-600" title="In আছে, Out নেই">{{ s.missing_out_days }} no-out</span>{% endif %}</p>
             </td>
             <td class="text-right">{{ s.base_salary|floatformat:"0g" }}</td>
-            <td class="text-right">{{ s.bank_transfer|floatformat:"0g" }}</td>
+            <td class="text-right {% if s.bank_excess %}font-semibold text-rose-600{% endif %}" {% if s.bank_excess %}title="Net এর চেয়ে ৳{{ s.bank_excess|floatformat:'0g' }} বেশি"{% endif %}>{{ s.bank_transfer|floatformat:"0g" }}{% if s.bank_excess %} ⚠{% endif %}</td>
             <td class="text-right">{{ s.cash_amount|floatformat:"0g" }}</td>
             <td class="text-center font-semibold text-emerald-600 dark:text-emerald-400">{{ s.present_days }}</td>
             <td class="text-center text-blue-600 dark:text-blue-400">{{ s.leave_days }}</td>

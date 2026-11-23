@@ -2,7 +2,7 @@ from django.urls import path
 
 from attendance_app.views import attendance_pdf_report, attendance_list_pdf
 from .views import *
-from . import analytics_views, branch_views, bulk_views, device_views, excel_views, hr_views, leave_views, shift_views
+from . import analytics_views, branch_views, bulk_views, document_views, device_views, excel_views, hr_views, leave_views, shift_views
 from .portal import admin_views as portal_admin
 app_name = "attendance_app"
 
@@ -71,6 +71,9 @@ urlpatterns = [
     path('branches/managers/<int:user_id>/remove/', branch_views.manager_remove, name='manager_remove'),
     path('branch/switch/', branch_views.branch_switch, name='branch_switch'),
     path('employees/<int:pk>/transfer/', branch_views.employee_transfer, name='employee_transfer'),
+    path('employees/<int:employee_id>/documents/', document_views.employee_documents, name='employee_documents'),
+    path('documents/<int:pk>/file/', document_views.document_file, name='document_file'),
+    path('documents/<int:pk>/delete/', document_views.document_delete, name='document_delete'),
 
     # ----------------------Shifts----------------------------
     path('shifts/', shift_views.shift_list, name='shift_list'),

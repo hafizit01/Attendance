@@ -6,7 +6,7 @@
     <div>
       <p class="eyebrow">{% include "partials/icon.html" with name="calendar" cls="h-3.5 w-3.5" %}Time off</p>
       <h1 class="page-title">Leave <span class="text-gradient">Balance</span> {{ year }}</h1>
-      <p class="page-subtitle">বছরে কে কত দিন ছুটি পাবে, কত নিয়েছে, কত বাকি। Approve করলেই ব্যালান্স থেকে কমে; বাকি না থাকলে আবেদন করা যায় না।</p>
+      <p class="page-subtitle">বছরে কে কত দিন ছুটি পাবে, কত নিয়েছে, কত বাকি। Approve করলেই ব্যালান্স থেকে কমে; সীমা পার হলে সতর্ক করে।</p>
     </div>
     <div class="flex flex-wrap items-center gap-2">
       <form method="get" class="flex gap-2">
@@ -21,28 +21,76 @@
   </div>
 
   <div class="grid grid-cols-1 gap-6 xl:grid-cols-3">
-    {# ── বছরের সীমা ── #}
-    <form method="post" action="{% url 'attendance_app:leave_allocation_save' %}" class="card h-fit overflow-hidden">
+    {# ── ছুটির ধরন ও বছরের সীমা ── #}
+    <form method="post" action="{% url 'attendance_app:leave_allocation_save' %}" class="card h-fit overflow-hidden xl:col-span-3">
       {% csrf_token %}
-      <div class="card-header"><p class="card-title">{% include "partials/icon.html" with name="cog" cls="h-4 w-4 text-primary-500" %}Yearly limit (all employees)</p></div>
-      <div class="space-y-3 p-5">
-        {% for t, label, days in leave_types %}
-        <div class="flex items-center justify-between gap-3">
-          <label for="alloc_{{ t }}" class="text-sm font-medium text-slate-700 dark:text-slate-200">{{ label }}</label>
+      <div class="card-header">
+        <p class="card-title">{% include "partials/icon.html" with name="cog" cls="h-4 w-4 text-primary-500" %}Leave types &amp; yearly limit</p>
+        <span class="text-xs text-slate-500">সব কর্মচারীর জন্য · কারো আলাদা হলে নিচে "Special limits"</span>
+      </div>
+      <div class="space-y-5 p-5">
+        {# বছরের মোট সীমা #}
+        <div class="flex flex-col gap-3 rounded-2xl border border-primary-100 bg-primary-50/60 p-4 sm:flex-row sm:items-center sm:justify-between dark:border-primary-500/20 dark:bg-primary-500/5">
+          <div>
+            <p class="font-semibold text-slate-900 dark:text-white">সব ছুটি মিলিয়ে বছরে মোট</p>
+            <p class="text-xs text-slate-500">নিচে "Counts in total" টিক দেওয়া সব ধরন এই হিসাবে গোনা হয়। এর বেশি হলে সতর্ক করবে (আটকাবে না)।</p>
+          </div>
           <div class="flex items-center gap-2">
-            <input id="alloc_{{ t }}" type="number" min="0" max="366" name="alloc_{{ t }}" value="{{ days|default_if_none:'' }}" placeholder="No limit"
-                   class="form-input w-28 text-right" {% if not can_manage %}disabled{% endif %}>
-            <span class="w-8 text-xs text-slate-400">days</span>
+            <input type="number" min="0" max="366" name="total_limit" value="{{ total_limit|default_if_none:'' }}" placeholder="No limit"
+                   class="form-input w-28 text-right text-lg font-bold" {% if not can_manage %}disabled{% endif %} aria-label="Total leave days per year">
+            <span class="text-sm text-slate-500">days / year</span>
           </div>
         </div>
-        {% endfor %}
-        <p class="form-help">খালি রাখলে ওই ছুটির কোনো সীমা নেই (আগের মতো)। Unpaid ছুটি সাধারণত খালি রাখা হয়।</p>
+
+        <div class="overflow-x-auto">
+          <table class="w-full min-w-[640px] text-sm">
+            <thead><tr class="text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+              <th class="pb-2">Leave type</th>
+              <th class="pb-2 text-center" title="টিক = বেতন কাটবে না">Paid</th>
+              <th class="pb-2 text-center" title="টিক = বছরের মোট সীমায় গোনা হবে">Counts in total</th>
+              <th class="pb-2 text-right" title="ঐচ্ছিক — শুধু এই ধরনের আলাদা সীমা">Own limit</th>
+              <th class="pb-2 text-center">Active</th>
+              <th class="pb-2"></th>
+            </tr></thead>
+            <tbody class="divide-y divide-slate-100 dark:divide-white/[0.05]">
+              {% for row in leave_types %}{% with t=row.obj %}
+              <tr class="{% if not t.is_active %}opacity-60{% endif %}">
+                <td class="py-2.5 pr-3"><input type="hidden" name="present_{{ t.pk }}" value="1">
+                  <span class="font-medium text-slate-900 dark:text-white">{{ t.label }}</span>
+                  {% if not t.is_builtin %}<span class="badge-purple ml-1">Custom</span>{% endif %}</td>
+                <td class="py-2.5 text-center"><input type="checkbox" name="paid_{{ t.pk }}" class="form-checkbox" {% if t.is_paid %}checked{% endif %} {% if not can_manage %}disabled{% endif %} aria-label="{{ t.label }} paid"></td>
+                <td class="py-2.5 text-center"><input type="checkbox" name="counts_{{ t.pk }}" class="form-checkbox" {% if t.counts_in_limit %}checked{% endif %} {% if not can_manage %}disabled{% endif %} aria-label="{{ t.label }} counts in total"></td>
+                <td class="py-2.5 text-right"><input type="number" min="0" max="366" name="alloc_{{ t.pk }}" value="{{ row.limit|default_if_none:'' }}" placeholder="—"
+                       class="form-input ml-auto w-24 text-right" {% if not can_manage %}disabled{% endif %} aria-label="{{ t.label }} own limit"></td>
+                <td class="py-2.5 text-center"><input type="checkbox" name="active_{{ t.pk }}" class="form-checkbox" {% if t.is_active %}checked{% endif %} {% if not can_manage %}disabled{% endif %} aria-label="{{ t.label }} active"></td>
+                <td class="py-2.5 pl-2 text-right">{% if can_manage and not t.is_builtin %}
+                  <label class="inline-flex cursor-pointer items-center gap-1 text-xs text-rose-600" title="{% if row.in_use %}ব্যবহার হয়েছে — মোছা হবে না, শুধু বন্ধ হবে{% else %}মুছে ফেলা হবে{% endif %}">
+                    <input type="checkbox" name="remove_{{ t.pk }}" class="h-3.5 w-3.5 accent-rose-600">{% if row.in_use %}Disable{% else %}Remove{% endif %}</label>{% endif %}</td>
+              </tr>
+              {% endwith %}{% endfor %}
+              {% if can_manage %}
+              <tr class="bg-slate-50/70 dark:bg-white/[0.02]">
+                <td class="py-2.5 pr-3"><input name="new_name" maxlength="20" placeholder="+ New type (e.g. Hajj Leave)" class="form-input" aria-label="New leave type name"></td>
+                <td class="py-2.5 text-center"><input type="checkbox" name="new_paid" class="form-checkbox" checked aria-label="New type paid"></td>
+                <td class="py-2.5 text-center"><input type="checkbox" name="new_counts" class="form-checkbox" checked aria-label="New type counts in total"></td>
+                <td class="py-2.5 text-right"><input type="number" min="0" max="366" name="new_alloc" placeholder="—" class="form-input ml-auto w-24 text-right" aria-label="New type own limit"></td>
+                <td colspan="2"></td>
+              </tr>
+              {% endif %}
+            </tbody>
+          </table>
+        </div>
+        <ul class="grid gap-1 text-xs text-slate-500 sm:grid-cols-3">
+          <li><b class="text-slate-700 dark:text-slate-300">Paid</b> — ছুটির দিনে বেতন কাটে না। টিক না থাকলে অনুপস্থিতির মতো বেতন কাটে।</li>
+          <li><b class="text-slate-700 dark:text-slate-300">Counts in total</b> — উপরের মোট সীমায় গোনা হয়। যেমন Earned leave আলাদা রাখতে টিক তুলে দিন।</li>
+          <li><b class="text-slate-700 dark:text-slate-300">Own limit</b> — ঐচ্ছিক; শুধু এই ধরনের আলাদা সীমা (যেমন Jamat বছরে ৩ দিন)।</li>
+        </ul>
       </div>
-      {% if can_manage %}<div class="border-t border-slate-100 bg-slate-50/60 px-5 py-3 text-right dark:border-white/[0.06] dark:bg-white/[0.02]"><button class="btn-primary">Save limits</button></div>{% endif %}
+      {% if can_manage %}<div class="border-t border-slate-100 bg-slate-50/60 px-5 py-3 text-right dark:border-white/[0.06] dark:bg-white/[0.02]"><button class="btn-primary">Save leave rules</button></div>{% endif %}
     </form>
 
     {# ── ব্যালান্স টেবিল ── #}
-    <div class="card overflow-hidden xl:col-span-2">
+    <div class="card overflow-hidden xl:col-span-3">
       <div class="card-header"><p class="card-title">{% include "partials/icon.html" with name="users" cls="h-4 w-4 text-primary-500" %}Employees</p>
         <span class="text-xs text-slate-500">বাকি / বছরে · (pending)</span></div>
       {% if types %}
@@ -58,8 +106,9 @@
                 {% if c.allocated is None %}<span class="text-sm text-slate-400">{{ c.used }} used</span>
                 {% else %}
                 <div class="inline-flex flex-col items-center">
-                  <span class="text-sm font-bold tabular-nums {% if c.remaining <= 0 %}text-rose-600 dark:text-rose-400{% elif c.remaining <= 2 %}text-amber-600 dark:text-amber-400{% else %}text-emerald-600 dark:text-emerald-400{% endif %}">{{ c.remaining }}<span class="font-normal text-slate-400"> / {{ c.allocated }}</span></span>
+                  <span class="text-sm font-bold tabular-nums {% if c.remaining <= 0 %}text-rose-600 dark:text-rose-400{% elif c.remaining <= 2 %}text-amber-600 dark:text-amber-400{% else %}text-emerald-600 dark:text-emerald-400{% endif %}">{% if c.remaining < 0 %}0{% else %}{{ c.remaining }}{% endif %}<span class="font-normal text-slate-400"> / {{ c.allocated }}</span></span>
                   <span class="mt-1 h-1.5 w-16 overflow-hidden rounded-full bg-slate-100 dark:bg-white/10"><span class="block h-full rounded-full {% if c.remaining <= 0 %}bg-rose-500{% else %}bg-primary-500{% endif %}" style="width: {% widthratio c.used c.allocated|default:1 100 %}%"></span></span>
+                  {% if c.over %}<span class="mt-0.5 text-[10px] font-semibold text-rose-600">+{{ c.over }} over limit</span>{% endif %}
                   {% if c.pending %}<span class="mt-0.5 text-[10px] text-amber-600">({{ c.pending }} pending)</span>{% endif %}
                 </div>
                 {% endif %}
@@ -71,7 +120,7 @@
         </table>
       </div>
       {% else %}
-      <div class="p-8">{% include "partials/empty_state.html" with icon="calendar" title="এখনো কোনো ছুটির সীমা নেই" text="বামে বছরের সীমা দিন (যেমন Casual 10, Sick 14) — তাহলে এখানে সবার ব্যালান্স দেখাবে।" %}</div>
+      <div class="p-8">{% include "partials/empty_state.html" with icon="calendar" title="এখনো কোনো ছুটির সীমা নেই" text="উপরে বছরের মোট সীমা দিন (যেমন সব মিলিয়ে ১২ দিন) — তাহলে এখানে সবার ব্যালান্স দেখাবে।" %}</div>
       {% endif %}
     </div>
   </div>

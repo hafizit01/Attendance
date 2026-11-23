@@ -229,21 +229,36 @@ def branch_on(current_branch_id, transfers, day):
     return branch_id
 
 
-def load_leaves(employee_ids, start_date, end_date):
-    """{(employee_id, date)} — শুধু Approved leave"""
+def load_leaves(employee_ids, start_date, end_date, unpaid_out=None):
+    """
+    {(employee_id, date)} — শুধু Approved Paid leave।
+    unpaid_out (set) দিলে Unpaid ধরনের ছুটির দিনগুলো সেখানে যায় (বেতনের হিসাবের মতো: ছুটি, কিন্তু কাজের ক্রেডিট নেই)।
+    unpaid_out না দিলে আগের মতো সব Approved ছুটি একসাথে।
+    """
     leaves = set()
     qs = LeaveRequest.objects.filter(employee_id__in=list(employee_ids), status='Approved',
                                      start_date__lte=end_date, end_date__gte=start_date)
-    for lv in qs.values('employee_id', 'start_date', 'end_date'):
+    unpaid_by_company = {}
+    for lv in qs.values('employee_id', 'employee__company_id', 'leave_type', 'start_date', 'end_date'):
+        target = leaves
+        if unpaid_out is not None:
+            cid = lv['employee__company_id']
+            if cid not in unpaid_by_company:
+                from attendance_app.hr.leave_balance import unpaid_codes
+                unpaid_by_company[cid] = unpaid_codes(cid)
+            if lv['leave_type'] in unpaid_by_company[cid]:
+                target = unpaid_out
         for d in date_range(max(lv['start_date'], start_date), min(lv['end_date'], end_date)):
-            leaves.add((lv['employee_id'], d))
+            target.add((lv['employee_id'], d))
+    if unpaid_out is not None:
+        unpaid_out -= leaves   # একই দিনে Paid ছুটি থাকলে Paid ই ধরা হয় (বেতনের হিসাবের মতো)
     return leaves
 
 
 # ---------------------------------------------------------
 # একদিনের হিসাব
 # ---------------------------------------------------------
-def evaluate_day(day, punches, shift, is_holiday=False, is_leave=False, elsewhere=False):
+def evaluate_day(day, punches, shift, is_holiday=False, is_leave=False, elsewhere=False, is_unpaid_leave=False):
     """
     punches: ওই দিনের Punch লিস্ট (সাজানো, লোকাল)।
     elsewhere: ব্রাঞ্চ রিপোর্টে এই দিন কর্মচারী অন্য ব্রাঞ্চে ছিল — কোনো হিসাবে ধরা হয় না।
@@ -310,6 +325,12 @@ def evaluate_day(day, punches, shift, is_holiday=False, is_leave=False, elsewher
     elif is_leave:
         result['status'] = result['label'] = 'Leave'
         result['work'] = shift.duration  # পুরো ক্রেডিট
+    elif is_unpaid_leave:
+        # Unpaid ছুটি: ছুটি হিসেবে গোনা হয় (Absent নয়), কিন্তু কাজের ক্রেডিট নেই — বেতনের হিসাবের সাথে মিলিয়ে
+        result['status'] = 'Leave'
+        result['label'] = 'Unpaid leave'
+        result['unpaid'] = True
+        result['less'] = shift.duration
     else:
         result['status'] = result['label'] = 'Absent'
         result['less'] = shift.duration  # পুরো পেনাল্টি
@@ -333,7 +354,8 @@ def build_attendance(employees, start_date, end_date, branch_id=None):
     # রাতের শিফটে Out পরের দিন পড়ে, তাই একদিন বেশি পড়ি (দিনভিত্তিক হিসাবে বাড়তি দিনটা ব্যবহার হয় না)
     punches = load_punches(emp_ids, start_date, end_date + timedelta(days=1) if has_night else end_date)
     holidays = load_holidays({e.company_id for e in employees}, start_date, end_date)
-    leaves = load_leaves(emp_ids, start_date, end_date)
+    unpaid_leaves = set()
+    leaves = load_leaves(emp_ids, start_date, end_date, unpaid_out=unpaid_leaves)
     transfers = load_transfers(emp_ids)
 
     out = []
@@ -359,6 +381,7 @@ def build_attendance(employees, start_date, end_date, branch_id=None):
                 d, day_punches, shift,
                 is_holiday=is_holiday_for(company_holidays, d, day_branch),
                 is_leave=(emp.id, d) in leaves,
+                is_unpaid_leave=(emp.id, d) in unpaid_leaves,
                 elsewhere=branch_id is not None and day_branch != branch_id,
             ))
         out.append((emp, base_shift, days))

@@ -57,7 +57,7 @@ class EmployeeProfileForm(forms.ModelForm):
         if user is not None:
             company = getattr(getattr(user, 'profile', None), 'company', None)
             # শুধু user-এর company এর employees দেখাবে
-            qs = Employee.objects.filter(company=company) if company else Employee.objects.none()
+            qs = Employee.objects.filter(company=company).select_related('company') if company else Employee.objects.none()
             from attendance_app.scoping import manager_branch_of
             branch = manager_branch_of(user)
             if branch is not None:

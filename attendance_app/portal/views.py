@@ -108,9 +108,15 @@ class PortalLeaveForm(forms.ModelForm):
                    'reason': forms.Textarea(attrs={'rows': 3, 'placeholder': 'ছুটির কারণ'})}
 
     def __init__(self, *args, employee=None, **kwargs):
+        from attendance_app.forms import set_leave_type_choices
         super().__init__(*args, **kwargs)
         self.employee = employee
         self.fields['reason'].required = True
+        if employee is not None:
+            set_leave_type_choices(self.fields, employee.company, self.instance)
+        self.fields['confirm_over_limit'] = forms.BooleanField(required=False)
+        self.over_warnings = []
+        self.over_days = 0
 
     def clean(self):
         c = super().clean()
@@ -125,9 +131,8 @@ class PortalLeaveForm(forms.ModelForm):
                                                   start_date__lte=e, end_date__gte=s).exists()
             if overlap:
                 raise ValidationError("এই তারিখগুলোতে আপনার আরেকটা ছুটির আবেদন আছে।")
-            err = leave_balance.validate_request(self.employee, lt, s, e)
-            if err:
-                raise ValidationError(err)
+            from attendance_app.forms import apply_over_limit_check
+            apply_over_limit_check(self, self.employee, lt, s, e)
         return c
 
 
@@ -139,18 +144,22 @@ def leave(request):
         lv = form.save(commit=False)
         lv.employee, lv.company, lv.status = emp, emp.company, 'Pending'
         lv.save()
-        _notify_admins_leave(lv)
-        messages.success(request, "ছুটির আবেদন জমা হয়েছে — অফিস approve করলে ব্যালান্স থেকে কাটা হবে।")
+        _notify_admins_leave(lv, form.over_days)
+        if form.over_days:
+            messages.warning(request, f"ছুটির আবেদন জমা হয়েছে — {form.over_days} দিন আপনার সীমার অতিরিক্ত। অফিস দেখে সিদ্ধান্ত নেবে।")
+        else:
+            messages.success(request, "ছুটির আবেদন জমা হয়েছে — অফিস approve করলে ব্যালান্স থেকে কাটা হবে।")
         return redirect('portal:leave')
     year = timezone.localdate().year
     return render(request, 'portal/leave.html', {
         **_common(request, 'leave'), 'form': form,
         'balances': leave_balance.balance(emp, year), 'year': year,
+        'total': leave_balance.total_balance(emp, year),
         'leaves': LeaveRequest.objects.filter(employee=emp).order_by('-start_date', '-id')[:30],
     })
 
 
-def _notify_admins_leave(lv):
+def _notify_admins_leave(lv, over_days=0):
     from django.urls import reverse
     from attendance_app.hr.missing_punch import _recipients
     from attendance_app.models import Notification
@@ -159,7 +168,8 @@ def _notify_admins_leave(lv):
     Notification.objects.bulk_create([
         Notification(company=lv.company, user=u, kind='info',
                      title=f"ছুটির আবেদন: {lv.employee.name}",
-                     message=f"{lv.get_leave_type_display()} · {lv.start_date:%d %b} – {lv.end_date:%d %b} ({days} দিন)। {lv.reason or ''}"[:500],
+                     message=(f"{lv.get_leave_type_display()} · {lv.start_date:%d %b} – {lv.end_date:%d %b} ({days} দিন)"
+                              + (f" — ⚠ {over_days} দিন সীমার অতিরিক্ত" if over_days else '') + f"। {lv.reason or ''}")[:500],
                      link=reverse('attendance_app:leave_update', args=[lv.pk]))
         for u, b in _recipients(lv.company) if b is None or b == branch_id
     ])

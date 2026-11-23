@@ -5,20 +5,32 @@
   <div>
     <a href="{% url 'attendance_app:leave_list' %}" class="btn-ghost btn-sm -ml-3 mb-2">← Leave requests</a>
     <h1 class="page-title">{{ title|default:"Leave Application" }}</h1>
-    <p class="page-subtitle">Approved ছুটির দিনগুলো রিপোর্ট ও বেতনে পুরো শিফট হিসেবে ধরা হয়।</p>
+    <p class="page-subtitle">Paid ছুটির দিন রিপোর্ট ও বেতনে পুরো শিফট হিসেবে ধরা হয়; Unpaid ছুটিতে অনুপস্থিতির মতো বেতন কাটে।</p>
   </div>
 
   <form method="post" class="card overflow-hidden" novalidate>
     {% csrf_token %}
     <div class="space-y-5 p-5 sm:p-6">
-      {% if form.non_field_errors %}
+      {% if form.over_warnings %}
+      {# সীমা পার — আটকানো নয়, সতর্কতা + "তবুও সেভ" #}
+      <div class="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200" role="alert">
+        <p class="flex items-center gap-2 font-semibold">{% include "partials/icon.html" with name="alert" cls="h-5 w-5" %}ছুটির সীমা পার হচ্ছে — {{ form.over_days }} দিন অতিরিক্ত</p>
+        <ul class="mt-2 list-disc space-y-1 pl-6">{% for w in form.over_warnings %}<li>{{ w.message }}</li>{% endfor %}</ul>
+        <label class="mt-3 flex cursor-pointer items-start gap-3 rounded-lg bg-white/70 p-3 dark:bg-black/20">
+          <input type="checkbox" name="confirm_over_limit" value="on" class="form-checkbox mt-0.5" {% if form.confirm_over_limit.value %}checked{% endif %}>
+          <span><span class="block font-semibold">Limit পার হলেও সেভ করুন</span>
+            <span class="block text-xs opacity-80">সেভ হবে, আর ছুটির তালিকায় "+{{ form.over_days }} days over limit" দেখাবে।</span></span>
+        </label>
+      </div>
+      {% elif form.non_field_errors %}
       <div class="flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 p-3.5 text-sm text-rose-700 dark:border-rose-500/20 dark:bg-rose-500/10 dark:text-rose-300" role="alert">
         {% include "partials/icon.html" with name="alert" %}<div>{% for e in form.non_field_errors %}<p>{{ e }}</p>{% endfor %}</div>
       </div>
       {% endif %}
       <div class="grid grid-cols-1 gap-5 sm:grid-cols-2">
         {% for field in form %}
-          {% if field.name == "employee" or field.name == "reason" %}
+          {% if field.name == "confirm_over_limit" %}
+          {% elif field.name == "employee" or field.name == "reason" %}
             {% include "partials/form_field.html" with field=field wrap="sm:col-span-2" %}
           {% else %}
             {% include "partials/form_field.html" with field=field %}
@@ -26,16 +38,45 @@
         {% endfor %}
       </div>
 
-      {# কর্মচারীর ছুটির ব্যালান্স (কর্মচারী বাছাই করলেই) #}
-      <div x-data="leaveBalance('{% url 'attendance_app:employee_leave_balance_json' 0 %}')" x-init="init()" x-show="rows.length" x-cloak
-           class="rounded-2xl border border-primary-100 bg-primary-50/50 p-4 dark:border-primary-500/20 dark:bg-primary-500/5">
-        <p class="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-white">{% include "partials/icon.html" with name="calendar" cls="h-4 w-4 text-primary-500" %}<span x-text="'Leave balance ' + year"></span></p>
-        <div class="grid grid-cols-2 gap-2 sm:grid-cols-3">
+      {# কর্মচারীর ছুটির ব্যালান্স — কর্মচারী/তারিখ/ধরন বদলালেই আপডেট #}
+      <div x-data="leaveBalance('{% url 'attendance_app:employee_leave_balance_json' 0 %}', '{{ form.instance.pk|default:'' }}')" x-init="init()" x-show="loaded" x-cloak
+           class="space-y-3 rounded-2xl border border-primary-100 bg-primary-50/50 p-4 dark:border-primary-500/20 dark:bg-primary-500/5">
+        <p class="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-white">{% include "partials/icon.html" with name="calendar" cls="h-4 w-4 text-primary-500" %}<span x-text="name + ' · leave ' + year"></span></p>
+
+        {# বছরের মোট সীমা #}
+        <template x-if="total && total.allocated !== null">
+          <div class="rounded-xl bg-white p-3.5 dark:bg-slate-900">
+            <div class="flex items-baseline justify-between gap-3">
+              <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">All leave this year</p>
+              <p class="text-sm tabular-nums text-slate-500"><b class="text-slate-900 dark:text-white" x-text="total.used"></b> used<span x-show="total.pending"> · <b x-text="total.pending"></b> pending</span> / <span x-text="total.allocated"></span></p>
+            </div>
+            <div class="mt-2 h-2 overflow-hidden rounded-full bg-slate-100 dark:bg-white/10">
+              <div class="flex h-full">
+                <span class="block h-full bg-primary-500" :style="'width:' + pct(total.used) + '%'"></span>
+                <span class="block h-full bg-amber-400" :style="'width:' + pct(total.pending) + '%'"></span>
+                <span class="block h-full bg-sky-400" x-show="counts && want > 0" :style="'width:' + pct(want) + '%'"></span>
+              </div>
+            </div>
+            <p class="mt-2 text-2xl font-bold tabular-nums" :class="left > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'">
+              <span x-text="Math.max(left, 0)"></span> <span class="text-sm font-medium text-slate-500">days left</span></p>
+          </div>
+        </template>
+
+        {# এই আবেদনের প্রভাব #}
+        <template x-if="want > 0">
+          <div class="rounded-xl p-3 text-sm" :class="verdict.cls">
+            <p class="font-semibold" x-text="verdict.title"></p>
+            <p class="mt-0.5 text-xs opacity-90" x-text="verdict.text"></p>
+          </div>
+        </template>
+
+        {# ধরন অনুযায়ী #}
+        <div class="grid grid-cols-2 gap-2 sm:grid-cols-3" x-show="rows.length">
           <template x-for="r in rows" :key="r.type">
-            <div class="rounded-xl bg-white p-2.5 dark:bg-slate-900">
-              <p class="text-xs text-slate-500" x-text="r.label"></p>
+            <div class="rounded-xl bg-white p-2.5 dark:bg-slate-900" :class="r.type === type && 'ring-2 ring-primary-400'">
+              <p class="truncate text-xs text-slate-500"><span x-text="r.label"></span><span x-show="!r.paid" class="ml-1 text-[10px] font-semibold text-slate-400">UNPAID</span></p>
               <p class="text-lg font-bold tabular-nums" :class="r.limited && r.remaining <= 0 ? 'text-rose-600' : 'text-slate-900 dark:text-white'"
-                 x-text="r.limited ? (r.remaining + ' / ' + r.allocated) : (r.used + ' used')"></p>
+                 x-text="r.limited ? (Math.max(r.remaining, 0) + ' / ' + r.allocated + ' left') : (r.used + ' used')"></p>
               <p class="text-[11px] text-slate-400" x-show="r.pending" x-text="r.pending + ' pending'"></p>
             </div>
           </template>
@@ -49,25 +90,59 @@
   </form>
 </div>
 <script>
-function leaveBalance(urlTemplate) {
+function leaveBalance(urlTemplate, excludeId) {
   return {
-    rows: [], year: '',
+    loaded: false, name: '', year: '', rows: [], total: null, types: {}, type: '', want: 0,
+    get counts() { const t = this.types[this.type]; return !t || t.counts; },
+    get left() { return this.total ? this.total.allocated - this.total.used - this.total.pending : 0; },
+    pct(n) { return this.total && this.total.allocated ? Math.min(100, n * 100 / this.total.allocated) : 0; },
+    get verdict() {
+      const t = this.types[this.type] || {}, d = this.want, label = t.label || 'This leave';
+      const typeRow = this.rows.find(r => r.type === this.type && r.limited);
+      const overs = [];
+      if (typeRow) { const rem = typeRow.remaining - typeRow.pending; if (d > rem) overs.push([label, d - Math.max(rem, 0), rem]); }
+      if (this.total && this.total.allocated !== null && t.counts !== false) { const rem = this.left; if (d > rem) overs.push(['Yearly total', d - Math.max(rem, 0), rem]); }
+      const paid = t.paid === false ? ' Unpaid — এই দিনগুলোর বেতন কাটা যাবে।' : '';
+      if (overs.length) {
+        const over = Math.max(...overs.map(o => o[1]));
+        const rem = Math.min(...overs.map(o => o[2]));
+        return { cls: 'bg-rose-50 text-rose-800 ring-1 ring-rose-200 dark:bg-rose-500/10 dark:text-rose-200 dark:ring-rose-500/20',
+                 title: rem <= 0 ? `Limit শেষ — এই ${d} দিনই অতিরিক্ত` : `${d} দিন চাওয়া হয়েছে, বাকি ${rem} — ${over} দিন অতিরিক্ত`,
+                 text: 'সেভ করা যাবে, তবে নিশ্চিত করতে হবে; তালিকায় অতিরিক্ত দিন আলাদা দেখাবে।' + paid };
+      }
+      if (t.counts === false && this.total && this.total.allocated !== null)
+        return { cls: 'bg-sky-50 text-sky-800 ring-1 ring-sky-200 dark:bg-sky-500/10 dark:text-sky-200 dark:ring-sky-500/20',
+                 title: `${d} দিন — ${label} বছরের মোট সীমার বাইরে`, text: 'এই ধরনের ছুটি মোট ' + this.total.allocated + ' দিনের হিসাবে গোনা হয় না।' + paid };
+      const after = this.total && this.total.allocated !== null ? this.left - d : null;
+      return { cls: 'bg-emerald-50 text-emerald-800 ring-1 ring-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-200 dark:ring-emerald-500/20',
+               title: `${d} দিন — সীমার ভেতরে`, text: (after !== null ? `এই ছুটির পর বাকি থাকবে ${after} দিন।` : 'এই ধরনের ছুটির কোনো সীমা নেই।') + paid };
+    },
     init() {
-      const emp = document.querySelector('[name=employee]');
-      const start = document.querySelector('[name=start_date]');
+      const $ = n => document.querySelector('[name=' + n + ']');
+      const emp = $('employee'), start = $('start_date'), end = $('end_date'), type = $('leave_type'), status = $('status');
       if (!emp) return;
+      const days = () => {
+        if (!start || !end || !start.value || !end.value) return 0;
+        const d = (new Date(end.value) - new Date(start.value)) / 86400000 + 1;
+        return d > 0 ? Math.round(d) : 0;
+      };
+      const refresh = () => { this.type = type ? type.value : ''; this.want = status && status.value === 'Rejected' ? 0 : days(); };
       const load = async () => {
-        if (!emp.value) { this.rows = []; return; }
+        refresh();
+        if (!emp.value) { this.loaded = false; return; }
         const y = start && start.value ? start.value.slice(0, 4) : '';
+        const q = new URLSearchParams(); if (y) q.set('year', y); if (excludeId) q.set('exclude', excludeId);
         try {
-          const res = await fetch(urlTemplate.replace('/0/', '/' + emp.value + '/') + (y ? '?year=' + y : ''));
+          const res = await fetch(urlTemplate.replace('/0/', '/' + emp.value + '/') + '?' + q);
           if (!res.ok) return;
-          const data = await res.json();
-          this.rows = data.balance; this.year = data.year;
+          const d = await res.json();
+          Object.assign(this, { name: d.employee, year: d.year, rows: d.balance, total: d.total, types: d.types, loaded: true });
         } catch (e) {}
       };
       emp.addEventListener('change', load);
       start && start.addEventListener('change', load);
+      [end, type, status].forEach(el => el && el.addEventListener('change', refresh));
+      [start, end].forEach(el => el && el.addEventListener('input', refresh));
       load();
     }
   };

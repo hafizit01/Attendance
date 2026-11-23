@@ -134,13 +134,19 @@ def get_salary_summary_data(request, month_str, department_id=None, employee_id=
         for pk, emp_id, ts in all_attendance.values_list('id', 'employee_id', 'timestamp'):
             att_map[(emp_id, ts.astimezone(_tz).date())].append(_PunchRec(pk, ts))
 
+        # Paid ছুটি = পুরো শিফট ক্রেডিট (আগের মতো)। Unpaid ধরনের ছুটি (Leave types এ Paid বন্ধ) = বেতন কাটা,
+        # অনুপস্থিতির মতো — তবে "Absent" নয়, "Leave" হিসেবেই গোনা হয়। কোনো ধরন Unpaid না থাকলে হিসাব হুবহু আগের মতো।
+        from attendance_app.hr.leave_balance import unpaid_codes
+        unpaid_types = unpaid_codes(user_company.id)
         leave_map = set()
+        unpaid_leave_map = set()
         for lv in all_leaves:
             s = max(lv.start_date, start_date)
             e = min(lv.end_date, end_date)
+            target = unpaid_leave_map if lv.leave_type in unpaid_types else leave_map
             curr = s
             while curr <= e:
-                leave_map.add((lv.employee_id, curr))
+                target.add((lv.employee_id, curr))
                 curr += timedelta(days=1)
 
         # ছুটি: সব-ব্রাঞ্চের + কর্মচারী যে দিন যে ব্রাঞ্চে ছিল সেই ব্রাঞ্চের
@@ -184,6 +190,8 @@ def get_salary_summary_data(request, month_str, department_id=None, employee_id=
             # Counters
             present_days = 0
             leave_days = 0
+            unpaid_leave_days = 0
+            missing_out_days = 0        # In আছে, Out নেই → সেদিনের কাজ ০ ধরা হয় (সতর্কতার জন্য গোনা)
             weekly_off = 0
             pub_holiday = 0
             absent_days = 0
@@ -214,6 +222,7 @@ def get_salary_summary_data(request, month_str, department_id=None, employee_id=
                 is_holiday = is_holiday_for(company_holidays, curr, branch_on(current_branch, transfers, curr))
                 is_off = (day_off and wd == day_off)
                 is_leave = (emp.id, curr) in leave_map
+                is_unpaid_leave = not is_leave and (emp.id, curr) in unpaid_leave_map
                 if use_shift and sh.night:
                     w_start, w_end = night_window(curr, sh)
                     recs = [r for dd in (curr, curr + timedelta(days=1)) for r in att_map.get((emp.id, dd), [])
@@ -239,11 +248,17 @@ def get_salary_summary_data(request, month_str, department_id=None, employee_id=
                     leave_days += 1
                     day_works.append(DayWork(is_leave=True, regular=day_regular if use_shift else None))
                     continue
+                if is_unpaid_leave and not recs:
+                    leave_days += 1
+                    unpaid_leave_days += 1      # কাজের ক্রেডিট নেই → বেতন কাটা যায়
+                    continue
 
                 if recs:
                     timestamps = [r.timestamp for r in recs]
                     first_in = min(timestamps)
                     last_out = max(timestamps) if len(timestamps) > 1 else None
+                    if last_out is None:
+                        missing_out_days += 1
                     present_days += 1
 
                     # Late Logic (শিফটের grace এর মধ্যে এলে late নয়; শিফট না থাকলে grace 0 = আগের নিয়ম)
@@ -345,6 +360,8 @@ def get_salary_summary_data(request, month_str, department_id=None, employee_id=
                 final_salary += rounding_adjustment  # মোট = ব্যাংক + (মেলানো) নগদ
 
             salary_diff = final_salary - base_salary
+            # ব্যাংকে পাঠানোর টাকা Net এর চেয়ে বেশি হলে (নগদ ০ হয়ে যায়) — কত বেশি যাচ্ছে, সতর্কতার জন্য
+            bank_excess = max(actual_bank_transfer - final_salary, Decimal(0))
 
             # Totals
             total_base_salary += base_salary
@@ -369,6 +386,7 @@ def get_salary_summary_data(request, month_str, department_id=None, employee_id=
                 
                 'present_days': present_days,
                 'leave_days': leave_days,
+                'unpaid_leave_days': unpaid_leave_days,
                 'absent_days': absent_days,
                 'weekly_off_days': weekly_off,
                 'holiday_days': pub_holiday,
@@ -400,7 +418,9 @@ def get_salary_summary_data(request, month_str, department_id=None, employee_id=
                 'loan_items': loan_items,
                 'loan_shortfall': loan_shortfall,
 
-                'salary_difference': salary_diff
+                'salary_difference': salary_diff,
+                'missing_out_days': missing_out_days,
+                'bank_excess': bank_excess,
             })
 
     # Footer Totals
@@ -442,6 +462,11 @@ def get_salary_summary_data(request, month_str, department_id=None, employee_id=
         'can_change_settings': can_change_payroll_settings(request.user, user_company),
         'ot_settings': ot_settings,
         'company': user_company,
+        # বেতন দেওয়ার আগে দেখার মতো সমস্যা (কোনো সংখ্যা বদলায় না — শুধু সতর্কতা)
+        'missing_out_rows': [r for r in summary_data if r['missing_out_days']],
+        'missing_out_total': sum(r['missing_out_days'] for r in summary_data),
+        'bank_excess_rows': [r for r in summary_data if r['bank_excess'] > 0],
+        'bank_excess_total': sum((r['bank_excess'] for r in summary_data), Decimal(0)),
     }
     
 def can_change_payroll_settings(user, company):

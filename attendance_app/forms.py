@@ -179,6 +179,9 @@ class AttendanceForm(forms.ModelForm):
             "timestamp": forms.DateTimeInput(attrs={"type": "datetime-local", "class": "w-full rounded border px-3 py-2 dark:bg-gray-900 dark:text-white"}),
             "status": forms.Select(attrs={"class": "w-full rounded border px-3 py-2 dark:bg-gray-900 dark:text-white"}),
         }
+        labels = {'timestamp': 'Date & time', 'status': 'Punch type'}
+        help_texts = {'timestamp': 'কখন পাঞ্চ দিয়েছে (তারিখ ও সময়)।',
+                      'status': 'In = আসা, Out = যাওয়া। দিনের প্রথম পাঞ্চ In আর শেষ পাঞ্চ Out ধরা হয়।'}
 
     def __init__(self, *args, **kwargs):
         user = kwargs.pop('user', None)
@@ -186,7 +189,7 @@ class AttendanceForm(forms.ModelForm):
         self._company = _user_company(user) if user is not None else None
         if user is not None:
             # GET ও POST দুই ক্ষেত্রেই শুধু user-এর company এর employees
-            qs = Employee.objects.filter(company=self._company) if self._company else Employee.objects.none()
+            qs = Employee.objects.filter(company=self._company).select_related('company') if self._company else Employee.objects.none()
             branch = _manager_branch(user)
             if branch is not None:
                 qs = qs.filter(department__branch=branch)
@@ -263,7 +266,7 @@ class LeaveRequestForm(forms.ModelForm):
             company = _user_company(user)
             if company:
                 # শুধু user-এর company এর employees / company / users দেখাবে
-                employees = Employee.objects.filter(company=company)
+                employees = Employee.objects.filter(company=company).select_related('company')
                 branch = _manager_branch(user)
                 if branch is not None:
                     employees = employees.filter(department__branch=branch)
@@ -274,9 +277,15 @@ class LeaveRequestForm(forms.ModelForm):
                 self.fields['employee'].queryset = Employee.objects.none()
                 self.fields['company'].queryset = Company.objects.none()
                 self.fields['approved_by'].queryset = User.objects.none()
+            set_leave_type_choices(self.fields, company, self.instance)
+        # সীমা পার হলে প্রথমে সতর্ক করি; অপারেটর টিক দিলে তবুও সেভ হয়
+        self.fields['confirm_over_limit'] = forms.BooleanField(
+            required=False, label="Limit পার হলেও সেভ করুন",
+            help_text="টিক দিলে ছুটি সেভ হবে — তালিকায় অতিরিক্ত দিনগুলো আলাদা করে দেখাবে।")
+        self.over_warnings = []
+        self.over_days = 0
 
     def clean(self):
-        from .hr.leave_balance import validate_request
         cleaned = super().clean()
         emp, lt = cleaned.get('employee'), cleaned.get('leave_type')
         start, end, status = cleaned.get('start_date'), cleaned.get('end_date'), cleaned.get('status')
@@ -285,15 +294,35 @@ class LeaveRequestForm(forms.ModelForm):
             return cleaned
         if not (emp and lt and start and end) or status == 'Rejected':
             return cleaned
-        # আগে থেকে থাকা ছুটি এডিট: একই ধরন আর দিন না বাড়লে নতুন করে আটকাই না (শুধু কারণ/স্ট্যাটাস বদল)
+        # আগে থেকে থাকা ছুটি এডিট: একই ধরন আর দিন না বাড়লে নতুন করে সতর্ক করি না (শুধু কারণ/স্ট্যাটাস বদল)
         inst = self.instance
         if inst.pk and inst.status in ('Approved', 'Pending') and inst.leave_type == lt and inst.employee_id == emp.id \
                 and (end - start) <= (inst.end_date - inst.start_date) and start >= inst.start_date and end <= inst.end_date:
             return cleaned
-        error = validate_request(emp, lt, start, end, exclude_id=inst.pk)
-        if error:
-            raise ValidationError(error)
+        apply_over_limit_check(self, emp, lt, start, end, exclude_id=inst.pk)
         return cleaned
+
+
+def set_leave_type_choices(fields, company, instance=None):
+    """ছুটির ধরন: কোম্পানির চালু ধরনগুলো (এডিটের সময় বন্ধ করা ধরনও থাকে)"""
+    from .models import LeaveType
+    types = LeaveType.for_company(company) if company else []
+    current = getattr(instance, 'leave_type', None)
+    choices = [(t.code, t.label + ('' if t.is_paid else ' (Unpaid)')) for t in types if t.is_active or t.code == current]
+    if current and current not in {c for c, _l in choices}:
+        choices.append((current, current))
+    fields['leave_type'] = forms.ChoiceField(choices=[('', '---------')] + choices, label="Leave type",
+                                             initial=current)
+
+
+def apply_over_limit_check(form, emp, lt, start, end, exclude_id=None):
+    """সীমা পার হলে: টিক না দিলে সতর্কবার্তা (ফর্ম invalid), টিক দিলে সেভ হতে দেয়"""
+    from .hr.leave_balance import check_request, over_days
+    form.over_warnings = check_request(emp, lt, start, end, exclude_id=exclude_id)
+    form.over_days = over_days(form.over_warnings)
+    if form.over_warnings and not form.cleaned_data.get('confirm_over_limit'):
+        raise ValidationError([w['message'] for w in form.over_warnings] +
+                              [f"তবুও সেভ করতে নিচের \"Limit পার হলেও সেভ করুন\" টিক দিন — {form.over_days} দিন অতিরিক্ত হিসেবে দেখাবে।"])
 
 
 

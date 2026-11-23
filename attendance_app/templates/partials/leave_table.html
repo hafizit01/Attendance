@@ -25,9 +25,14 @@
               </div>
             </div>
           </td>
-          <td class="text-slate-700 dark:text-slate-200">{{ leave.get_leave_type_display|default:leave.leave_type }}</td>
+          <td class="text-slate-700 dark:text-slate-200">
+            {{ leave.get_leave_type_display|default:leave.leave_type }}
+            {% if leave.is_unpaid %}<span class="badge-neutral ml-1">Unpaid</span>{% endif %}
+            {% if leave.over_limit_days %}<span class="badge-danger mt-1 block w-fit" title="বছরের সীমার বাইরে">+{{ leave.over_limit_days }} day{{ leave.over_limit_days|pluralize }} over limit</span>{% endif %}
+          </td>
           <td class="whitespace-nowrap tabular-nums text-slate-600 dark:text-slate-300">
             {{ leave.start_date|date:"d M" }}{% if leave.end_date != leave.start_date %} – {{ leave.end_date|date:"d M Y" }}{% else %} {{ leave.start_date|date:"Y" }}{% endif %}
+            <span class="block text-xs text-slate-400">{{ leave.days }} day{{ leave.days|pluralize }}</span>
           </td>
           <td>
             {% if leave.status == 'Approved' %}<span class="badge-success"><span class="badge-dot"></span>Approved</span>

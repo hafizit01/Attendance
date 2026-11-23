@@ -8,6 +8,14 @@
     <p class="page-subtitle">একটি পাঞ্চ ম্যানুয়ালি যোগ করুন (যেমন মেশিন বন্ধ থাকলে)।</p>
   </div>
 
+  <div class="flex flex-col gap-3 rounded-2xl border border-indigo-100 bg-indigo-50/60 p-4 text-sm sm:flex-row sm:items-center sm:justify-between dark:border-indigo-500/20 dark:bg-indigo-500/5">
+    <p class="text-slate-700 dark:text-slate-300">অনেকজন বা অনেক দিনের হাজিরা (ফিল্ড ডিউটি, মেশিন নষ্ট) একবারে দিতে চান?</p>
+    <div class="flex shrink-0 gap-2">
+      <a href="{% url 'attendance_app:bulk_attendance' %}" class="btn-secondary btn-sm">Bulk entry</a>
+      <a href="{% url 'attendance_app:missing_queue' %}" class="btn-secondary btn-sm">Missing punches</a>
+    </div>
+  </div>
+
   <form method="post" class="card overflow-hidden" novalidate>
     {% csrf_token %}
     <div class="space-y-5 p-5 sm:p-6">

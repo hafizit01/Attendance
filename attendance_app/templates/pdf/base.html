@@ -64,7 +64,8 @@
   .kpi.good .v { color: #047857; } .kpi.bad .v { color: #be123c; } .kpi.warn .v { color: #b45309; }
 
   /* ── টেবিল ── */
-  table.tbl { width: 100%; border-collapse: collapse; }
+  /* fixed: কলামের চওড়া হেডার/colgroup থেকে — হাজার সারিতেও প্রতিটা ঘর মেপে দেখতে হয় না (PDF অনেক দ্রুত) */
+  table.tbl { width: 100%; border-collapse: collapse; table-layout: fixed; }
   .tbl thead { display: table-header-group; }   /* প্রতিটা পাতায় হেডার আবার আসে */
   .tbl tfoot { display: table-row-group; page-break-before: avoid; }
   .tbl th { background: #f1f5f9; color: #475569; font-size: 6.5pt; font-weight: 600; letter-spacing: 0.4pt; text-transform: uppercase;

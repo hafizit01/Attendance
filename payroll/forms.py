@@ -59,7 +59,7 @@ class SalarySummaryFilterForm(forms.Form):
         input_formats=['%Y-%m']
     )
     employee = forms.ModelChoiceField(
-        queryset=Employee.objects.all(),
+        queryset=Employee.objects.select_related('company'),
         required=False,
         label="Employee"
     )

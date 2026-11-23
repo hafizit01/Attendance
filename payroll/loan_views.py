@@ -29,7 +29,7 @@ class LoanForm(forms.ModelForm):
 
     def __init__(self, *args, scope=None, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields['employee'].queryset = scoping.employees(Employee.objects.all(), scope).order_by('name')
+        self.fields['employee'].queryset = scoping.employees(Employee.objects.select_related('company'), scope).order_by('name')
         self.fields['monthly_deduction'].required = False
 
     def clean(self):

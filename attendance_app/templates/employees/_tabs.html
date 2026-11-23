@@ -1,0 +1,12 @@
+{# কর্মচারীর পাতাগুলোর ট্যাব: রিপোর্ট · ডকুমেন্ট · প্রোফাইল #}
+<nav class="flex gap-1 overflow-x-auto rounded-xl bg-slate-100 p-1 dark:bg-white/[0.04]" aria-label="Employee sections">
+  {% with cls="inline-flex items-center gap-2 whitespace-nowrap rounded-lg px-3.5 py-2 text-sm font-medium transition" on="bg-white text-indigo-700 shadow-sm ring-1 ring-slate-200 dark:bg-slate-800 dark:text-indigo-300 dark:ring-white/10" off="text-slate-600 hover:bg-white hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white" %}
+  <a href="{% url 'attendance_app:employee_attendance_detail' employee.id %}" class="{{ cls }} {% if emp_tab == 'report' %}{{ on }}{% else %}{{ off }}{% endif %}">{% include "partials/icon.html" with name="chart" cls="h-4 w-4" %}Report</a>
+  <a href="{% url 'attendance_app:employee_documents' employee.id %}" class="{{ cls }} {% if emp_tab == 'docs' %}{{ on }}{% else %}{{ off }}{% endif %}">{% include "partials/icon.html" with name="document" cls="h-4 w-4" %}Documents{% if doc_count %} <span class="rounded-full bg-indigo-100 px-1.5 text-[11px] font-bold text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-300">{{ doc_count }}</span>{% endif %}</a>
+  {% if employee.profile %}
+  <a href="{% url 'userapp:employee_profile_detail' employee.profile.pk %}" class="{{ cls }} {{ off }}">{% include "partials/icon.html" with name="user" cls="h-4 w-4" %}Profile</a>
+  {% else %}
+  <a href="{% url 'userapp:employee_profile_create' %}?employee={{ employee.id }}" class="{{ cls }} {{ off }}">{% include "partials/icon.html" with name="plus" cls="h-4 w-4" %}Add profile</a>
+  {% endif %}
+  {% endwith %}
+</nav>

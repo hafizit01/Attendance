@@ -1,9 +1,21 @@
 {% extends "portal/base.html" %}
 {% block title %}Leave{% endblock %}
 {% block content %}
+{% if total.allocated is not None %}
+{# সব মিলিয়ে বছরের মোট — কত নিয়েছি, কত বাকি #}
+<div class="card p-4">
+  <div class="flex items-baseline justify-between gap-3">
+    <p class="font-semibold text-slate-900 dark:text-white">My leave {{ year }}</p>
+    <p class="text-sm text-slate-500"><b class="text-slate-900 dark:text-white">{{ total.used }}</b> taken{% if total.pending %} · {{ total.pending }} pending{% endif %} / {{ total.allocated }}</p>
+  </div>
+  <p class="mt-2 text-3xl font-bold {% if total.remaining <= 0 %}text-rose-600{% else %}text-emerald-600 dark:text-emerald-400{% endif %}">{% if total.remaining < 0 %}0{% else %}{{ total.remaining }}{% endif %} <span class="text-base font-medium text-slate-500">days left</span></p>
+  <span class="mt-2 block h-2 overflow-hidden rounded-full bg-slate-200 dark:bg-white/10"><span class="block h-full rounded-full {% if total.remaining <= 0 %}bg-rose-500{% else %}bg-primary-500{% endif %}" style="width: {% widthratio total.used total.allocated|default:1 100 %}%"></span></span>
+  {% if total.over %}<p class="mt-2 text-sm font-semibold text-rose-600">সীমার চেয়ে {{ total.over }} দিন বেশি নেওয়া হয়েছে।</p>{% endif %}
+</div>
+{% endif %}
 {% if balances %}
 <div class="card p-4">
-  <p class="mb-3 font-semibold text-slate-900 dark:text-white">My leave balance {{ year }}</p>
+  <p class="mb-3 font-semibold text-slate-900 dark:text-white">By leave type {{ year }}</p>
   <div class="grid grid-cols-2 gap-2 sm:grid-cols-3">
     {% for b in balances %}
     <div class="rounded-xl bg-slate-50 p-3 dark:bg-white/[0.04]">
@@ -22,7 +34,14 @@
 <form method="post" class="card space-y-4 p-5" novalidate>
   {% csrf_token %}
   <p class="font-semibold text-slate-900 dark:text-white">{% include "partials/icon.html" with name="plus-circle" cls="inline h-5 w-5 text-primary-500" %} Apply for leave</p>
-  {% if form.non_field_errors %}<div class="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700 dark:border-rose-500/20 dark:bg-rose-500/10 dark:text-rose-300">{% for e in form.non_field_errors %}<p>{{ e }}</p>{% endfor %}</div>{% endif %}
+  {% if form.over_warnings %}
+  <div class="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">
+    <p class="font-semibold">আপনার ছুটির সীমা পার হচ্ছে — {{ form.over_days }} দিন অতিরিক্ত</p>
+    {% for w in form.over_warnings %}<p class="mt-1">{{ w.message }}</p>{% endfor %}
+    <label class="mt-2 flex items-start gap-2"><input type="checkbox" name="confirm_over_limit" class="form-checkbox mt-0.5">
+      <span>জেনেও আবেদন করতে চাই (অফিস সিদ্ধান্ত নেবে)</span></label>
+  </div>
+  {% elif form.non_field_errors %}<div class="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700 dark:border-rose-500/20 dark:bg-rose-500/10 dark:text-rose-300">{% for e in form.non_field_errors %}<p>{{ e }}</p>{% endfor %}</div>{% endif %}
   {% include "partials/form_field.html" with field=form.leave_type %}
   <div class="grid grid-cols-2 gap-3">
     {% include "partials/form_field.html" with field=form.start_date %}

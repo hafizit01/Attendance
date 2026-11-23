@@ -25,7 +25,10 @@ def payslip_lines(row):
     absence = max(Decimal(s['prorated_gross']) - worked_part, ZERO).quantize(Decimal('0.01'))
     deductions = []
     if absence:
-        deductions.append((f"Absence / short hours ({row.get('absent_days', 0)} absent)", absence))
+        unpaid = row.get('unpaid_leave_days') or 0
+        label = (f"Absence / unpaid leave / short hours ({row.get('absent_days', 0)} absent, {unpaid} unpaid leave)"
+                 if unpaid else f"Absence / short hours ({row.get('absent_days', 0)} absent)")
+        deductions.append((label, absence))
     if row.get('late_deduction'):
         deductions.append((f"Late deduction ({row.get('late_days', 0)} late → {row.get('late_deduction_days', 0)} day)",
                            Decimal(row['late_deduction'])))

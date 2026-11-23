@@ -282,6 +282,73 @@ class Attendance(models.Model):
 
 
 
+class EmployeeDocument(models.Model):
+    """
+    কর্মচারীর ডকুমেন্ট (NID, CV, সার্টিফিকেট, নিয়োগপত্র ...) — যত খুশি।
+    ফাইল গোপন স্টোরেজে (PRIVATE_MEDIA_ROOT) — পাবলিক /media/ লিংক নেই; শুধু ঐ কোম্পানির লগইন করা ইউজার
+    (ম্যানেজার হলে নিজের ব্রাঞ্চের) document_views দিয়ে খুলতে পারে।
+    """
+    DOC_TYPES = [
+        ('nid', 'National ID (NID)'),
+        ('photo', 'Photo'),
+        ('cv', 'CV / Resume'),
+        ('certificate', 'Educational certificate'),
+        ('appointment', 'Appointment / Offer letter'),
+        ('contract', 'Contract / Agreement'),
+        ('experience', 'Experience / Release letter'),
+        ('bank', 'Bank document'),
+        ('medical', 'Medical'),
+        ('police', 'Police verification'),
+        ('other', 'Other'),
+    ]
+
+    company = models.ForeignKey('Company', on_delete=models.CASCADE, related_name='employee_documents')
+    employee = models.ForeignKey('Employee', on_delete=models.CASCADE, related_name='documents')
+    doc_type = models.CharField(max_length=20, choices=DOC_TYPES, default='other')
+    title = models.CharField(max_length=120, blank=True)
+    file = models.FileField(upload_to='employee_docs/%Y/%m/', storage=_private_storage)
+    original_name = models.CharField(max_length=255, blank=True)
+    size = models.PositiveIntegerField(default=0)
+    expiry_date = models.DateField(null=True, blank=True)
+    note = models.CharField(max_length=255, blank=True)
+    uploaded_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['doc_type', '-uploaded_at']
+        indexes = [models.Index(fields=['employee', 'doc_type'])]
+
+    def __str__(self):
+        return f"{self.employee.name} · {self.get_doc_type_display()}"
+
+    @property
+    def display_name(self):
+        return self.title or self.original_name or self.get_doc_type_display()
+
+    @property
+    def extension(self):
+        name = self.original_name or self.file.name or ''
+        return name.rsplit('.', 1)[-1].lower() if '.' in name else ''
+
+    @property
+    def kind(self):
+        ext = self.extension
+        if ext == 'pdf':
+            return 'pdf'
+        if ext in ('jpg', 'jpeg', 'png', 'webp', 'gif'):
+            return 'image'
+        if ext in ('xls', 'xlsx', 'csv'):
+            return 'sheet'
+        return 'doc'
+
+    @property
+    def days_to_expiry(self):
+        if not self.expiry_date:
+            return None
+        from django.utils import timezone as _tz
+        return (self.expiry_date - _tz.localdate()).days
+
+
 class LeaveRequest(models.Model):
     LEAVE_TYPES = [
         ('Casual', 'Casual Leave'),
@@ -310,7 +377,8 @@ class LeaveRequest(models.Model):
         on_delete=models.CASCADE,
         related_name='leave_requests'
     )
-    leave_type = models.CharField(max_length=20, choices=LEAVE_TYPES)
+    # কোড (Casual, Sick ... বা কোম্পানির বানানো ধরনের নাম) — কোন কোড কী তা LeaveType বলে
+    leave_type = models.CharField(max_length=20)
     start_date = models.DateField()
     end_date = models.DateField()
     reason = models.TextField(blank=True, null=True)
@@ -320,6 +388,72 @@ class LeaveRequest(models.Model):
 
     def __str__(self):
         return f"{self.employee.name} - {self.leave_type} ({self.start_date} to {self.end_date})"
+
+    def get_leave_type_display(self):
+        return leave_type_label(self.leave_type)
+
+    @property
+    def days(self):
+        return (self.end_date - self.start_date).days + 1
+
+
+TOTAL_LEAVE = 'TOTAL'   # LeaveAllocation এ এই কোড = সব (গোনা হয় এমন) ছুটি মিলিয়ে বছরের মোট সীমা
+
+
+def leave_type_label(code):
+    if code == TOTAL_LEAVE:
+        return 'All leave (yearly total)'
+    return dict(LeaveRequest.LEAVE_TYPES).get(code, code)
+
+
+class LeaveType(models.Model):
+    """
+    কোম্পানির ছুটির ধরন। বিল্ট-ইন ৬টা (Casual, Sick, Jamat, Earned, Unpaid, Other) নিজে থেকেই তৈরি হয়;
+    কোম্পানি নিজের ধরন বানাতে পারে (যেমন Hajj Leave) — তার নামই কোড।
+      • is_paid: Approved ছুটির দিনে বেতন কাটা যাবে না (পুরো শিফট ক্রেডিট)। বন্ধ = অনুপস্থিতির মতো বেতন কাটা
+      • counts_in_limit: বছরের মোট সীমায় (যেমন সব মিলিয়ে ১২ দিন) গোনা হবে কিনা
+    """
+    DEFAULTS = [
+        # code, paid, counts in yearly total
+        ('Casual', True, True),
+        ('Sick', True, True),
+        ('Jamat', True, False),     # কোম্পানির অতিরিক্ত ছুটি — বছরের সীমায় গোনা হয় না
+        ('Earned', True, False),
+        ('Unpaid', False, False),
+        ('Other', True, True),
+    ]
+
+    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name='leave_types')
+    code = models.CharField(max_length=20)
+    is_paid = models.BooleanField(default=True, verbose_name="Paid (বেতন কাটবে না)")
+    counts_in_limit = models.BooleanField(default=True, verbose_name="বছরের মোট সীমায় গোনা হবে")
+    is_builtin = models.BooleanField(default=False, editable=False)
+    is_active = models.BooleanField(default=True)
+    order = models.PositiveSmallIntegerField(default=0)
+
+    class Meta:
+        ordering = ['order', 'id']
+        constraints = [models.UniqueConstraint(fields=['company', 'code'], name='uniq_leave_type_code')]
+
+    def __str__(self):
+        return self.label
+
+    @property
+    def label(self):
+        return leave_type_label(self.code)
+
+    @classmethod
+    def for_company(cls, company, active_only=False):
+        """কোম্পানির সব ধরন (প্রথমবার বিল্ট-ইনগুলো তৈরি হয়)"""
+        qs = cls.objects.filter(company=company)
+        if not qs.filter(is_builtin=True).exists():
+            cls.objects.bulk_create([
+                cls(company=company, code=c, is_paid=p, counts_in_limit=n, is_builtin=True, order=i)
+                for i, (c, p, n) in enumerate(cls.DEFAULTS)
+            ], ignore_conflicts=True)
+        if active_only:
+            qs = qs.filter(is_active=True)
+        return list(qs.order_by('order', 'id'))
 
 
 class LeaveAllocation(models.Model):
@@ -333,7 +467,8 @@ class LeaveAllocation(models.Model):
     employee = models.ForeignKey(Employee, on_delete=models.CASCADE, null=True, blank=True,
                                  related_name='leave_allocations',
                                  help_text="খালি = সব কর্মচারী। দিলে শুধু এই কর্মচারীর জন্য আলাদা সীমা।")
-    leave_type = models.CharField(max_length=20, choices=LeaveRequest.LEAVE_TYPES)
+    # ছুটির কোড, অথবা TOTAL_LEAVE = সব মিলিয়ে বছরের মোট সীমা
+    leave_type = models.CharField(max_length=20)
     days_per_year = models.PositiveSmallIntegerField(validators=[MaxValueValidator(366)])
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -350,6 +485,9 @@ class LeaveAllocation(models.Model):
     def __str__(self):
         who = self.employee.name if self.employee_id else 'All'
         return f"{who} · {self.leave_type}: {self.days_per_year}/year"
+
+    def get_leave_type_display(self):
+        return leave_type_label(self.leave_type)
 
 
 class Holiday(models.Model):
